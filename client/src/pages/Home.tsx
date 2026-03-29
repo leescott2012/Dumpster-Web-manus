@@ -1,8 +1,14 @@
 /*
  * Home — Main page assembling all carousel builder components
  * V4 design: dark theme, gold accents, scroll-snap strips
- * Interactive: drag-and-drop, lightbox, context menu, new dump creation
- * Playground mode: changes reset on refresh
+ *
+ * Interaction model:
+ * - Tap photo = yellow highlight + "..." dots
+ * - "..." dots = context menu (Mark Huji, Remove)
+ * - "+" card at end of dump = pool selection mode
+ * - Double tap = lightbox
+ * - Hold + move = drag
+ * - Tap elsewhere = deselect
  */
 import { useState, useCallback, useEffect, useRef } from "react";
 import { DragProvider, useDrag } from "@/contexts/DragContext";
@@ -18,7 +24,7 @@ import { Plus, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 function HomeContent() {
-  const {
+  var {
     dumps,
     pool,
     resetAll,
@@ -32,22 +38,35 @@ function HomeContent() {
     renameDump,
   } = useCarouselState();
 
-  const { dragState, updateDragPosition, endDrag } = useDrag();
+  var { dragState, updateDragPosition, endDrag } = useDrag();
 
-  const [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
-  const [contextMenu, setContextMenu] = useState<{
+  // Selected photo (tap to highlight + show dots)
+  var [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+
+  // Lightbox
+  var [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
+
+  // Context menu (from dots click)
+  var [contextMenu, setContextMenu] = useState<{
     photo: Photo;
     position: { x: number; y: number };
     dumpId?: string;
   } | null>(null);
 
+  // Pool selection mode
+  var [selectionMode, setSelectionMode] = useState(false);
+  var [selectionTargetDumpId, setSelectionTargetDumpId] = useState<string | null>(null);
+  var [selectedPoolPhotoIds, setSelectedPoolPhotoIds] = useState<string[]>([]);
+
+  // Ref for scroll-back after confirm
+  var scrollBackRef = useRef<string | null>(null);
+
   // Global touch/mouse move for drag ghost positioning
-  useEffect(() => {
+  useEffect(function() {
     if (!dragState.isDragging) return;
 
-    const handleMove = (e: TouchEvent | MouseEvent) => {
+    var handleMove = function(e: TouchEvent | MouseEvent) {
       if ("touches" in e) {
-        // Prevent page scroll/rubber-banding while dragging
         e.preventDefault();
         updateDragPosition({
           x: e.touches[0].clientX,
@@ -58,9 +77,8 @@ function HomeContent() {
       }
     };
 
-    const handleEnd = () => {
-      // Delay to let drop handlers fire first
-      setTimeout(() => endDrag(), 100);
+    var handleEnd = function() {
+      setTimeout(function() { endDrag(); }, 100);
     };
 
     window.addEventListener("touchmove", handleMove, { passive: false });
@@ -68,11 +86,10 @@ function HomeContent() {
     window.addEventListener("touchend", handleEnd);
     window.addEventListener("mouseup", handleEnd);
 
-    // Prevent page scrolling during drag
     document.body.style.overflow = "hidden";
     document.body.classList.add("dragging");
 
-    return () => {
+    return function() {
       window.removeEventListener("touchmove", handleMove);
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("touchend", handleEnd);
@@ -82,29 +99,132 @@ function HomeContent() {
     };
   }, [dragState.isDragging, updateDragPosition, endDrag]);
 
-  const handleTapPhoto = useCallback((photo: Photo) => {
-    setLightboxPhoto(photo);
+  // ── Tap to select photo (yellow highlight + dots) ──
+  var handleSelectPhoto = useCallback(function(photo: Photo) {
+    setSelectedPhotoId(function(prev) {
+      return prev === photo.id ? null : photo.id;
+    });
+    // Close context menu if open
+    setContextMenu(null);
   }, []);
 
-  const handleDoubleTapPhoto = useCallback(
-    (photo: Photo, position?: { x: number; y: number }) => {
-      const dump = dumps.find((d) => d.photos.some((p) => p.id === photo.id));
-      // Use provided position, or fall back to center of screen
-      var pos = position || { x: window.innerWidth / 2 - 90, y: window.innerHeight / 2 - 80 };
-      setContextMenu({
-        photo,
-        position: pos,
-        dumpId: dump?.id,
-      });
-    },
-    [dumps]
-  );
+  // ── Dots click → open context menu ──
+  var handleDotsClick = useCallback(function(photo: Photo, position: { x: number; y: number }) {
+    var dump = dumps.find(function(d) {
+      return d.photos.some(function(p) { return p.id === photo.id; });
+    });
+    setContextMenu({
+      photo: photo,
+      position: position,
+      dumpId: dump ? dump.id : undefined,
+    });
+  }, [dumps]);
 
-  const handleDropOnDump = useCallback(
-    (targetDumpId: string, insertIndex: number) => {
+  // ── Double tap → lightbox ──
+  var handleDoubleTapPhoto = useCallback(function(photo: Photo) {
+    setLightboxPhoto(photo);
+    setSelectedPhotoId(null);
+    setContextMenu(null);
+  }, []);
+
+  // ── "+" card click → enter pool selection mode ──
+  var handlePlusClick = useCallback(function(dumpId: string) {
+    setSelectionMode(true);
+    setSelectionTargetDumpId(dumpId);
+    setSelectedPoolPhotoIds([]);
+    setSelectedPhotoId(null);
+    setContextMenu(null);
+
+    // Scroll to pool
+    setTimeout(function() {
+      var poolEl = document.getElementById("photo-pool");
+      if (poolEl) {
+        poolEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 100);
+
+    // Remember which dump to scroll back to
+    scrollBackRef.current = dumpId;
+  }, []);
+
+  // ── Toggle pool photo selection ──
+  var handleTogglePoolSelection = useCallback(function(photo: Photo) {
+    setSelectedPoolPhotoIds(function(prev) {
+      var idx = prev.indexOf(photo.id);
+      if (idx >= 0) {
+        return prev.filter(function(id) { return id !== photo.id; });
+      }
+      return prev.concat([photo.id]);
+    });
+  }, []);
+
+  // ── Confirm pool selection → add photos to dump ──
+  var handleConfirmSelection = useCallback(function() {
+    if (!selectionTargetDumpId || selectedPoolPhotoIds.length === 0) return;
+
+    var targetDumpId = selectionTargetDumpId;
+    var photoIds = selectedPoolPhotoIds.slice();
+
+    // Find the target dump to get current photo count
+    var targetDump = dumps.find(function(d) { return d.id === targetDumpId; });
+    if (!targetDump) return;
+
+    var available = 7 - targetDump.photos.length;
+    var toAdd = photoIds.slice(0, available);
+
+    // Add each photo in order
+    for (var i = 0; i < toAdd.length; i++) {
+      var insertIdx = targetDump.photos.length + i;
+      movePhotoFromPoolToDump(toAdd[i], targetDumpId, insertIdx);
+    }
+
+    if (toAdd.length < photoIds.length) {
+      toast("Added " + toAdd.length + " photos (dump max is 7)");
+    } else {
+      toast("Added " + toAdd.length + " photos to dump");
+    }
+
+    // Exit selection mode
+    setSelectionMode(false);
+    setSelectionTargetDumpId(null);
+    setSelectedPoolPhotoIds([]);
+
+    // Scroll back to the target dump
+    var scrollTarget = scrollBackRef.current;
+    if (scrollTarget) {
+      setTimeout(function() {
+        var dumpEl = document.querySelector("[data-dump-id='" + scrollTarget + "']");
+        if (dumpEl) {
+          dumpEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 200);
+    }
+  }, [selectionTargetDumpId, selectedPoolPhotoIds, dumps, movePhotoFromPoolToDump]);
+
+  // ── Cancel pool selection ──
+  var handleCancelSelection = useCallback(function() {
+    setSelectionMode(false);
+    setSelectionTargetDumpId(null);
+    setSelectedPoolPhotoIds([]);
+
+    // Scroll back
+    var scrollTarget = scrollBackRef.current;
+    if (scrollTarget) {
+      setTimeout(function() {
+        var dumpEl = document.querySelector("[data-dump-id='" + scrollTarget + "']");
+        if (dumpEl) {
+          dumpEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 200);
+    }
+  }, []);
+
+  // ── Drop handlers ──
+  var handleDropOnDump = useCallback(
+    function(targetDumpId: string, insertIndex: number) {
       if (!dragState.isDragging || !dragState.source || !dragState.photo) return;
 
-      const { source } = dragState;
+      var source = dragState.source;
 
       if (source.type === "pool") {
         movePhotoFromPoolToDump(dragState.photo.id, targetDumpId, insertIndex);
@@ -119,48 +239,81 @@ function HomeContent() {
     [dragState, movePhotoFromPoolToDump, movePhotoWithinDump, movePhotoBetweenDumps]
   );
 
-  const handleDropToPool = useCallback(() => {
+  var handleDropToPool = useCallback(function() {
     if (!dragState.isDragging || !dragState.source || dragState.source.type !== "dump") return;
     movePhotoFromDumpToPool(dragState.source.dumpId!, dragState.source.index);
     toast("Photo returned to pool");
   }, [dragState, movePhotoFromDumpToPool]);
 
-  const handleRemoveFromDump = useCallback(
-    (photoId: string) => {
-      if (!contextMenu?.dumpId) return;
-      const dump = dumps.find((d) => d.id === contextMenu.dumpId);
+  // ── Remove from dump (via context menu) ──
+  var handleRemoveFromDump = useCallback(
+    function(photoId: string) {
+      if (!contextMenu || !contextMenu.dumpId) return;
+      var dumpId = contextMenu.dumpId;
+      var dump = dumps.find(function(d) { return d.id === dumpId; });
       if (!dump) return;
-      const idx = dump.photos.findIndex((p) => p.id === photoId);
+      var idx = dump.photos.findIndex(function(p) { return p.id === photoId; });
       if (idx >= 0) {
-        movePhotoFromDumpToPool(contextMenu.dumpId, idx);
+        movePhotoFromDumpToPool(dumpId, idx);
         toast("Photo returned to pool");
       }
+      setSelectedPhotoId(null);
     },
     [contextMenu, dumps, movePhotoFromDumpToPool]
   );
 
-  const handleReset = useCallback(() => {
+  var handleReset = useCallback(function() {
     resetAll();
+    setSelectedPhotoId(null);
+    setContextMenu(null);
+    setSelectionMode(false);
+    setSelectedPoolPhotoIds([]);
     toast("Reset to original state");
   }, [resetAll]);
 
-  const handleCreateDump = useCallback(() => {
+  var handleCreateDump = useCallback(function() {
     createNewDump();
-    toast("New dump created — drag photos into it");
+    toast("New dump created \u2014 tap + to add photos");
   }, [createNewDump]);
 
-  const handleDeleteDump = useCallback(
-    (dumpId: string) => {
+  var handleDeleteDump = useCallback(
+    function(dumpId: string) {
       deleteDump(dumpId);
-      toast("Dump deleted — photos returned to pool");
+      toast("Dump deleted \u2014 photos returned to pool");
     },
     [deleteDump]
   );
 
-  const originalDumpIds = ["dump-1", "dump-2", "dump-3"];
+  // ── Click on empty space → deselect ──
+  var handleBackgroundClick = useCallback(function(e: React.MouseEvent) {
+    var target = e.target as HTMLElement;
+    // Only deselect if clicking on the page background, not on a card or button
+    if (target.closest("[data-photo-id]") || target.closest("button") || target.closest("[data-dump-id]")) return;
+    setSelectedPhotoId(null);
+    setContextMenu(null);
+  }, []);
+
+  var originalDumpIds = ["dump-1", "dump-2", "dump-3"];
 
   return (
-    <div style={{ minHeight: "100vh" }}>
+    <div style={{ minHeight: "100vh" }} onClick={handleBackgroundClick}>
+      {/* Dimming overlay when in selection mode */}
+      {selectionMode && (
+        <div
+          id="selection-dimmer"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.7)",
+            zIndex: 100,
+            pointerEvents: "none",
+          }}
+        />
+      )}
+
       {/* Header — V4 exact */}
       <header
         style={{
@@ -168,6 +321,11 @@ function HomeContent() {
           margin: "0 auto",
           padding: "60px 32px 40px",
           borderBottom: "1px solid #1e1e1e",
+          position: "relative",
+          zIndex: selectionMode ? 50 : "auto",
+          opacity: selectionMode ? 0.3 : 1,
+          transition: "opacity 0.3s",
+          pointerEvents: selectionMode ? "none" : "auto",
         }}
       >
         <div
@@ -203,7 +361,7 @@ function HomeContent() {
           }}
         >
           Rearrange photos, build new dumps, and experiment with different flows.
-          Long press to pick up a photo. Swipe to browse. Changes reset on refresh.
+          Tap a photo to select it. Tap + to add from the pool. Changes reset on refresh.
         </p>
         <div
           style={{
@@ -215,24 +373,26 @@ function HomeContent() {
         >
           {[
             { label: "Dumps", value: dumps.length },
-            { label: "Photos Used", value: dumps.reduce((s, d) => s + d.photos.length, 0) },
+            { label: "Photos Used", value: dumps.reduce(function(s, d) { return s + d.photos.length; }, 0) },
             { label: "In Pool", value: pool.length },
-          ].map((pill) => (
-            <span
-              key={pill.label}
-              style={{
-                background: "#1a1a1a",
-                border: "1px solid #1e1e1e",
-                borderRadius: "100px",
-                padding: "5px 14px",
-                fontSize: "11px",
-                color: "#666",
-                letterSpacing: "0.04em",
-              }}
-            >
-              <strong style={{ color: "#e8e8e8", fontWeight: 600 }}>{pill.value}</strong> {pill.label}
-            </span>
-          ))}
+          ].map(function(pill) {
+            return (
+              <span
+                key={pill.label}
+                style={{
+                  background: "#1a1a1a",
+                  border: "1px solid #1e1e1e",
+                  borderRadius: "100px",
+                  padding: "5px 14px",
+                  fontSize: "11px",
+                  color: "#666",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                <strong style={{ color: "#e8e8e8", fontWeight: 600 }}>{pill.value}</strong> {pill.label}
+              </span>
+            );
+          })}
           <span
             style={{
               background: "#1a1a1a",
@@ -250,7 +410,18 @@ function HomeContent() {
       </header>
 
       {/* Rules — V4 exact */}
-      <section style={{ maxWidth: "1100px", margin: "40px auto", padding: "0 32px" }}>
+      <section
+        style={{
+          maxWidth: "1100px",
+          margin: "40px auto",
+          padding: "0 32px",
+          position: "relative",
+          zIndex: selectionMode ? 50 : "auto",
+          opacity: selectionMode ? 0.3 : 1,
+          transition: "opacity 0.3s",
+          pointerEvents: selectionMode ? "none" : "auto",
+        }}
+      >
         <div
           style={{
             display: "grid",
@@ -259,62 +430,87 @@ function HomeContent() {
           }}
         >
           {[
-            { num: "01", text: "Slide 1 is THE HOOK — must stop the scroll" },
+            { num: "01", text: "Slide 1 is THE HOOK \u2014 must stop the scroll" },
             { num: "02", text: "Max 1-2 portraits per dump" },
             { num: "03", text: "Same car family within a dump" },
-            { num: "04", text: "Match edit styles — flag Huji mismatches" },
+            { num: "04", text: "Match edit styles \u2014 flag Huji mismatches" },
             { num: "05", text: "Night stays night, day stays day" },
             { num: "06", text: "3-7 photos per dump, zero duplicates" },
             { num: "07", text: "Flow is the #1 priority above everything" },
             { num: "08", text: "Every dump tells a story" },
-          ].map((rule) => (
-            <div
-              key={rule.num}
-              style={{
-                background: "#151515",
-                border: "1px solid #1e1e1e",
-                borderRadius: "10px",
-                padding: "16px",
-              }}
-            >
+          ].map(function(rule) {
+            return (
               <div
+                key={rule.num}
                 style={{
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  color: "#c8a96e",
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase" as const,
-                  marginBottom: "6px",
+                  background: "#151515",
+                  border: "1px solid #1e1e1e",
+                  borderRadius: "10px",
+                  padding: "16px",
                 }}
               >
-                RULE {rule.num}
+                <div
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    color: "#c8a96e",
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase" as const,
+                    marginBottom: "6px",
+                  }}
+                >
+                  {"RULE " + rule.num}
+                </div>
+                <div style={{ fontSize: "13px", color: "#999", lineHeight: 1.5 }}>
+                  {rule.text}
+                </div>
               </div>
-              <div style={{ fontSize: "13px", color: "#999", lineHeight: 1.5 }}>
-                {rule.text}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
       {/* Divider */}
-      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 32px" }}>
+      <div
+        style={{
+          maxWidth: "1100px",
+          margin: "0 auto",
+          padding: "0 32px",
+          opacity: selectionMode ? 0.3 : 1,
+          transition: "opacity 0.3s",
+        }}
+      >
         <hr style={{ border: "none", borderTop: "1px solid #1e1e1e" }} />
       </div>
 
       {/* Dump Strips */}
-      {dumps.map((dump) => (
-        <DumpStrip
-          key={dump.id}
-          dump={dump}
-          onTapPhoto={handleTapPhoto}
-          onDoubleTapPhoto={handleDoubleTapPhoto}
-          onDropPhoto={handleDropOnDump}
-          onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
-          onRenameDump={renameDump}
-          isCustom={!originalDumpIds.includes(dump.id)}
-        />
-      ))}
+      {dumps.map(function(dump) {
+        return (
+          <div
+            key={dump.id}
+            style={{
+              position: "relative",
+              zIndex: selectionMode ? 50 : "auto",
+              opacity: selectionMode ? 0.3 : 1,
+              transition: "opacity 0.3s",
+              pointerEvents: selectionMode ? "none" : "auto",
+            }}
+          >
+            <DumpStrip
+              dump={dump}
+              selectedPhotoId={selectedPhotoId}
+              onSelectPhoto={handleSelectPhoto}
+              onDotsClick={handleDotsClick}
+              onDoubleTapPhoto={handleDoubleTapPhoto}
+              onDropPhoto={handleDropOnDump}
+              onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
+              onRenameDump={renameDump}
+              onPlusClick={handlePlusClick}
+              isCustom={!originalDumpIds.includes(dump.id)}
+            />
+          </div>
+        );
+      })}
 
       {/* Action Buttons */}
       <div
@@ -325,6 +521,11 @@ function HomeContent() {
           display: "flex",
           gap: "12px",
           flexWrap: "wrap",
+          position: "relative",
+          zIndex: selectionMode ? 50 : "auto",
+          opacity: selectionMode ? 0.3 : 1,
+          transition: "opacity 0.3s",
+          pointerEvents: selectionMode ? "none" : "auto",
         }}
       >
         <button
@@ -345,11 +546,11 @@ function HomeContent() {
             fontFamily: "inherit",
             letterSpacing: "0.04em",
           }}
-          onMouseEnter={(e) => {
+          onMouseEnter={function(e) {
             e.currentTarget.style.borderColor = "#c8a96e";
             e.currentTarget.style.background = "rgba(200,169,110,0.08)";
           }}
-          onMouseLeave={(e) => {
+          onMouseLeave={function(e) {
             e.currentTarget.style.borderColor = "#2a2a2a";
             e.currentTarget.style.background = "#151515";
           }}
@@ -375,10 +576,10 @@ function HomeContent() {
             fontFamily: "inherit",
             letterSpacing: "0.04em",
           }}
-          onMouseEnter={(e) => {
+          onMouseEnter={function(e) {
             e.currentTarget.style.borderColor = "#666";
           }}
-          onMouseLeave={(e) => {
+          onMouseLeave={function(e) {
             e.currentTarget.style.borderColor = "#2a2a2a";
           }}
         >
@@ -388,17 +589,32 @@ function HomeContent() {
       </div>
 
       {/* Divider */}
-      <div style={{ maxWidth: "1100px", margin: "40px auto 0", padding: "0 32px" }}>
+      <div
+        style={{
+          maxWidth: "1100px",
+          margin: "40px auto 0",
+          padding: "0 32px",
+          opacity: selectionMode ? 0.3 : 1,
+          transition: "opacity 0.3s",
+        }}
+      >
         <hr style={{ border: "none", borderTop: "1px solid #1e1e1e" }} />
       </div>
 
-      {/* Photo Pool */}
-      <PhotoPool
-        photos={pool}
-        onTapPhoto={handleTapPhoto}
-        onDoubleTapPhoto={handleDoubleTapPhoto}
-        onDropToPool={handleDropToPool}
-      />
+      {/* Photo Pool — elevated z-index in selection mode */}
+      <div style={{ position: "relative", zIndex: selectionMode ? 200 : "auto" }}>
+        <PhotoPool
+          photos={pool}
+          onDoubleTapPhoto={handleDoubleTapPhoto}
+          onDropToPool={handleDropToPool}
+          selectionMode={selectionMode}
+          selectedIds={selectedPoolPhotoIds}
+          onTogglePoolSelection={handleTogglePoolSelection}
+          onConfirmSelection={handleConfirmSelection}
+          onCancelSelection={handleCancelSelection}
+          targetDumpId={selectionTargetDumpId}
+        />
+      </div>
 
       {/* Footer */}
       <footer
@@ -412,20 +628,19 @@ function HomeContent() {
           borderTop: "1px solid #1e1e1e",
         }}
       >
-        Carousel Dump Builder · Playground Mode · Changes reset on refresh
+        Carousel Dump Builder \u00B7 Playground Mode \u00B7 Changes reset on refresh
       </footer>
 
       {/* Overlays */}
       <DragGhost />
-      <PhotoLightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} />
+      <PhotoLightbox photo={lightboxPhoto} onClose={function() { setLightboxPhoto(null); }} />
       <PhotoContextMenu
-        photo={contextMenu?.photo || null}
-        position={contextMenu?.position || null}
-        onClose={() => setContextMenu(null)}
+        photo={contextMenu ? contextMenu.photo : null}
+        position={contextMenu ? contextMenu.position : null}
+        onClose={function() { setContextMenu(null); setSelectedPhotoId(null); }}
         onRemoveFromDump={handleRemoveFromDump}
         onToggleHuji={toggleHuji}
-        onViewLarger={(photo) => setLightboxPhoto(photo)}
-        isInDump={!!contextMenu?.dumpId}
+        isInDump={contextMenu ? !!contextMenu.dumpId : false}
       />
       <OnboardingHint />
     </div>

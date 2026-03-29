@@ -2,42 +2,47 @@
  * DumpStrip — V4 exact: horizontal scroll-snap strip with 12px gap
  * Dump header with number, title, subtitle
  * Drop zone for receiving dragged photos
- * Shows gold insertion line between cards during drag
+ * "+" card at end of every strip for pool selection flow
  * NO template literals — plain string concat for Safari compatibility
  */
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect } from "react";
 import PhotoCard from "./PhotoCard";
 import { useDrag } from "@/contexts/DragContext";
 import type { Dump, Photo } from "@/lib/photoData";
-import { Trash2 } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 
 interface DumpStripProps {
   dump: Dump;
-  onTapPhoto: (photo: Photo) => void;
+  selectedPhotoId: string | null;
+  onSelectPhoto: (photo: Photo) => void;
+  onDotsClick: (photo: Photo, position: { x: number; y: number }) => void;
   onDoubleTapPhoto: (photo: Photo) => void;
   onDropPhoto: (dumpId: string, insertIndex: number) => void;
   onDeleteDump?: (dumpId: string) => void;
   onRenameDump?: (dumpId: string, title: string) => void;
+  onPlusClick: (dumpId: string) => void;
   isCustom?: boolean;
 }
 
 export default function DumpStrip({
   dump,
-  onTapPhoto,
+  selectedPhotoId,
+  onSelectPhoto,
+  onDotsClick,
   onDoubleTapPhoto,
   onDropPhoto,
   onDeleteDump,
   onRenameDump,
+  onPlusClick,
   isCustom = false,
 }: DumpStripProps) {
-  const stripRef = useRef<HTMLDivElement>(null);
-  const { dragState } = useDrag();
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(dump.title);
-  const dropIndexRef = useRef<number | null>(null);
+  var stripRef = useRef<HTMLDivElement>(null);
+  var { dragState } = useDrag();
+  var [dropIndex, setDropIndex] = useState<number | null>(null);
+  var [isEditing, setIsEditing] = useState(false);
+  var [editTitle, setEditTitle] = useState(dump.title);
+  var dropIndexRef = useRef<number | null>(null);
 
-  // Keep ref in sync
   useEffect(function() {
     dropIndexRef.current = dropIndex;
   }, [dropIndex]);
@@ -137,6 +142,7 @@ export default function DumpStrip({
 
   return (
     <section
+      data-dump-id={dump.id}
       style={{
         maxWidth: "1100px",
         margin: "56px auto",
@@ -251,7 +257,7 @@ export default function DumpStrip({
         )}
       </div>
 
-      {/* Slide Strip — V4 exact */}
+      {/* Slide Strip */}
       <div
         ref={stripRef}
         style={{
@@ -271,27 +277,7 @@ export default function DumpStrip({
           transition: "outline 0.2s",
         }}
       >
-        {dump.photos.length === 0 && !dragState.isDragging && (
-          <div
-            style={{
-              width: "200px",
-              height: "260px",
-              borderRadius: "10px",
-              border: "2px dashed #2a2a2a",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#666",
-              fontSize: "13px",
-              textAlign: "center",
-              padding: "20px",
-              flexShrink: 0,
-            }}
-          >
-            Drag photos here
-          </div>
-        )}
-
+        {/* Empty dump during drag */}
         {dump.photos.length === 0 && dragState.isDragging && (
           <div
             className="dump-drop-pulse"
@@ -315,6 +301,7 @@ export default function DumpStrip({
           </div>
         )}
 
+        {/* Photo cards */}
         {dump.photos.map(function(photo, i) {
           return (
             <div key={photo.id} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
@@ -337,13 +324,16 @@ export default function DumpStrip({
                 index={i}
                 isFirst={i === 0}
                 source={{ type: "dump", dumpId: dump.id }}
-                onTap={onTapPhoto}
+                isSelected={selectedPhotoId === photo.id}
+                onSelect={onSelectPhoto}
+                onDotsClick={onDotsClick}
                 onDoubleTap={onDoubleTapPhoto}
               />
             </div>
           );
         })}
 
+        {/* Drop indicator at end */}
         {showDropIndicator && dropIndex === dump.photos.length && (
           <div
             className="drop-line-pulse"
@@ -357,6 +347,45 @@ export default function DumpStrip({
               flexShrink: 0,
             }}
           />
+        )}
+
+        {/* "+" card at end of strip */}
+        {!dragState.isDragging && !isOverCapacity && (
+          <div
+            onClick={function() { onPlusClick(dump.id); }}
+            style={{
+              width: "200px",
+              height: "260px",
+              borderRadius: "10px",
+              border: "2px dashed #2a2a2a",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#666",
+              fontSize: "13px",
+              textAlign: "center",
+              flexShrink: 0,
+              cursor: "pointer",
+              transition: "all 0.2s",
+              background: "rgba(255,255,255,0.02)",
+            }}
+            onMouseEnter={function(e) {
+              e.currentTarget.style.borderColor = "#c8a96e";
+              e.currentTarget.style.color = "#c8a96e";
+              e.currentTarget.style.background = "rgba(200,169,110,0.05)";
+            }}
+            onMouseLeave={function(e) {
+              e.currentTarget.style.borderColor = "#2a2a2a";
+              e.currentTarget.style.color = "#666";
+              e.currentTarget.style.background = "rgba(255,255,255,0.02)";
+            }}
+          >
+            <Plus size={32} strokeWidth={1.5} />
+            <span style={{ marginTop: "8px", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>
+              Add Photos
+            </span>
+          </div>
         )}
       </div>
     </section>

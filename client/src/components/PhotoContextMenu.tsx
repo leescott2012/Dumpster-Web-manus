@@ -1,7 +1,7 @@
 /*
- * PhotoContextMenu — Options on double-tap or long-press
- * Remove from dump, toggle Huji, view larger
- * NO template literals, NO inline style tags — Safari compatible
+ * PhotoContextMenu — triggered by "..." dots button on selected photo
+ * Shows: Mark/Unmark Huji (normal), Remove (red with slide animation)
+ * NO template literals — Safari compatible
  */
 import type { Photo } from "@/lib/photoData";
 
@@ -11,7 +11,6 @@ interface PhotoContextMenuProps {
   onClose: () => void;
   onRemoveFromDump: (photoId: string) => void;
   onToggleHuji: (photoId: string) => void;
-  onViewLarger: (photo: Photo) => void;
   isInDump: boolean;
 }
 
@@ -21,7 +20,6 @@ export default function PhotoContextMenu({
   onClose,
   onRemoveFromDump,
   onToggleHuji,
-  onViewLarger,
   isInDump,
 }: PhotoContextMenuProps) {
   if (!photo || !position) return null;
@@ -57,7 +55,7 @@ export default function PhotoContextMenu({
     fontFamily: "inherit",
   };
 
-  var hujiLabel = photo.isHuji ? "Unmark as Huji" : "Mark as Huji";
+  var hujiLabel = photo.isHuji ? "Unmark Huji" : "Mark as Huji";
 
   return (
     <>
@@ -74,18 +72,6 @@ export default function PhotoContextMenu({
 
       {/* Menu */}
       <div style={menuStyle} className="context-menu-enter">
-        <button
-          style={itemStyle}
-          onClick={function() {
-            onViewLarger(photo);
-            onClose();
-          }}
-          onMouseEnter={function(e) { e.currentTarget.style.background = "#1a1a1a"; }}
-          onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
-        >
-          View Larger
-        </button>
-
         <button
           style={itemStyle}
           onClick={function() {
@@ -108,6 +94,7 @@ export default function PhotoContextMenu({
               border: "none",
               color: "#e74c3c",
               fontSize: "13px",
+              fontWeight: 600,
               textAlign: "left",
               cursor: "pointer",
               borderRadius: "6px",
@@ -121,7 +108,7 @@ export default function PhotoContextMenu({
             onMouseEnter={function(e) { e.currentTarget.style.background = "#1a1a1a"; }}
             onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
           >
-            Remove from Dump
+            Remove
           </button>
         )}
       </div>
