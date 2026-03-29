@@ -121,16 +121,20 @@ export default function PhotoCard({
 
       if (didDrag.current || dragState.isDragging) return;
 
-      // Double tap = lightbox, single tap = nothing
+      // Single tap = context menu, double tap = lightbox
       tapCount.current++;
       if (tapCount.current === 1) {
         tapTimer.current = setTimeout(function() {
-          // single tap: do nothing
+          if (tapCount.current === 1) {
+            // single tap: open context menu
+            if (onDoubleTap) onDoubleTap(photo);
+          }
           tapCount.current = 0;
         }, 280);
       } else if (tapCount.current >= 2) {
         if (tapTimer.current) clearTimeout(tapTimer.current);
         tapCount.current = 0;
+        // double tap: open lightbox
         if (onTap) onTap(photo);
       }
     },
@@ -166,15 +170,18 @@ export default function PhotoCard({
 
   const handleClick = useCallback(
     function(e: React.MouseEvent) {
-      // single click does nothing — double click opens lightbox
+      // single click: open context menu
+      if (didDrag.current || dragState.isDragging) return;
+      if (onDoubleTap) onDoubleTap(photo);
     },
-    []
+    [dragState.isDragging, onDoubleTap, photo]
   );
 
   const handleDoubleClick = useCallback(
     function(e: React.MouseEvent) {
       e.preventDefault();
       if (didDrag.current || dragState.isDragging) return;
+      // double click: open lightbox
       if (onTap) onTap(photo);
     },
     [dragState.isDragging, onTap, photo]
