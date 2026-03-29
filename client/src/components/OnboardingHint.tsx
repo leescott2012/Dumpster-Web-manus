@@ -61,10 +61,10 @@ export default function OnboardingHint() {
           <strong style={{ color: "#e8e8e8" }}>Long press</strong> to pick up a photo, then drag to reorder or move between dumps
         </div>
         <div style={{ marginBottom: "6px" }}>
-          <strong style={{ color: "#e8e8e8" }}>Tap</strong> to view larger
+          <strong style={{ color: "#e8e8e8" }}>Double tap</strong> to view larger
         </div>
         <div>
-          <strong style={{ color: "#e8e8e8" }}>Double tap</strong> for options (remove, mark Huji)
+          <strong style={{ color: "#e8e8e8" }}>Right-click / hold</strong> for options (remove, mark Huji)
         </div>
       </div>
       <div
