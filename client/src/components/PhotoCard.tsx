@@ -3,11 +3,12 @@
  * First card gets gold border (#c8a96e), Huji gets red (#e74c3c)
  * Badge top-left "HOOK" for first in dump, role label bottom gradient overlay
  *
- * Interactions:
- * - Single tap/click → lightbox
- * - Double tap/click → context menu
- * - Long press (400ms) → start drag
- * - Right-click → context menu
+ * Interaction model:
+ * - Single tap/click   → nothing
+ * - Double tap/click   → lightbox (onTap)
+ * - Long press + release (no move) → context menu (onDoubleTap)
+ * - Long press + move  → drag to rearrange / move between dumps
+ * - Right-click        → context menu (onDoubleTap)
  *
  * NO template literals — plain string concat for Safari compatibility
  */
@@ -21,7 +22,7 @@ interface PhotoCardProps {
   isFirst?: boolean;
   source: { type: "dump" | "pool"; dumpId?: string };
   onTap?: (photo: Photo) => void;
-  onDoubleTap?: (photo: Photo) => void;
+  onDoubleTap?: (photo: Photo, position: { x: number; y: number }) => void;
   isDragOver?: boolean;
   width?: number;
   height?: number;
@@ -41,7 +42,8 @@ export default function PhotoCard({
   const { startDrag, dragState } = useDrag();
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
-  const didDrag = useRef(false);
+  const longPressTriggered = useRef(false); // long press fired
+  const didMove = useRef(false);            // finger moved after long press
   const tapCount = useRef(0);
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isPressed, setIsPressed] = useState(false);
@@ -70,6 +72,16 @@ export default function PhotoCard({
   var heightPx = height + "px";
   var borderVal = "2px solid " + borderColor;
 
+  var badgeLabel: string;
+  if (isFirst && source.type === "dump") {
+    badgeLabel = "HOOK";
+  } else {
+    var n = index + 1;
+    badgeLabel = n < 10 ? "0" + n : "" + n;
+  }
+
+  var isBeingDragged = dragState.isDragging && dragState.photo && dragState.photo.id === photo.id;
+
   const clearLongPress = function() {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
@@ -82,17 +94,20 @@ export default function PhotoCard({
     function(e: React.TouchEvent) {
       var touch = e.touches[0];
       touchStartPos.current = { x: touch.clientX, y: touch.clientY };
-      didDrag.current = false;
+      longPressTriggered.current = false;
+      didMove.current = false;
       setIsPressed(true);
 
-      var touchX = touch.clientX;
-      var touchY = touch.clientY;
+      var startX = touch.clientX;
+      var startY = touch.clientY;
 
       longPressTimer.current = setTimeout(function() {
-        didDrag.current = true;
+        longPressTriggered.current = true;
+        // Long press fired — now we wait to see if they move or release
+        // Start drag immediately so the ghost appears
         startDrag(photo, { type: source.type, dumpId: source.dumpId, index: index }, {
-          x: touchX,
-          y: touchY,
+          x: startX,
+          y: startY,
         });
         if (navigator.vibrate) navigator.vibrate(30);
       }, 400);
@@ -106,9 +121,16 @@ export default function PhotoCard({
       var touch = e.touches[0];
       var dx = Math.abs(touch.clientX - touchStartPos.current.x);
       var dy = Math.abs(touch.clientY - touchStartPos.current.y);
-      if (dx > 10 || dy > 10) {
-        clearLongPress();
-        setIsPressed(false);
+
+      if (dx > 8 || dy > 8) {
+        if (!longPressTriggered.current) {
+          // Moved before long press fired — cancel long press, allow scroll
+          clearLongPress();
+          setIsPressed(false);
+        } else {
+          // Moved after long press — this is a drag
+          didMove.current = true;
+        }
       }
     },
     []
@@ -119,16 +141,24 @@ export default function PhotoCard({
       clearLongPress();
       setIsPressed(false);
 
-      if (didDrag.current || dragState.isDragging) return;
+      if (dragState.isDragging) return;
 
-      // Single tap = context menu, double tap = lightbox
+      if (longPressTriggered.current) {
+        // Long press fired but finger didn't move → context menu
+        if (!didMove.current) {
+          var touch = e.changedTouches[0];
+          if (onDoubleTap) onDoubleTap(photo, { x: touch.clientX, y: touch.clientY });
+        }
+        longPressTriggered.current = false;
+        didMove.current = false;
+        return;
+      }
+
+      // Regular tap — check for double tap → lightbox
       tapCount.current++;
       if (tapCount.current === 1) {
         tapTimer.current = setTimeout(function() {
-          if (tapCount.current === 1) {
-            // single tap: open context menu
-            if (onDoubleTap) onDoubleTap(photo);
-          }
+          // single tap: do nothing
           tapCount.current = 0;
         }, 280);
       } else if (tapCount.current >= 2) {
@@ -146,41 +176,69 @@ export default function PhotoCard({
     function(e: React.MouseEvent) {
       if (e.button !== 0) return;
       touchStartPos.current = { x: e.clientX, y: e.clientY };
-      didDrag.current = false;
+      longPressTriggered.current = false;
+      didMove.current = false;
       setIsPressed(true);
 
-      var mouseX = e.clientX;
-      var mouseY = e.clientY;
+      var startX = e.clientX;
+      var startY = e.clientY;
 
       longPressTimer.current = setTimeout(function() {
-        didDrag.current = true;
+        longPressTriggered.current = true;
         startDrag(photo, { type: source.type, dumpId: source.dumpId, index: index }, {
-          x: mouseX,
-          y: mouseY,
+          x: startX,
+          y: startY,
         });
       }, 400);
     },
     [photo, source, index, startDrag]
   );
 
-  const handleMouseUp = useCallback(function() {
-    clearLongPress();
-    setIsPressed(false);
-  }, []);
+  const handleMouseMove = useCallback(
+    function(e: React.MouseEvent) {
+      if (!touchStartPos.current) return;
+      var dx = Math.abs(e.clientX - touchStartPos.current.x);
+      var dy = Math.abs(e.clientY - touchStartPos.current.y);
+      if (dx > 8 || dy > 8) {
+        if (!longPressTriggered.current) {
+          clearLongPress();
+          setIsPressed(false);
+        } else {
+          didMove.current = true;
+        }
+      }
+    },
+    []
+  );
+
+  const handleMouseUp = useCallback(
+    function(e: React.MouseEvent) {
+      clearLongPress();
+      setIsPressed(false);
+
+      if (dragState.isDragging) return;
+
+      if (longPressTriggered.current && !didMove.current) {
+        // Long press + release without move → context menu
+        if (onDoubleTap) onDoubleTap(photo, { x: e.clientX, y: e.clientY });
+        longPressTriggered.current = false;
+        didMove.current = false;
+      }
+    },
+    [dragState.isDragging, onDoubleTap, photo]
+  );
 
   const handleClick = useCallback(
     function(e: React.MouseEvent) {
-      // single click: open context menu
-      if (didDrag.current || dragState.isDragging) return;
-      if (onDoubleTap) onDoubleTap(photo);
+      // single click: nothing
     },
-    [dragState.isDragging, onDoubleTap, photo]
+    []
   );
 
   const handleDoubleClick = useCallback(
     function(e: React.MouseEvent) {
       e.preventDefault();
-      if (didDrag.current || dragState.isDragging) return;
+      if (dragState.isDragging) return;
       // double click: open lightbox
       if (onTap) onTap(photo);
     },
@@ -190,20 +248,10 @@ export default function PhotoCard({
   const handleContextMenu = useCallback(
     function(e: React.MouseEvent) {
       e.preventDefault();
-      if (onDoubleTap) onDoubleTap(photo);
+      if (onDoubleTap) onDoubleTap(photo, { x: e.clientX, y: e.clientY });
     },
     [onDoubleTap, photo]
   );
-
-  var isBeingDragged = dragState.isDragging && dragState.photo && dragState.photo.id === photo.id;
-
-  var badgeLabel: string;
-  if (isFirst && source.type === "dump") {
-    badgeLabel = "HOOK";
-  } else {
-    var n = index + 1;
-    badgeLabel = n < 10 ? "0" + n : "" + n;
-  }
 
   return (
     <div
@@ -226,6 +274,7 @@ export default function PhotoCard({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}

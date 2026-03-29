@@ -87,11 +87,13 @@ function HomeContent() {
   }, []);
 
   const handleDoubleTapPhoto = useCallback(
-    (photo: Photo) => {
+    (photo: Photo, position?: { x: number; y: number }) => {
       const dump = dumps.find((d) => d.photos.some((p) => p.id === photo.id));
+      // Use provided position, or fall back to center of screen
+      var pos = position || { x: window.innerWidth / 2 - 90, y: window.innerHeight / 2 - 80 };
       setContextMenu({
         photo,
-        position: { x: window.innerWidth / 2 - 90, y: window.innerHeight / 2 - 80 },
+        position: pos,
         dumpId: dump?.id,
       });
     },
