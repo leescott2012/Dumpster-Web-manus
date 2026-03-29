@@ -1,7 +1,8 @@
 /*
  * PhotoCard — V4 exact: 200x260px, border-radius 10px, 2px border
- * Tap = yellow highlight + dots, Double tap = lightbox, Hold+move = drag
- * Star badge in top-left when favorited. Huji red border.
+ * SAFARI FIX: touchend is the ONLY tap trigger on mobile.
+ * The ghost click fired by Safari 300ms after touchend is suppressed via e.preventDefault().
+ * Background deselect uses a separate mechanism — it never fires on the card itself.
  * NO template literals, NO HOOK label, NO role field.
  */
 import { useRef, useCallback, useState } from "react";
@@ -30,15 +31,143 @@ export default function PhotoCard({
   selectionMode = false, selectionIndex,
 }: PhotoCardProps) {
   var { startDrag, dragState } = useDrag();
-  var longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Touch state refs — never stored in React state to avoid re-render races
   var touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  var longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   var longPressTriggered = useRef(false);
-  var didMove = useRef(false);
-  var tapCount = useRef(0);
-  var tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  var didMoveEnough = useRef(false);
+  var lastTapTime = useRef(0);
+  var suppressNextClick = useRef(false);
   var [isPressed, setIsPressed] = useState(false);
 
-  // Border color logic
+  var clearLongPress = function() {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+  };
+
+  // ── TOUCH HANDLERS (mobile) ──────────────────────────────────────────────
+
+  var handleTouchStart = useCallback(function(e: React.TouchEvent) {
+    var touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    longPressTriggered.current = false;
+    didMoveEnough.current = false;
+    setIsPressed(true);
+
+    var sx = touch.clientX;
+    var sy = touch.clientY;
+
+    longPressTimer.current = setTimeout(function() {
+      longPressTriggered.current = true;
+      startDrag(photo, { type: source.type, dumpId: source.dumpId, index: index }, { x: sx, y: sy });
+      if (navigator.vibrate) navigator.vibrate(30);
+      setIsPressed(false);
+    }, 400);
+  }, [photo, source, index, startDrag]);
+
+  var handleTouchMove = useCallback(function(e: React.TouchEvent) {
+    if (!touchStartPos.current) return;
+    var touch = e.touches[0];
+    var dx = Math.abs(touch.clientX - touchStartPos.current.x);
+    var dy = Math.abs(touch.clientY - touchStartPos.current.y);
+    if (dx > 10 || dy > 10) {
+      didMoveEnough.current = true;
+      if (!longPressTriggered.current) {
+        clearLongPress();
+        setIsPressed(false);
+      }
+    }
+  }, []);
+
+  var handleTouchEnd = useCallback(function(e: React.TouchEvent) {
+    clearLongPress();
+    setIsPressed(false);
+
+    // Always suppress the ghost click Safari fires ~300ms after touchend
+    suppressNextClick.current = true;
+    setTimeout(function() { suppressNextClick.current = false; }, 600);
+
+    // If drag is active or user moved, do nothing
+    if (dragState.isDragging || longPressTriggered.current || didMoveEnough.current) {
+      longPressTriggered.current = false;
+      didMoveEnough.current = false;
+      return;
+    }
+
+    // Stop propagation so the background deselect handler never fires on a card tap
+    e.stopPropagation();
+
+    var now = Date.now();
+    var timeSinceLast = now - lastTapTime.current;
+
+    if (timeSinceLast < 300 && timeSinceLast > 0) {
+      // Double tap → lightbox
+      lastTapTime.current = 0;
+      if (!selectionMode && onDoubleTap) onDoubleTap(photo);
+    } else {
+      // Single tap → select
+      lastTapTime.current = now;
+      if (onSelect) onSelect(photo);
+    }
+  }, [dragState.isDragging, onSelect, onDoubleTap, photo, selectionMode]);
+
+  // ── MOUSE HANDLERS (desktop) ─────────────────────────────────────────────
+
+  var handleMouseDown = useCallback(function(e: React.MouseEvent) {
+    if (e.button !== 0) return;
+    touchStartPos.current = { x: e.clientX, y: e.clientY };
+    longPressTriggered.current = false;
+    didMoveEnough.current = false;
+    setIsPressed(true);
+
+    var sx = e.clientX;
+    var sy = e.clientY;
+
+    longPressTimer.current = setTimeout(function() {
+      longPressTriggered.current = true;
+      startDrag(photo, { type: source.type, dumpId: source.dumpId, index: index }, { x: sx, y: sy });
+      setIsPressed(false);
+    }, 400);
+  }, [photo, source, index, startDrag]);
+
+  var handleMouseUp = useCallback(function() {
+    clearLongPress();
+    setIsPressed(false);
+  }, []);
+
+  var handleClick = useCallback(function(e: React.MouseEvent) {
+    // Suppress ghost clicks from Safari touch events
+    if (suppressNextClick.current) { e.stopPropagation(); return; }
+    if (dragState.isDragging || longPressTriggered.current) return;
+    // Stop propagation so background deselect never fires on a card click
+    e.stopPropagation();
+    if (onSelect) onSelect(photo);
+  }, [dragState.isDragging, onSelect, photo]);
+
+  var handleDoubleClick = useCallback(function(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragState.isDragging || selectionMode) return;
+    if (onDoubleTap) onDoubleTap(photo);
+  }, [dragState.isDragging, onDoubleTap, photo, selectionMode]);
+
+  // ── DOTS BUTTON ──────────────────────────────────────────────────────────
+
+  var handleDotsTouch = useCallback(function(e: React.TouchEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    var touch = e.changedTouches[0];
+    if (onDotsClick) onDotsClick(photo, { x: touch.clientX, y: touch.clientY });
+  }, [onDotsClick, photo]);
+
+  var handleDotsClick = useCallback(function(e: React.MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    if (onDotsClick) onDotsClick(photo, { x: e.clientX, y: e.clientY });
+  }, [onDotsClick, photo]);
+
+  // ── STYLES ───────────────────────────────────────────────────────────────
+
   var borderColor: string;
   if (selectionMode && isSelected) {
     borderColor = "#22c55e";
@@ -59,98 +188,6 @@ export default function PhotoCard({
   var badgeLabel = (index + 1) < 10 ? "0" + (index + 1) : "" + (index + 1);
   var isBeingDragged = dragState.isDragging && dragState.photo && dragState.photo.id === photo.id;
 
-  var clearLongPress = function() {
-    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-  };
-
-  var handleTouchStart = useCallback(function(e: React.TouchEvent) {
-    if (selectionMode) return;
-    var touch = e.touches[0];
-    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
-    longPressTriggered.current = false;
-    didMove.current = false;
-    setIsPressed(true);
-    var sx = touch.clientX; var sy = touch.clientY;
-    longPressTimer.current = setTimeout(function() {
-      longPressTriggered.current = true;
-      startDrag(photo, { type: source.type, dumpId: source.dumpId, index: index }, { x: sx, y: sy });
-      if (navigator.vibrate) navigator.vibrate(30);
-    }, 400);
-  }, [photo, source, index, startDrag, selectionMode]);
-
-  var handleTouchMove = useCallback(function(e: React.TouchEvent) {
-    if (!touchStartPos.current) return;
-    var touch = e.touches[0];
-    var dx = Math.abs(touch.clientX - touchStartPos.current.x);
-    var dy = Math.abs(touch.clientY - touchStartPos.current.y);
-    if (dx > 8 || dy > 8) {
-      if (!longPressTriggered.current) { clearLongPress(); setIsPressed(false); }
-      else { didMove.current = true; }
-    }
-  }, []);
-
-  var handleTouchEnd = useCallback(function(_e: React.TouchEvent) {
-    clearLongPress();
-    setIsPressed(false);
-    if (dragState.isDragging) return;
-    if (longPressTriggered.current) { longPressTriggered.current = false; didMove.current = false; return; }
-    if (selectionMode) { if (onSelect) onSelect(photo); return; }
-    tapCount.current++;
-    if (tapCount.current === 1) {
-      tapTimer.current = setTimeout(function() {
-        if (tapCount.current === 1 && onSelect) onSelect(photo);
-        tapCount.current = 0;
-      }, 280);
-    } else if (tapCount.current >= 2) {
-      if (tapTimer.current) clearTimeout(tapTimer.current);
-      tapCount.current = 0;
-      if (onDoubleTap) onDoubleTap(photo);
-    }
-  }, [dragState.isDragging, onSelect, onDoubleTap, photo, selectionMode]);
-
-  var handleMouseDown = useCallback(function(e: React.MouseEvent) {
-    if (e.button !== 0 || selectionMode) return;
-    touchStartPos.current = { x: e.clientX, y: e.clientY };
-    longPressTriggered.current = false; didMove.current = false; setIsPressed(true);
-    var sx = e.clientX; var sy = e.clientY;
-    longPressTimer.current = setTimeout(function() {
-      longPressTriggered.current = true;
-      startDrag(photo, { type: source.type, dumpId: source.dumpId, index: index }, { x: sx, y: sy });
-    }, 400);
-  }, [photo, source, index, startDrag, selectionMode]);
-
-  var handleMouseMove = useCallback(function(e: React.MouseEvent) {
-    if (!touchStartPos.current) return;
-    var dx = Math.abs(e.clientX - touchStartPos.current.x);
-    var dy = Math.abs(e.clientY - touchStartPos.current.y);
-    if (dx > 8 || dy > 8) {
-      if (!longPressTriggered.current) { clearLongPress(); setIsPressed(false); }
-      else { didMove.current = true; }
-    }
-  }, []);
-
-  var handleMouseUp = useCallback(function() { clearLongPress(); setIsPressed(false); }, []);
-
-  var handleClick = useCallback(function() {
-    if (dragState.isDragging || longPressTriggered.current) return;
-    if (selectionMode) { if (onSelect) onSelect(photo); return; }
-    if (onSelect) onSelect(photo);
-  }, [dragState.isDragging, onSelect, photo, selectionMode]);
-
-  var handleDoubleClick = useCallback(function(e: React.MouseEvent) {
-    e.preventDefault();
-    if (dragState.isDragging || selectionMode) return;
-    if (onDoubleTap) onDoubleTap(photo);
-  }, [dragState.isDragging, onDoubleTap, photo, selectionMode]);
-
-  var handleDotsClick = useCallback(function(e: React.MouseEvent | React.TouchEvent) {
-    e.stopPropagation(); e.preventDefault();
-    var cx: number; var cy: number;
-    if ("touches" in e) { cx = (e as React.TouchEvent).changedTouches[0].clientX; cy = (e as React.TouchEvent).changedTouches[0].clientY; }
-    else { cx = (e as React.MouseEvent).clientX; cy = (e as React.MouseEvent).clientY; }
-    if (onDotsClick) onDotsClick(photo, { x: cx, y: cy });
-  }, [onDotsClick, photo]);
-
   return (
     <div
       data-photo-id={photo.id}
@@ -164,12 +201,18 @@ export default function PhotoCard({
         transform: cardTransform, scrollSnapAlign: "start",
         opacity: isBeingDragged ? 0.3 : 1,
         WebkitTouchCallout: "none",
+        cursor: "pointer",
       }}
-      onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
-      onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
-      onClick={handleClick} onDoubleClick={handleDoubleClick}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
     >
-      <img src={photo.url} alt={photo.alt} draggable={false} loading="lazy"
+      <img
+        src={photo.url} alt={photo.alt} draggable={false} loading="lazy"
         style={{ width: widthPx, height: heightPx, objectFit: "cover", display: "block", pointerEvents: "none" }}
       />
 
@@ -178,18 +221,19 @@ export default function PhotoCard({
         position: "absolute", top: "8px", left: "8px",
         background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
         color: "#fff", fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em",
-        padding: "3px 8px", borderRadius: "4px",
+        padding: "3px 8px", borderRadius: "4px", pointerEvents: "none",
       }}>
         {badgeLabel}
       </div>
 
-      {/* Gold star badge — top left below number, when favorited */}
+      {/* Gold star badge — when favorited */}
       {photo.isFavorite && (
         <div style={{
           position: "absolute", top: "32px", left: "8px",
           width: "22px", height: "22px", borderRadius: "50%",
           background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
           display: "flex", alignItems: "center", justifyContent: "center",
+          pointerEvents: "none",
         }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="#c8a96e" stroke="none">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
@@ -197,12 +241,13 @@ export default function PhotoCard({
         </div>
       )}
 
-      {/* Huji badge — top right (when NOT selected and not in selection mode) */}
+      {/* Huji badge — top right (when not selected) */}
       {photo.isHuji && !isSelected && !selectionMode && (
         <div style={{
           position: "absolute", top: "8px", right: "8px",
           background: "#e74c3c", color: "#fff", fontSize: "8px", fontWeight: 700,
           letterSpacing: "0.1em", padding: "2px 6px", borderRadius: "4px",
+          pointerEvents: "none",
         }}>
           HUJI
         </div>
@@ -210,13 +255,16 @@ export default function PhotoCard({
 
       {/* "..." dots button — appears when selected (not in pool selection mode) */}
       {isSelected && !selectionMode && (
-        <div onClick={handleDotsClick} onTouchEnd={handleDotsClick}
+        <div
+          onTouchEnd={handleDotsTouch}
+          onClick={handleDotsClick}
           style={{
             position: "absolute", top: "6px", right: "6px",
             width: "28px", height: "28px", borderRadius: "50%",
-            background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+            background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", zIndex: 10,
+            WebkitTapHighlightColor: "transparent",
           }}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -234,6 +282,7 @@ export default function PhotoCard({
           width: "24px", height: "24px", borderRadius: "50%",
           background: "#22c55e", color: "#fff", fontSize: "11px", fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
+          pointerEvents: "none",
         }}>
           {selectionIndex + 1}
         </div>
@@ -245,6 +294,7 @@ export default function PhotoCard({
         background: "linear-gradient(transparent, rgba(0,0,0,0.85))",
         padding: "24px 10px 8px", fontSize: "9px", fontWeight: 500,
         letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "#999",
+        pointerEvents: "none",
       }}>
         {photo.category}
       </div>

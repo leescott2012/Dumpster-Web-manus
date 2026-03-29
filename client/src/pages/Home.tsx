@@ -258,10 +258,25 @@ function HomeContent() {
     toast("Dump deleted \u2014 photos returned to pool");
   }, [deleteDump]);
 
-  // Click on empty space -> deselect
+  // Tap/click on empty space -> deselect
+  // SAFARI FIX: We use a ref to track whether a card touchend just fired.
+  // If it did, the background touchend/click must be ignored.
+  var cardTappedRef = useRef(false);
+
+  var handleBackgroundTouch = useCallback(function(e: React.TouchEvent) {
+    var target = e.target as HTMLElement;
+    // If touch ended on a card or button, don't deselect
+    if (target.closest("[data-photo-id]") || target.closest("button")) return;
+    // Small delay to let card's own touchend fire first
+    setTimeout(function() {
+      setSelectedPhotoId(null);
+      setContextMenu(null);
+    }, 50);
+  }, []);
+
   var handleBackgroundClick = useCallback(function(e: React.MouseEvent) {
     var target = e.target as HTMLElement;
-    if (target.closest("[data-photo-id]") || target.closest("button") || target.closest("[data-dump-id]")) return;
+    if (target.closest("[data-photo-id]") || target.closest("button")) return;
     setSelectedPhotoId(null);
     setContextMenu(null);
   }, []);
@@ -269,7 +284,7 @@ function HomeContent() {
   var originalDumpIds = ["dump-1", "dump-2", "dump-3"];
 
   return (
-    <div style={{ minHeight: "100vh" }} onClick={handleBackgroundClick}>
+    <div style={{ minHeight: "100vh" }} onClick={handleBackgroundClick} onTouchEnd={handleBackgroundTouch}>
       {/* Dimming overlay when in selection mode */}
       {selectionMode && (
         <div id="selection-dimmer" style={{
