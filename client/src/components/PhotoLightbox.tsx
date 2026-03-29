@@ -2,6 +2,7 @@
  * PhotoLightbox — Full-screen photo viewer on tap
  * Dark overlay with backdrop blur, centered photo, tap to dismiss
  * V4 dark theme with gold accents
+ * NO template literals, NO inline style tags — Safari compatible
  */
 import type { Photo } from "@/lib/photoData";
 
@@ -13,9 +14,12 @@ interface PhotoLightboxProps {
 export default function PhotoLightbox({ photo, onClose }: PhotoLightboxProps) {
   if (!photo) return null;
 
+  var imgBorder = photo.isHuji ? "3px solid #e74c3c" : "2px solid #2a2a2a";
+
   return (
     <div
       onClick={onClose}
+      className="lightbox-enter"
       style={{
         position: "fixed",
         inset: 0,
@@ -28,7 +32,6 @@ export default function PhotoLightbox({ photo, onClose }: PhotoLightboxProps) {
         justifyContent: "center",
         padding: "20px",
         cursor: "pointer",
-        animation: "fadeIn 0.2s ease-out",
       }}
     >
       <div
@@ -38,10 +41,10 @@ export default function PhotoLightbox({ photo, onClose }: PhotoLightboxProps) {
           maxHeight: "80vh",
           borderRadius: "12px",
           overflow: "hidden",
-          border: photo.isHuji ? "3px solid #e74c3c" : "2px solid #2a2a2a",
+          border: imgBorder,
           boxShadow: "0 16px 64px rgba(0,0,0,0.5)",
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={function(e) { e.stopPropagation(); }}
       >
         <img
           src={photo.url}
@@ -109,13 +112,6 @@ export default function PhotoLightbox({ photo, onClose }: PhotoLightboxProps) {
       >
         TAP TO CLOSE
       </div>
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-      `}</style>
     </div>
   );
 }

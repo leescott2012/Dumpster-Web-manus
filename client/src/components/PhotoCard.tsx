@@ -8,6 +8,8 @@
  * - Double tap/click → context menu
  * - Long press (400ms) → start drag
  * - Right-click → context menu
+ *
+ * NO template literals — plain string concat for Safari compatibility
  */
 import { useRef, useCallback, useState } from "react";
 import { useDrag } from "@/contexts/DragContext";
@@ -44,14 +46,31 @@ export default function PhotoCard({
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isPressed, setIsPressed] = useState(false);
 
-  const getBorderColor = () => {
-    if (isDragOver) return "#c8a96e";
-    if (isFirst) return "#c8a96e";
-    if (photo.isHuji) return "#e74c3c";
-    return "#1e1e1e";
-  };
+  var borderColor: string;
+  if (isDragOver) {
+    borderColor = "#c8a96e";
+  } else if (isFirst) {
+    borderColor = "#c8a96e";
+  } else if (photo.isHuji) {
+    borderColor = "#e74c3c";
+  } else {
+    borderColor = "#1e1e1e";
+  }
 
-  const clearLongPress = () => {
+  var cardTransform: string;
+  if (isPressed) {
+    cardTransform = "scale(0.97)";
+  } else if (isDragOver) {
+    cardTransform = "scale(1.03)";
+  } else {
+    cardTransform = "scale(1)";
+  }
+
+  var widthPx = width + "px";
+  var heightPx = height + "px";
+  var borderVal = "2px solid " + borderColor;
+
+  const clearLongPress = function() {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
@@ -60,17 +79,20 @@ export default function PhotoCard({
 
   // ── Touch events (mobile) ──
   const handleTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      const touch = e.touches[0];
+    function(e: React.TouchEvent) {
+      var touch = e.touches[0];
       touchStartPos.current = { x: touch.clientX, y: touch.clientY };
       didDrag.current = false;
       setIsPressed(true);
 
-      longPressTimer.current = setTimeout(() => {
+      var touchX = touch.clientX;
+      var touchY = touch.clientY;
+
+      longPressTimer.current = setTimeout(function() {
         didDrag.current = true;
-        startDrag(photo, { ...source, index }, {
-          x: touch.clientX,
-          y: touch.clientY,
+        startDrag(photo, { type: source.type, dumpId: source.dumpId, index: index }, {
+          x: touchX,
+          y: touchY,
         });
         if (navigator.vibrate) navigator.vibrate(30);
       }, 400);
@@ -79,11 +101,11 @@ export default function PhotoCard({
   );
 
   const handleTouchMove = useCallback(
-    (e: React.TouchEvent) => {
+    function(e: React.TouchEvent) {
       if (!touchStartPos.current) return;
-      const touch = e.touches[0];
-      const dx = Math.abs(touch.clientX - touchStartPos.current.x);
-      const dy = Math.abs(touch.clientY - touchStartPos.current.y);
+      var touch = e.touches[0];
+      var dx = Math.abs(touch.clientX - touchStartPos.current.x);
+      var dy = Math.abs(touch.clientY - touchStartPos.current.y);
       if (dx > 10 || dy > 10) {
         clearLongPress();
         setIsPressed(false);
@@ -93,7 +115,7 @@ export default function PhotoCard({
   );
 
   const handleTouchEnd = useCallback(
-    (e: React.TouchEvent) => {
+    function(e: React.TouchEvent) {
       clearLongPress();
       setIsPressed(false);
 
@@ -102,16 +124,16 @@ export default function PhotoCard({
       // Tap detection with double-tap support
       tapCount.current++;
       if (tapCount.current === 1) {
-        tapTimer.current = setTimeout(() => {
+        tapTimer.current = setTimeout(function() {
           if (tapCount.current === 1) {
-            onTap?.(photo);
+            if (onTap) onTap(photo);
           }
           tapCount.current = 0;
         }, 250);
       } else if (tapCount.current >= 2) {
         if (tapTimer.current) clearTimeout(tapTimer.current);
         tapCount.current = 0;
-        onDoubleTap?.(photo);
+        if (onDoubleTap) onDoubleTap(photo);
       }
     },
     [dragState.isDragging, onTap, onDoubleTap, photo]
@@ -119,53 +141,64 @@ export default function PhotoCard({
 
   // ── Mouse events (desktop) ──
   const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.button !== 0) return; // only left click
+    function(e: React.MouseEvent) {
+      if (e.button !== 0) return;
       touchStartPos.current = { x: e.clientX, y: e.clientY };
       didDrag.current = false;
       setIsPressed(true);
 
-      longPressTimer.current = setTimeout(() => {
+      var mouseX = e.clientX;
+      var mouseY = e.clientY;
+
+      longPressTimer.current = setTimeout(function() {
         didDrag.current = true;
-        startDrag(photo, { ...source, index }, {
-          x: e.clientX,
-          y: e.clientY,
+        startDrag(photo, { type: source.type, dumpId: source.dumpId, index: index }, {
+          x: mouseX,
+          y: mouseY,
         });
       }, 400);
     },
     [photo, source, index, startDrag]
   );
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback(function() {
     clearLongPress();
     setIsPressed(false);
   }, []);
 
   const handleClick = useCallback(
-    (e: React.MouseEvent) => {
+    function(e: React.MouseEvent) {
       if (didDrag.current || dragState.isDragging) return;
-      onTap?.(photo);
+      if (onTap) onTap(photo);
     },
     [dragState.isDragging, onTap, photo]
   );
 
   const handleDoubleClick = useCallback(
-    (e: React.MouseEvent) => {
+    function(e: React.MouseEvent) {
       e.preventDefault();
-      onDoubleTap?.(photo);
+      if (onDoubleTap) onDoubleTap(photo);
     },
     [onDoubleTap, photo]
   );
 
   const handleContextMenu = useCallback(
-    (e: React.MouseEvent) => {
+    function(e: React.MouseEvent) {
       e.preventDefault();
-      onDoubleTap?.(photo);
+      if (onDoubleTap) onDoubleTap(photo);
     },
     [onDoubleTap, photo]
   );
 
-  const isBeingDragged = dragState.isDragging && dragState.photo?.id === photo.id;
+  var isBeingDragged = dragState.isDragging && dragState.photo && dragState.photo.id === photo.id;
+
+  var badgeLabel: string;
+  if (isFirst && source.type === "dump") {
+    badgeLabel = "HOOK";
+  } else {
+    var n = index + 1;
+    badgeLabel = n < 10 ? "0" + n : "" + n;
+  }
 
   return (
     <div
@@ -175,11 +208,11 @@ export default function PhotoCard({
       data-index={index}
       className="relative flex-shrink-0 overflow-hidden select-none"
       style={{
-        width: `${width}px`,
+        width: widthPx,
         borderRadius: "10px",
-        border: `2px solid ${getBorderColor()}`,
+        border: borderVal,
         transition: "border-color 0.2s, transform 0.15s, opacity 0.15s",
-        transform: isPressed ? "scale(0.97)" : isDragOver ? "scale(1.03)" : "scale(1)",
+        transform: cardTransform,
         scrollSnapAlign: "start",
         opacity: isBeingDragged ? 0.3 : 1,
         WebkitTouchCallout: "none",
@@ -199,8 +232,8 @@ export default function PhotoCard({
         draggable={false}
         loading="lazy"
         style={{
-          width: `${width}px`,
-          height: `${height}px`,
+          width: widthPx,
+          height: heightPx,
           objectFit: "cover",
           display: "block",
           pointerEvents: "none",
@@ -215,6 +248,7 @@ export default function PhotoCard({
           left: "8px",
           background: isFirst ? "#c8a96e" : "rgba(0,0,0,0.75)",
           backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
           color: isFirst ? "#000" : "#fff",
           fontSize: "10px",
           fontWeight: 700,
@@ -224,7 +258,7 @@ export default function PhotoCard({
           textTransform: "uppercase" as const,
         }}
       >
-        {isFirst && source.type === "dump" ? "HOOK" : String(index + 1).padStart(2, "0")}
+        {badgeLabel}
       </div>
 
       {/* Huji badge — top right */}

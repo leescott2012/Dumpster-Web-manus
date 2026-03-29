@@ -3,6 +3,7 @@
  * Dump header with number, title, subtitle
  * Drop zone for receiving dragged photos
  * Shows gold insertion line between cards during drag
+ * NO template literals — plain string concat for Safari compatibility
  */
 import { useRef, useState, useEffect, useCallback } from "react";
 import PhotoCard from "./PhotoCard";
@@ -37,49 +38,58 @@ export default function DumpStrip({
   const dropIndexRef = useRef<number | null>(null);
 
   // Keep ref in sync
-  useEffect(() => {
+  useEffect(function() {
     dropIndexRef.current = dropIndex;
   }, [dropIndex]);
 
   // Track drop position during drag
-  useEffect(() => {
+  useEffect(function() {
     if (!dragState.isDragging) {
       setDropIndex(null);
       return;
     }
 
-    const handleMove = (e: TouchEvent | MouseEvent) => {
-      const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
-      const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    var dumpId = dump.id;
+    var dumpPhotosLen = dump.photos.length;
+
+    var handleMove = function(e: TouchEvent | MouseEvent) {
+      var clientX: number;
+      var clientY: number;
+      if ("touches" in e) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = (e as MouseEvent).clientX;
+        clientY = (e as MouseEvent).clientY;
+      }
 
       if (!stripRef.current) return;
-      const rect = stripRef.current.getBoundingClientRect();
+      var rect = stripRef.current.getBoundingClientRect();
 
-      // Check if cursor is over this strip (with some vertical tolerance)
       if (
         clientY >= rect.top - 40 &&
         clientY <= rect.bottom + 40 &&
         clientX >= rect.left - 20 &&
         clientX <= rect.right + 20
       ) {
-        const cards = stripRef.current.querySelectorAll("[data-photo-id]");
-        let insertIdx = dump.photos.length;
+        var cards = stripRef.current.querySelectorAll("[data-photo-id]");
+        var insertIdx = dumpPhotosLen;
 
-        for (let i = 0; i < cards.length; i++) {
-          const cardRect = cards[i].getBoundingClientRect();
-          const midX = cardRect.left + cardRect.width / 2;
+        for (var i = 0; i < cards.length; i++) {
+          var cardRect = cards[i].getBoundingClientRect();
+          var midX = cardRect.left + cardRect.width / 2;
           if (clientX < midX) {
             insertIdx = i;
             break;
           }
         }
 
-        // Don't allow dropping on self at same position
         if (
-          dragState.source?.type === "dump" &&
-          dragState.source.dumpId === dump.id
+          dragState.source &&
+          dragState.source.type === "dump" &&
+          dragState.source.dumpId === dumpId
         ) {
-          const srcIdx = dragState.source.index;
+          var srcIdx = dragState.source.index;
           if (insertIdx === srcIdx || insertIdx === srcIdx + 1) {
             setDropIndex(null);
             return;
@@ -92,9 +102,9 @@ export default function DumpStrip({
       }
     };
 
-    const handleEnd = () => {
+    var handleEnd = function() {
       if (dropIndexRef.current !== null) {
-        onDropPhoto(dump.id, dropIndexRef.current);
+        onDropPhoto(dumpId, dropIndexRef.current);
       }
     };
 
@@ -103,7 +113,7 @@ export default function DumpStrip({
     window.addEventListener("touchend", handleEnd);
     window.addEventListener("mouseup", handleEnd);
 
-    return () => {
+    return function() {
       window.removeEventListener("touchmove", handleMove);
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("touchend", handleEnd);
@@ -111,17 +121,19 @@ export default function DumpStrip({
     };
   }, [dragState.isDragging, dragState.source, dump.id, dump.photos.length, onDropPhoto]);
 
-  const handleTitleSubmit = () => {
+  var handleTitleSubmit = function() {
     setIsEditing(false);
     if (editTitle.trim() && editTitle !== dump.title) {
-      onRenameDump?.(dump.id, editTitle.trim());
+      if (onRenameDump) onRenameDump(dump.id, editTitle.trim());
     } else {
       setEditTitle(dump.title);
     }
   };
 
-  const isOverCapacity = dump.photos.length >= 7;
-  const showDropIndicator = dropIndex !== null && !isOverCapacity;
+  var isOverCapacity = dump.photos.length >= 7;
+  var showDropIndicator = dropIndex !== null && !isOverCapacity;
+
+  var dumpNumStr = dump.number < 10 ? "0" + dump.number : "" + dump.number;
 
   return (
     <section
@@ -153,14 +165,14 @@ export default function DumpStrip({
               marginBottom: "8px",
             }}
           >
-            DUMP {String(dump.number).padStart(2, "0")}
+            {"DUMP " + dumpNumStr}
           </div>
           {isEditing ? (
             <input
               value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
+              onChange={function(e) { setEditTitle(e.target.value); }}
               onBlur={handleTitleSubmit}
-              onKeyDown={(e) => e.key === "Enter" && handleTitleSubmit()}
+              onKeyDown={function(e) { if (e.key === "Enter") handleTitleSubmit(); }}
               autoFocus
               style={{
                 fontSize: "clamp(24px, 3vw, 36px)",
@@ -187,7 +199,7 @@ export default function DumpStrip({
                 marginBottom: "4px",
                 cursor: isCustom ? "pointer" : "default",
               }}
-              onClick={() => isCustom && setIsEditing(true)}
+              onClick={function() { if (isCustom) setIsEditing(true); }}
             >
               {dump.title}
             </h2>
@@ -202,14 +214,14 @@ export default function DumpStrip({
             {dump.subtitle}
             {dump.photos.length > 0 && (
               <span style={{ marginLeft: "12px", color: "#999", fontStyle: "normal", fontSize: "12px" }}>
-                {dump.photos.length}/7 photos
+                {dump.photos.length + "/7 photos"}
               </span>
             )}
           </div>
         </div>
         {isCustom && onDeleteDump && (
           <button
-            onClick={() => onDeleteDump(dump.id)}
+            onClick={function() { if (onDeleteDump) onDeleteDump(dump.id); }}
             style={{
               background: "transparent",
               border: "1px solid #2a2a2a",
@@ -224,11 +236,11 @@ export default function DumpStrip({
               fontSize: "11px",
               fontFamily: "inherit",
             }}
-            onMouseEnter={(e) => {
+            onMouseEnter={function(e) {
               e.currentTarget.style.borderColor = "#e74c3c";
               e.currentTarget.style.color = "#e74c3c";
             }}
-            onMouseLeave={(e) => {
+            onMouseLeave={function(e) {
               e.currentTarget.style.borderColor = "#2a2a2a";
               e.currentTarget.style.color = "#666";
             }}
@@ -282,6 +294,7 @@ export default function DumpStrip({
 
         {dump.photos.length === 0 && dragState.isDragging && (
           <div
+            className="dump-drop-pulse"
             style={{
               width: "200px",
               height: "260px",
@@ -296,44 +309,44 @@ export default function DumpStrip({
               padding: "20px",
               flexShrink: 0,
               background: "rgba(200,169,110,0.05)",
-              animation: "pulse 1.5s ease-in-out infinite",
             }}
           >
             Drop here
           </div>
         )}
 
-        {dump.photos.map((photo, i) => (
-          <div key={photo.id} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-            {/* Drop insertion line before this card */}
-            {showDropIndicator && dropIndex === i && (
-              <div
-                style={{
-                  width: "3px",
-                  height: "240px",
-                  background: "#c8a96e",
-                  borderRadius: "2px",
-                  marginRight: "6px",
-                  boxShadow: "0 0 8px rgba(200,169,110,0.5)",
-                  animation: "pulse 1s ease-in-out infinite",
-                  flexShrink: 0,
-                }}
+        {dump.photos.map(function(photo, i) {
+          return (
+            <div key={photo.id} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+              {showDropIndicator && dropIndex === i && (
+                <div
+                  className="drop-line-pulse"
+                  style={{
+                    width: "3px",
+                    height: "240px",
+                    background: "#c8a96e",
+                    borderRadius: "2px",
+                    marginRight: "6px",
+                    boxShadow: "0 0 8px rgba(200,169,110,0.5)",
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              <PhotoCard
+                photo={photo}
+                index={i}
+                isFirst={i === 0}
+                source={{ type: "dump", dumpId: dump.id }}
+                onTap={onTapPhoto}
+                onDoubleTap={onDoubleTapPhoto}
               />
-            )}
-            <PhotoCard
-              photo={photo}
-              index={i}
-              isFirst={i === 0}
-              source={{ type: "dump", dumpId: dump.id }}
-              onTap={onTapPhoto}
-              onDoubleTap={onDoubleTapPhoto}
-            />
-          </div>
-        ))}
+            </div>
+          );
+        })}
 
-        {/* Drop insertion line at the end */}
         {showDropIndicator && dropIndex === dump.photos.length && (
           <div
+            className="drop-line-pulse"
             style={{
               width: "3px",
               height: "240px",
@@ -341,19 +354,11 @@ export default function DumpStrip({
               borderRadius: "2px",
               marginLeft: "6px",
               boxShadow: "0 0 8px rgba(200,169,110,0.5)",
-              animation: "pulse 1s ease-in-out infinite",
               flexShrink: 0,
             }}
           />
         )}
       </div>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-      `}</style>
     </section>
   );
 }

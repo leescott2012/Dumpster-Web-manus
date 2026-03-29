@@ -2,6 +2,7 @@
  * DragGhost — Semi-transparent floating photo that follows finger during drag
  * V4 styling: gold border, slight scale, 0.85 opacity
  * Uses transform for GPU-accelerated positioning (smoother on mobile)
+ * NO template literals — plain string concat for Safari compatibility
  */
 import { useDrag } from "@/contexts/DragContext";
 
@@ -12,13 +13,17 @@ export default function DragGhost() {
     return null;
   }
 
+  var x = dragState.ghostPosition.x - 50;
+  var y = dragState.ghostPosition.y - 65;
+  var transformVal = "translate3d(" + x + "px, " + y + "px, 0) scale(1.05) rotate(-2deg)";
+
   return (
     <div
       style={{
         position: "fixed",
         left: 0,
         top: 0,
-        transform: `translate3d(${dragState.ghostPosition.x - 50}px, ${dragState.ghostPosition.y - 65}px, 0) scale(1.05) rotate(-2deg)`,
+        transform: transformVal,
         width: "100px",
         height: "130px",
         borderRadius: "8px",

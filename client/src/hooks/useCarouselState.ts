@@ -2,51 +2,90 @@ import { useState, useCallback } from "react";
 import { INITIAL_DUMPS, INITIAL_POOL, type Dump, type Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
 
-export function useCarouselState() {
-  const [dumps, setDumps] = useState<Dump[]>(() =>
-    JSON.parse(JSON.stringify(INITIAL_DUMPS))
-  );
-  const [pool, setPool] = useState<Photo[]>(() =>
-    JSON.parse(JSON.stringify(INITIAL_POOL))
-  );
+// Deep clone that works in all browsers (no JSON.parse/stringify)
+function deepCloneDumps(dumps: Dump[]): Dump[] {
+  return dumps.map(function(d) {
+    return {
+      id: d.id,
+      number: d.number,
+      title: d.title,
+      subtitle: d.subtitle,
+      photos: d.photos.map(function(p) {
+        return {
+          id: p.id,
+          url: p.url,
+          alt: p.alt,
+          isHuji: p.isHuji,
+          category: p.category,
+          role: p.role,
+        };
+      }),
+    };
+  });
+}
 
-  const resetAll = useCallback(() => {
-    setDumps(JSON.parse(JSON.stringify(INITIAL_DUMPS)));
-    setPool(JSON.parse(JSON.stringify(INITIAL_POOL)));
+function deepClonePool(pool: Photo[]): Photo[] {
+  return pool.map(function(p) {
+    return {
+      id: p.id,
+      url: p.url,
+      alt: p.alt,
+      isHuji: p.isHuji,
+      category: p.category,
+      role: p.role,
+    };
+  });
+}
+
+export function useCarouselState() {
+  const [dumps, setDumps] = useState<Dump[]>(function() {
+    return deepCloneDumps(INITIAL_DUMPS);
+  });
+  const [pool, setPool] = useState<Photo[]>(function() {
+    return deepClonePool(INITIAL_POOL);
+  });
+
+  const resetAll = useCallback(function() {
+    setDumps(deepCloneDumps(INITIAL_DUMPS));
+    setPool(deepClonePool(INITIAL_POOL));
   }, []);
 
   const movePhotoWithinDump = useCallback(
-    (dumpId: string, fromIndex: number, toIndex: number) => {
-      setDumps((prev) =>
-        prev.map((d) => {
+    function(dumpId: string, fromIndex: number, toIndex: number) {
+      setDumps(function(prev) {
+        return prev.map(function(d) {
           if (d.id !== dumpId) return d;
-          const photos = [...d.photos];
-          const [moved] = photos.splice(fromIndex, 1);
+          var photos = d.photos.slice();
+          var moved = photos.splice(fromIndex, 1)[0];
           photos.splice(toIndex, 0, moved);
-          return { ...d, photos };
-        })
-      );
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos };
+        });
+      });
     },
     []
   );
 
   const movePhotoBetweenDumps = useCallback(
-    (fromDumpId: string, fromIndex: number, toDumpId: string, toIndex: number) => {
-      setDumps((prev) => {
-        const fromDump = prev.find((d) => d.id === fromDumpId);
-        const toDump = prev.find((d) => d.id === toDumpId);
+    function(fromDumpId: string, fromIndex: number, toDumpId: string, toIndex: number) {
+      setDumps(function(prev) {
+        var fromDump = null as Dump | null;
+        var toDump = null as Dump | null;
+        for (var i = 0; i < prev.length; i++) {
+          if (prev[i].id === fromDumpId) fromDump = prev[i];
+          if (prev[i].id === toDumpId) toDump = prev[i];
+        }
         if (!fromDump || !toDump) return prev;
-        if (toDump.photos.length >= 7) return prev; // max 7
+        if (toDump.photos.length >= 7) return prev;
 
-        const photo = fromDump.photos[fromIndex];
-        return prev.map((d) => {
+        var photo = fromDump.photos[fromIndex];
+        return prev.map(function(d) {
           if (d.id === fromDumpId) {
-            return { ...d, photos: d.photos.filter((_, i) => i !== fromIndex) };
+            return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== fromIndex; }) };
           }
           if (d.id === toDumpId) {
-            const photos = [...d.photos];
+            var photos = d.photos.slice();
             photos.splice(toIndex, 0, photo);
-            return { ...d, photos };
+            return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos };
           }
           return d;
         });
@@ -56,86 +95,100 @@ export function useCarouselState() {
   );
 
   const movePhotoFromPoolToDump = useCallback(
-    (photoId: string, dumpId: string, toIndex: number) => {
-      setPool((prev) => {
-        const photo = prev.find((p) => p.id === photoId);
+    function(photoId: string, dumpId: string, toIndex: number) {
+      setPool(function(prev) {
+        var photo = null as Photo | null;
+        for (var i = 0; i < prev.length; i++) {
+          if (prev[i].id === photoId) { photo = prev[i]; break; }
+        }
         if (!photo) return prev;
-        setDumps((prevDumps) =>
-          prevDumps.map((d) => {
+        var capturedPhoto = photo;
+        setDumps(function(prevDumps) {
+          return prevDumps.map(function(d) {
             if (d.id !== dumpId) return d;
             if (d.photos.length >= 7) return d;
-            const photos = [...d.photos];
-            photos.splice(toIndex, 0, photo);
-            return { ...d, photos };
-          })
-        );
-        return prev.filter((p) => p.id !== photoId);
+            var photos = d.photos.slice();
+            photos.splice(toIndex, 0, capturedPhoto);
+            return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos };
+          });
+        });
+        return prev.filter(function(p) { return p.id !== photoId; });
       });
     },
     []
   );
 
   const movePhotoFromDumpToPool = useCallback(
-    (dumpId: string, photoIndex: number) => {
-      setDumps((prev) => {
-        const dump = prev.find((d) => d.id === dumpId);
+    function(dumpId: string, photoIndex: number) {
+      setDumps(function(prev) {
+        var dump = null as Dump | null;
+        for (var i = 0; i < prev.length; i++) {
+          if (prev[i].id === dumpId) { dump = prev[i]; break; }
+        }
         if (!dump) return prev;
-        const photo = dump.photos[photoIndex];
-        setPool((prevPool) => [...prevPool, photo]);
-        return prev.map((d) => {
+        var photo = dump.photos[photoIndex];
+        setPool(function(prevPool) { return prevPool.concat([photo]); });
+        return prev.map(function(d) {
           if (d.id !== dumpId) return d;
-          return { ...d, photos: d.photos.filter((_, i) => i !== photoIndex) };
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== photoIndex; }) };
         });
       });
     },
     []
   );
 
-  const createNewDump = useCallback(() => {
-    const newNum = dumps.length + 1;
-    setDumps((prev) => [
-      ...prev,
-      {
-        id: `dump-${nanoid(6)}`,
+  const createNewDump = useCallback(function() {
+    setDumps(function(prev) {
+      var newNum = prev.length + 1;
+      return prev.concat([{
+        id: "dump-" + nanoid(6),
         number: newNum,
-        title: `New Dump ${newNum}`,
+        title: "New Dump " + newNum,
         subtitle: "Drag photos here",
         photos: [],
-      },
-    ]);
-  }, [dumps.length]);
-
-  const deleteDump = useCallback((dumpId: string) => {
-    setDumps((prev) => {
-      const dump = prev.find((d) => d.id === dumpId);
-      if (!dump) return prev;
-      // Move photos back to pool
-      setPool((prevPool) => [...prevPool, ...dump.photos]);
-      return prev.filter((d) => d.id !== dumpId).map((d, i) => ({
-        ...d,
-        number: i + 1,
-      }));
+      }]);
     });
   }, []);
 
-  const toggleHuji = useCallback((photoId: string) => {
-    setDumps((prev) =>
-      prev.map((d) => ({
-        ...d,
-        photos: d.photos.map((p) =>
-          p.id === photoId ? { ...p, isHuji: !p.isHuji } : p
-        ),
-      }))
-    );
-    setPool((prev) =>
-      prev.map((p) => (p.id === photoId ? { ...p, isHuji: !p.isHuji } : p))
-    );
+  const deleteDump = useCallback(function(dumpId: string) {
+    setDumps(function(prev) {
+      var dump = null as Dump | null;
+      for (var i = 0; i < prev.length; i++) {
+        if (prev[i].id === dumpId) { dump = prev[i]; break; }
+      }
+      if (!dump) return prev;
+      var dumpPhotos = dump.photos.slice();
+      setPool(function(prevPool) { return prevPool.concat(dumpPhotos); });
+      return prev.filter(function(d) { return d.id !== dumpId; }).map(function(d, i) {
+        return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos };
+      });
+    });
   }, []);
 
-  const renameDump = useCallback((dumpId: string, title: string) => {
-    setDumps((prev) =>
-      prev.map((d) => (d.id === dumpId ? { ...d, title } : d))
-    );
+  const toggleHuji = useCallback(function(photoId: string) {
+    setDumps(function(prev) {
+      return prev.map(function(d) {
+        return {
+          id: d.id, number: d.number, title: d.title, subtitle: d.subtitle,
+          photos: d.photos.map(function(p) {
+            return p.id === photoId ? { id: p.id, url: p.url, alt: p.alt, isHuji: !p.isHuji, category: p.category, role: p.role } : p;
+          }),
+        };
+      });
+    });
+    setPool(function(prev) {
+      return prev.map(function(p) {
+        return p.id === photoId ? { id: p.id, url: p.url, alt: p.alt, isHuji: !p.isHuji, category: p.category, role: p.role } : p;
+      });
+    });
+  }, []);
+
+  const renameDump = useCallback(function(dumpId: string, title: string) {
+    setDumps(function(prev) {
+      return prev.map(function(d) {
+        return d.id === dumpId ? { id: d.id, number: d.number, title: title, subtitle: d.subtitle, photos: d.photos } : d;
+      });
+    });
   }, []);
 
   return {

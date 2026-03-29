@@ -1,6 +1,7 @@
 /*
  * PhotoContextMenu — Options on double-tap or long-press
  * Remove from dump, toggle Huji, view larger
+ * NO template literals, NO inline style tags — Safari compatible
  */
 import type { Photo } from "@/lib/photoData";
 
@@ -25,10 +26,13 @@ export default function PhotoContextMenu({
 }: PhotoContextMenuProps) {
   if (!photo || !position) return null;
 
-  const menuStyle: React.CSSProperties = {
+  var leftPos = Math.min(position.x, window.innerWidth - 200);
+  var topPos = Math.min(position.y, window.innerHeight - 200);
+
+  var menuStyle: React.CSSProperties = {
     position: "fixed",
-    left: Math.min(position.x, window.innerWidth - 200),
-    top: Math.min(position.y, window.innerHeight - 200),
+    left: leftPos,
+    top: topPos,
     background: "#151515",
     border: "1px solid #2a2a2a",
     borderRadius: "10px",
@@ -36,10 +40,9 @@ export default function PhotoContextMenu({
     zIndex: 10001,
     minWidth: "180px",
     boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
-    animation: "scaleIn 0.15s ease-out",
   };
 
-  const itemStyle: React.CSSProperties = {
+  var itemStyle: React.CSSProperties = {
     display: "block",
     width: "100%",
     padding: "10px 14px",
@@ -53,6 +56,8 @@ export default function PhotoContextMenu({
     transition: "background 0.15s",
     fontFamily: "inherit",
   };
+
+  var hujiLabel = photo.isHuji ? "Unmark as Huji" : "Mark as Huji";
 
   return (
     <>
@@ -68,52 +73,58 @@ export default function PhotoContextMenu({
       />
 
       {/* Menu */}
-      <div style={menuStyle}>
+      <div style={menuStyle} className="context-menu-enter">
         <button
           style={itemStyle}
-          onClick={() => {
+          onClick={function() {
             onViewLarger(photo);
             onClose();
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#1a1a1a")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          onMouseEnter={function(e) { e.currentTarget.style.background = "#1a1a1a"; }}
+          onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
         >
           View Larger
         </button>
 
         <button
           style={itemStyle}
-          onClick={() => {
+          onClick={function() {
             onToggleHuji(photo.id);
             onClose();
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#1a1a1a")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          onMouseEnter={function(e) { e.currentTarget.style.background = "#1a1a1a"; }}
+          onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
         >
-          {photo.isHuji ? "Unmark as Huji" : "Mark as Huji"}
+          {hujiLabel}
         </button>
 
         {isInDump && (
           <button
-            style={{ ...itemStyle, color: "#e74c3c" }}
-            onClick={() => {
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "10px 14px",
+              background: "transparent",
+              border: "none",
+              color: "#e74c3c",
+              fontSize: "13px",
+              textAlign: "left",
+              cursor: "pointer",
+              borderRadius: "6px",
+              transition: "background 0.15s",
+              fontFamily: "inherit",
+            }}
+            onClick={function() {
               onRemoveFromDump(photo.id);
               onClose();
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#1a1a1a")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            onMouseEnter={function(e) { e.currentTarget.style.background = "#1a1a1a"; }}
+            onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
           >
             Remove from Dump
           </button>
         )}
       </div>
-
-      <style>{`
-        @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-      `}</style>
     </>
   );
 }
