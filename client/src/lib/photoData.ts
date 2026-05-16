@@ -49,7 +49,7 @@ var C = "https://d2xsxph8kpxj0f.cloudfront.net/310519663373215716/mQthSgftBhhpNN
 function u(f: string): string { return C + "/" + f; }
 
 function p(id: string, file: string, alt: string, _huji: boolean, cat: string): Photo {
-  return { id: id, url: u(file), alt: alt, isFavorite: _huji, category: cat };
+  return { id: id, url: u(file), alt: alt, isFavorite: false, category: cat };
 }
 
 var OWNER_DUMPS: Dump[] = [
