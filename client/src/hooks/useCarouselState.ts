@@ -1,7 +1,27 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { INITIAL_DUMPS, INITIAL_POOL, type Dump, type Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
 import type { SuggestedCluster } from "@/components/AISuggestSheet";
+
+// ── localStorage persistence ───────────────────────────────────────────────
+
+var SK_DUMPS = "dumpster_state_dumps";
+var SK_POOL  = "dumpster_state_pool";
+
+function loadSaved<T>(key: string): T | null {
+  try {
+    var raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw) as T;
+  } catch { /* corrupted or missing — fall through */ }
+  return null;
+}
+
+function persist(key: string, value: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch { /* quota exceeded — silently skip */ }
+}
+
+// ── Deep clone helpers ─────────────────────────────────────────────────────
 
 function deepCloneDumps(dumps: Dump[]): Dump[] {
   return dumps.map(function(d) {
@@ -10,6 +30,7 @@ function deepCloneDumps(dumps: Dump[]): Dump[] {
       photos: d.photos.map(function(p) {
         return { id: p.id, url: p.url, alt: p.alt, isFavorite: p.isFavorite, category: p.category };
       }),
+      captions: d.captions, vibe: d.vibe, favorited: d.favorited,
     };
   });
 }
@@ -20,13 +41,35 @@ function deepClonePool(pool: Photo[]): Photo[] {
   });
 }
 
+// ── Hook ───────────────────────────────────────────────────────────────────
+
 export function useCarouselState() {
-  var [dumps, setDumps] = useState<Dump[]>(function() { return deepCloneDumps(INITIAL_DUMPS); });
-  var [pool, setPool] = useState<Photo[]>(function() { return deepClonePool(INITIAL_POOL); });
+  var [dumps, setDumps] = useState<Dump[]>(function() {
+    var saved = loadSaved<Dump[]>(SK_DUMPS);
+    return saved && saved.length > 0 ? saved : deepCloneDumps(INITIAL_DUMPS);
+  });
+  var [pool, setPool] = useState<Photo[]>(function() {
+    var saved = loadSaved<Photo[]>(SK_POOL);
+    return saved !== null ? saved : deepClonePool(INITIAL_POOL);
+  });
+
+  // Persist on every change (skip initial render to avoid writing defaults immediately)
+  var isFirstRender = useRef(true);
+  useEffect(function() {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    persist(SK_DUMPS, dumps);
+  }, [dumps]);
+  useEffect(function() {
+    persist(SK_POOL, pool);
+  }, [pool]);
 
   var resetAll = useCallback(function() {
     setDumps(deepCloneDumps(INITIAL_DUMPS));
     setPool(deepClonePool(INITIAL_POOL));
+    try {
+      localStorage.removeItem(SK_DUMPS);
+      localStorage.removeItem(SK_POOL);
+    } catch {}
   }, []);
 
   var movePhotoWithinDump = useCallback(function(dumpId: string, fromIndex: number, toIndex: number) {
@@ -36,7 +79,7 @@ export function useCarouselState() {
         var photos = d.photos.slice();
         var moved = photos.splice(fromIndex, 1)[0];
         photos.splice(toIndex, 0, moved);
-        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos };
+        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
       });
     });
   }, []);
@@ -54,12 +97,12 @@ export function useCarouselState() {
       var photo = fromDump.photos[fromIndex];
       return prev.map(function(d) {
         if (d.id === fromDumpId) {
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== fromIndex; }) };
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== fromIndex; }), captions: d.captions, vibe: d.vibe, favorited: d.favorited };
         }
         if (d.id === toDumpId) {
           var photos = d.photos.slice();
           photos.splice(toIndex, 0, photo);
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos };
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
         }
         return d;
       });
@@ -80,7 +123,7 @@ export function useCarouselState() {
           if (d.photos.length >= 20) return d;
           var photos = d.photos.slice();
           photos.splice(toIndex, 0, capturedPhoto);
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos };
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
         });
       });
       return prev.filter(function(p) { return p.id !== photoId; });
@@ -98,7 +141,7 @@ export function useCarouselState() {
       setPool(function(prevPool) { return prevPool.concat([photo]); });
       return prev.map(function(d) {
         if (d.id !== dumpId) return d;
-        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== photoIndex; }) };
+        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== photoIndex; }), captions: d.captions, vibe: d.vibe, favorited: d.favorited };
       });
     });
   }, []);
@@ -130,7 +173,7 @@ export function useCarouselState() {
       var dumpPhotos = dump.photos.slice();
       setPool(function(prevPool) { return prevPool.concat(dumpPhotos); });
       return prev.filter(function(d) { return d.id !== dumpId; }).map(function(d, i) {
-        return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos };
+        return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
       });
     });
   }, []);
@@ -140,6 +183,7 @@ export function useCarouselState() {
       return prev.map(function(d) {
         return {
           id: d.id, number: d.number, title: d.title, subtitle: d.subtitle,
+          captions: d.captions, vibe: d.vibe, favorited: d.favorited,
           photos: d.photos.map(function(p) {
             return p.id === photoId ? { id: p.id, url: p.url, alt: p.alt, isFavorite: !p.isFavorite, category: p.category } : p;
           }),
@@ -160,7 +204,7 @@ export function useCarouselState() {
   var renameDump = useCallback(function(dumpId: string, title: string) {
     setDumps(function(prev) {
       return prev.map(function(d) {
-        return d.id === dumpId ? { id: d.id, number: d.number, title: title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe } : d;
+        return d.id === dumpId ? { id: d.id, number: d.number, title: title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited } : d;
       });
     });
   }, []);
@@ -176,7 +220,7 @@ export function useCarouselState() {
   var toggleDumpFavorite = useCallback(function(dumpId: string) {
     setDumps(function(prev) {
       return prev.map(function(d) {
-        return d.id === dumpId ? { ...d, favorited: !d.favorited } : d;
+        return d.id === dumpId ? { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: !d.favorited } : d;
       });
     });
   }, []);
@@ -216,7 +260,7 @@ export function useCarouselState() {
       // Merge new dumps into state
       setDumps(function(prevDumps) {
         var combined = prevDumps.concat(newDumps).map(function(d, i) {
-          return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos };
+          return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
         });
         return combined;
       });
