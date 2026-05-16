@@ -5,7 +5,7 @@
  */
 import { useState, useEffect } from "react";
 import {
-  X, Sparkles, Archive, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Save,
+  X, Sparkles, Archive, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Save, Instagram,
 } from "lucide-react";
 import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules } from "@/lib/captionPool";
 
@@ -26,6 +26,7 @@ interface MainMenuProps {
   onClose: () => void;
   onAISuggest: () => void;
   onCaptions: () => void;
+  onIGScrub: () => void;
   dumpCount: number;
   poolCount: number;
 }
@@ -57,7 +58,7 @@ export function initAccent() {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function MainMenu({ open, onClose, onAISuggest, onCaptions, dumpCount, poolCount }: MainMenuProps) {
+export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount }: MainMenuProps) {
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const [visible, setVisible] = useState(false);
   const [accent, setAccent] = useState(loadAccent);
@@ -103,6 +104,10 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, dumpC
   function handleCaptionsClick() {
     onClose();
     setTimeout(onCaptions, 300);
+  }
+  function handleIGScrubClick() {
+    onClose();
+    setTimeout(onIGScrub, 300);
   }
 
   const folders: Folder[] = [
@@ -242,6 +247,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, dumpC
                 <AIToolsPanel
                   onAISuggest={handleAISuggestClick}
                   onCaptions={handleCaptionsClick}
+                  onIGScrub={handleIGScrubClick}
                   dumpCount={dumpCount}
                   poolCount={poolCount}
                 />
@@ -346,8 +352,8 @@ function FolderRow({ folder, index, visible, onClick }: {
 
 // ── AI Tools Panel ──────────────────────────────────────────────────────────
 
-function AIToolsPanel({ onAISuggest, onCaptions, dumpCount, poolCount }: {
-  onAISuggest: () => void; onCaptions: () => void;
+function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount }: {
+  onAISuggest: () => void; onCaptions: () => void; onIGScrub: () => void;
   dumpCount: number; poolCount: number;
 }) {
   const tools = [
@@ -372,6 +378,17 @@ function AIToolsPanel({ onAISuggest, onCaptions, dumpCount, poolCount }: {
       enabled: dumpCount > 0,
       disabledHint: "Create a dump first",
       onClick: onCaptions,
+    },
+    {
+      id: "igscrub",
+      title: "Instagram Scrub",
+      desc: "Paste post URLs or direct image links — previews found images so you can pick what goes in your pool.",
+      tone: "#C87EC8",
+      icon: <Instagram size={20} strokeWidth={1.5} />,
+      meta: "Any public URL",
+      enabled: true,
+      disabledHint: "",
+      onClick: onIGScrub,
     },
   ];
 
@@ -435,7 +452,7 @@ function AIToolsPanel({ onAISuggest, onCaptions, dumpCount, poolCount }: {
           Coming soon
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.55 }}>
-          Multiple providers · Instagram scrub · Batch caption all dumps · Saved scrub library
+          Multiple AI providers · Batch caption all dumps · Saved scrub library
         </div>
       </div>
     </div>

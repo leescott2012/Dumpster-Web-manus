@@ -10,6 +10,7 @@
   ],
   "functions": {
     "api/ai-suggest.ts": { "maxDuration": 60, "memory": 1024 },
-    "api/ai-caption.ts": { "maxDuration": 30, "memory": 512 }
+    "api/ai-caption.ts": { "maxDuration": 30, "memory": 512 },
+    "api/ig-scrub.ts": { "maxDuration": 30, "memory": 512 }
   }
 }

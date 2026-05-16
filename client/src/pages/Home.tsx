@@ -21,6 +21,7 @@ import CaptionSheet from "@/components/CaptionSheet";
 import DumpShareSheet from "@/components/DumpShareSheet";
 import DumpActionSheet from "@/components/DumpActionSheet";
 import MainMenu, { initAccent } from "@/components/MainMenu";
+import IGScrubSheet from "@/components/IGScrubSheet";
 import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
 import { loadCaptions } from "@/lib/captionPool";
@@ -48,6 +49,7 @@ function HomeContent() {
   // Refresh caption count when the tab changes (in case caps were added)
   useEffect(function() { setCaptionCount(loadCaptions().length); }, [poolTab]);
   var [aiSheetOpen, setAiSheetOpen] = useState(false);
+  var [igScrubOpen, setIGScrubOpen] = useState(false);
   var [captionSheetOpen, setCaptionSheetOpen] = useState(false);
   var [captionInitialDumpId, setCaptionInitialDumpId] = useState<string | null>(null);
   var [shareSheetDumpId, setShareSheetDumpId] = useState<string | null>(null);
@@ -549,8 +551,14 @@ function HomeContent() {
         onClose={function() { setMenuOpen(false); }}
         onAISuggest={function() { setAiSheetOpen(true); }}
         onCaptions={function() { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); }}
+        onIGScrub={function() { setIGScrubOpen(true); }}
         dumpCount={dumps.length}
         poolCount={pool.length}
+      />
+      <IGScrubSheet
+        open={igScrubOpen}
+        onClose={function() { setIGScrubOpen(false); }}
+        onAddToPool={function(photos) { addUploadedPhotos(photos); toast("Added " + photos.length + " item" + (photos.length !== 1 ? "s" : "") + " to pool"); }}
       />
       <CaptionSheet
         open={captionSheetOpen}
