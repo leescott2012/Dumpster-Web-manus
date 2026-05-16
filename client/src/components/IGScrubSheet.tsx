@@ -41,7 +41,12 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
       if (!res.ok) throw new Error("Server error " + res.status);
       var data = await res.json() as { results: ScrubResult[]; errors: string[] };
       if (data.results.length === 0) {
-        setError("No images found. Instagram often blocks scrapers — try pasting direct image URLs instead.");
+        var errMsg = data.errors && data.errors.length > 0 ? data.errors[0] : "";
+        if (errMsg.includes("APIFY_TOKEN")) {
+          setError("APIFY_TOKEN is not set — add it as an environment variable in your Vercel project dashboard, then redeploy.");
+        } else {
+          setError("No images found. Make sure the posts are public and the URLs are valid instagram.com/p/… or /reel/… links." + (errMsg ? " (" + errMsg + ")" : ""));
+        }
       } else {
         setResults(data.results);
         setFailedUrls(data.errors || []);
@@ -159,11 +164,12 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
                 borderRadius: 10, padding: "12px 14px", marginBottom: 18,
               }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#c8a96e", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 6 }}>
-                  Tips for best results
+                  Powered by Apify
                 </div>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.7 }}>
-                  <div>• <b style={{ color: "#aaa" }}>Direct image URLs</b> always work — right-click an IG photo in your browser and "Copy image address"</div>
-                  <div>• <b style={{ color: "#aaa" }}>Post URLs</b> (instagram.com/p/…) sometimes work for public posts</div>
+                  <div>• Paste <b style={{ color: "#aaa" }}>Instagram post URLs</b> (instagram.com/p/… or /reel/…) — Apify scrapes them server-side</div>
+                  <div>• Carousel posts return all slides automatically</div>
+                  <div>• <b style={{ color: "#aaa" }}>Direct image URLs</b> are passed through instantly without Apify</div>
                   <div>• Paste multiple URLs — one per line or comma-separated</div>
                 </div>
               </div>
@@ -211,8 +217,8 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
                 }}
               >
                 {loading
-                  ? <><Loader size={15} style={{ animation: "spin 0.8s linear infinite" }} /> Scrubbing…</>
-                  : <><Search size={15} /> Scrub URLs</>
+                  ? <><Loader size={15} style={{ animation: "spin 0.8s linear infinite" }} /> Apify is scrubbing… (up to 45s)</>
+                  : <><Search size={15} /> Scrub with Apify</>
                 }
               </button>
               <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

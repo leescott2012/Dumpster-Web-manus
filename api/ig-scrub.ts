@@ -1,53 +1,96 @@
 /**
- * /api/ig-scrub — Instagram / URL image extractor
- * Accepts an array of URLs (IG post URLs or direct image URLs).
- * For direct image/video URLs → passes through.
- * For page URLs → fetches with a browser-like UA and parses og:image / og:video.
+ * /api/ig-scrub — Instagram scraper via Apify
+ *
+ * Splits the incoming URL list into:
+ *   1. Direct image/video URLs → passed through immediately
+ *   2. Instagram page URLs     → sent to apify~instagram-scraper (sync run)
+ *
+ * Env: APIFY_TOKEN  (set in Vercel dashboard)
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const IMAGE_EXT = /\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i;
 const VIDEO_EXT = /\.(mp4|mov|webm)(\?|$)/i;
+const IG_URL    = /instagram\.com\/(p|reel|tv|stories)\//i;
 
-async function extractFromPage(url: string): Promise<{ src: string; category: "Image" | "Video" }[]> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+type Category = "Image" | "Video";
 
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Cache-Control": "no-cache",
-      },
-      redirect: "follow",
-    });
-
-    const html = await res.text();
-    const results: { src: string; category: "Image" | "Video" }[] = [];
-
-    // og:video (Reels, video posts)
-    const ogVideo = html.match(/property=["']og:video["'][^>]*content=["']([^"']+)["']/);
-    const ogVideoAlt = html.match(/content=["']([^"']+)["'][^>]*property=["']og:video["']/);
-    const videoSrc = ogVideo?.[1] || ogVideoAlt?.[1];
-    if (videoSrc) results.push({ src: videoSrc, category: "Video" });
-
-    // og:image (all posts — also the thumbnail for videos)
-    const ogImg = html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/);
-    const ogImgAlt = html.match(/content=["']([^"']+)["'][^>]*property=["']og:image["']/);
-    const imgSrc = ogImg?.[1] || ogImgAlt?.[1];
-    if (imgSrc && imgSrc !== videoSrc) results.push({ src: imgSrc, category: "Image" });
-
-    return results;
-  } finally {
-    clearTimeout(timeout);
-  }
+interface ScrapedItem {
+  src: string;
+  category: Category;
+  postUrl?: string;
 }
+
+// ── Apify ────────────────────────────────────────────────────────────────────
+
+async function scrapeWithApify(igUrls: string[]): Promise<{ items: ScrapedItem[]; errors: string[] }> {
+  const token = process.env.APIFY_TOKEN;
+  if (!token) {
+    return { items: [], errors: ["APIFY_TOKEN environment variable is not set"] };
+  }
+
+  // run-sync-get-dataset-items blocks until the actor finishes (up to `timeout` seconds)
+  // memory=256 keeps cost low; instagram-scraper typically finishes in 15-40 s
+  const url =
+    `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items` +
+    `?token=${token}&timeout=50&memory=256`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      directUrls: igUrls,
+      resultsType: "posts",
+      resultsLimit: 50,
+      addParentData: false,
+    }),
+    // node fetch signal for overall request timeout
+    signal: AbortSignal.timeout(55_000),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    return { items: [], errors: [`Apify error ${res.status}: ${txt.slice(0, 120)}`] };
+  }
+
+  // Dataset items — array of post objects
+  const posts = (await res.json()) as ApifyPost[];
+  const items: ScrapedItem[] = [];
+
+  for (const post of posts) {
+    const postUrl = post.url || post.shortCode
+      ? `https://www.instagram.com/p/${post.shortCode}/`
+      : undefined;
+
+    if (post.type === "GraphSidecar" && Array.isArray(post.images) && post.images.length > 0) {
+      // Carousel — extract each slide
+      for (const img of post.images) {
+        if (img) items.push({ src: img, category: "Image", postUrl });
+      }
+    } else if (post.type === "GraphVideo" && post.videoUrl) {
+      items.push({ src: post.videoUrl, category: "Video", postUrl });
+      // Also include the thumbnail
+      if (post.displayUrl) items.push({ src: post.displayUrl, category: "Image", postUrl });
+    } else if (post.displayUrl) {
+      items.push({ src: post.displayUrl, category: "Image", postUrl });
+    }
+  }
+
+  return { items, errors: [] };
+}
+
+// ── Apify post shape (partial) ───────────────────────────────────────────────
+
+interface ApifyPost {
+  type?: "GraphImage" | "GraphVideo" | "GraphSidecar";
+  url?: string;
+  shortCode?: string;
+  displayUrl?: string;
+  videoUrl?: string;
+  images?: string[];   // carousel slides
+}
+
+// ── Handler ──────────────────────────────────────────────────────────────────
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).end();
@@ -57,34 +100,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "urls array required" });
   }
 
-  const results: { src: string; category: "Image" | "Video" }[] = [];
+  const results: ScrapedItem[] = [];
   const errors: string[] = [];
+  const igUrls: string[] = [];
 
   for (const raw of urls.slice(0, 30)) {
     const url = raw.trim();
     if (!url) continue;
 
-    // Direct image / video URL — pass straight through
     if (IMAGE_EXT.test(url)) {
       results.push({ src: url, category: "Image" });
-      continue;
-    }
-    if (VIDEO_EXT.test(url)) {
+    } else if (VIDEO_EXT.test(url)) {
       results.push({ src: url, category: "Video" });
-      continue;
+    } else if (IG_URL.test(url)) {
+      igUrls.push(url);
+    } else {
+      errors.push(url + " (unrecognised URL format)");
     }
+  }
 
-    // Page URL — try to scrape meta tags
-    try {
-      const extracted = await extractFromPage(url);
-      if (extracted.length > 0) {
-        results.push(...extracted);
-      } else {
-        errors.push(url);
-      }
-    } catch {
-      errors.push(url);
-    }
+  // Batch all IG URLs into one Apify run
+  if (igUrls.length > 0) {
+    const { items, errors: apifyErrors } = await scrapeWithApify(igUrls);
+    results.push(...items);
+    errors.push(...apifyErrors);
   }
 
   return res.status(200).json({ results, errors });
