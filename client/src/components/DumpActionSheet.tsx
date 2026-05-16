@@ -2,7 +2,7 @@
  * DumpActionSheet — iOS-style "..." action menu for a dump
  * Actions: Heart, Generate Captions, Export/Share, Delete
  */
-import { Heart, Sparkles, Share2, Trash2, X } from "lucide-react";
+import { Heart, Sparkles, Share2, Trash2, X, MessageCircle } from "lucide-react";
 import type { Dump } from "@/lib/photoData";
 
 interface DumpActionSheetProps {
@@ -10,6 +10,7 @@ interface DumpActionSheetProps {
   open: boolean;
   onClose: () => void;
   onHeart: (dumpId: string) => void;
+  onChat: (dumpId: string) => void;
   onCaptions: (dumpId: string) => void;
   onExport: (dumpId: string) => void;
   onDelete: (dumpId: string) => void;
@@ -26,7 +27,7 @@ interface ActionRow {
 }
 
 export default function DumpActionSheet({
-  dump, open, onClose, onHeart, onCaptions, onExport, onDelete,
+  dump, open, onClose, onHeart, onChat, onCaptions, onExport, onDelete,
 }: DumpActionSheetProps) {
   if (!open || !dump) return null;
 
@@ -40,6 +41,13 @@ export default function DumpActionSheet({
       sublabel: isHearted ? "Remove from favorites" : "Mark as a keeper",
       color: isHearted ? "#e05c7a" : "#e8e8e8",
       onClick: () => { onHeart(dump.id); onClose(); },
+    },
+    {
+      icon: <MessageCircle size={18} />,
+      label: "Chat with AI",
+      sublabel: "Reorder, swap, set the vibe",
+      color: "#c8a96e",
+      onClick: () => { onChat(dump.id); onClose(); },
     },
     {
       icon: <Sparkles size={18} />,

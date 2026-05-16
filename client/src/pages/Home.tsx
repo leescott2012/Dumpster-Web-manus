@@ -22,6 +22,7 @@ import DumpShareSheet from "@/components/DumpShareSheet";
 import DumpActionSheet from "@/components/DumpActionSheet";
 import MainMenu, { initAccent } from "@/components/MainMenu";
 import IGScrubSheet from "@/components/IGScrubSheet";
+import DumpChatSheet from "@/components/DumpChatSheet";
 import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
 import { loadCaptions } from "@/lib/captionPool";
@@ -34,6 +35,7 @@ function HomeContent() {
     removePhotoFromPool, createNewDump, deleteDump,
     toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
+    reorderDumpPhotos, setDumpVibe,
   } = useCarouselState();
 
   var { dragState, updateDragPosition, endDrag } = useDrag();
@@ -54,6 +56,7 @@ function HomeContent() {
   var [captionInitialDumpId, setCaptionInitialDumpId] = useState<string | null>(null);
   var [shareSheetDumpId, setShareSheetDumpId] = useState<string | null>(null);
   var [actionSheetDumpId, setActionSheetDumpId] = useState<string | null>(null);
+  var [chatDumpId, setChatDumpId] = useState<string | null>(null);
   var [selectionMode, setSelectionMode] = useState(false);
   var [selectionTargetDumpId, setSelectionTargetDumpId] = useState<string | null>(null);
   var [selectedPoolPhotoIds, setSelectedPoolPhotoIds] = useState<string[]>([]);
@@ -578,6 +581,7 @@ function HomeContent() {
         dump={actionSheetDumpId ? (dumps.find(function(d) { return d.id === actionSheetDumpId; }) || null) : null}
         onClose={function() { setActionSheetDumpId(null); }}
         onHeart={function(dumpId) { toggleDumpFavorite(dumpId); }}
+        onChat={function(dumpId) { setChatDumpId(dumpId); }}
         onCaptions={function(dumpId) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); }}
         onExport={function(dumpId) { setShareSheetDumpId(dumpId); }}
         onDelete={function(dumpId) { handleDeleteDump(dumpId); }}
@@ -586,6 +590,16 @@ function HomeContent() {
         open={shareSheetDumpId !== null}
         dump={shareSheetDumpId ? (dumps.find(function(d) { return d.id === shareSheetDumpId; }) || null) : null}
         onClose={function() { setShareSheetDumpId(null); }}
+      />
+      <DumpChatSheet
+        open={chatDumpId !== null}
+        dump={chatDumpId ? (dumps.find(function(d) { return d.id === chatDumpId; }) || null) : null}
+        pool={pool}
+        onClose={function() { setChatDumpId(null); }}
+        onReorder={reorderDumpPhotos}
+        onSwapIn={movePhotoFromPoolToDump}
+        onSwapOut={movePhotoFromDumpToPool}
+        onUpdateVibe={setDumpVibe}
       />
       <DragGhost />
       <PhotoLightbox photo={lightboxPhoto} onClose={function() { setLightboxPhoto(null); }} />

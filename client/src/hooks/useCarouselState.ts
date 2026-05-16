@@ -278,6 +278,41 @@ export function useCarouselState() {
     });
   }, []);
 
+  // Reorder photos in a dump by a new ordered list of photo IDs
+  var reorderDumpPhotos = useCallback(function(dumpId: string, orderedIds: string[]) {
+    setDumps(function(prev) {
+      return prev.map(function(d) {
+        if (d.id !== dumpId) return d;
+        var photoMap: Record<string, typeof d.photos[0]> = {};
+        for (var i = 0; i < d.photos.length; i++) {
+          photoMap[d.photos[i].id] = d.photos[i];
+        }
+        var reordered = [];
+        for (var j = 0; j < orderedIds.length; j++) {
+          if (photoMap[orderedIds[j]]) reordered.push(photoMap[orderedIds[j]]);
+        }
+        // Append any photos not in the ordered list (safety net)
+        for (var k = 0; k < d.photos.length; k++) {
+          var found = false;
+          for (var m = 0; m < reordered.length; m++) {
+            if (reordered[m].id === d.photos[k].id) { found = true; break; }
+          }
+          if (!found) reordered.push(d.photos[k]);
+        }
+        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: reordered, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
+      });
+    });
+  }, []);
+
+  // Update just the vibe tag on a dump
+  var setDumpVibe = useCallback(function(dumpId: string, vibe: string) {
+    setDumps(function(prev) {
+      return prev.map(function(d) {
+        return d.id === dumpId ? { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: vibe, favorited: d.favorited } : d;
+      });
+    });
+  }, []);
+
   return {
     dumps, pool, resetAll,
     movePhotoWithinDump, movePhotoBetweenDumps,
@@ -285,5 +320,6 @@ export function useCarouselState() {
     removePhotoFromPool, createNewDump, deleteDump,
     toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
+    reorderDumpPhotos, setDumpVibe,
   };
 }

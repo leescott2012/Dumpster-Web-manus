@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { handleAISuggest } from "./aiSuggest.js";
 import { handleAICaption } from "./aiCaption.js";
+import { handleAIChat } from "./aiChat.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +21,11 @@ async function startServer() {
   // AI Caption API route
   app.post("/api/ai-caption", (req, res) => {
     handleAICaption(req, res);
+  });
+
+  // AI Chat API route
+  app.post("/api/ai-chat", (req, res) => {
+    handleAIChat(req, res);
   });
 
   // Serve static files from dist/public in production
