@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { nanoid } from "nanoid";
 import AISuggestSheet, { type SuggestedCluster } from "@/components/AISuggestSheet";
 import CaptionSheet from "@/components/CaptionSheet";
+import DumpShareSheet from "@/components/DumpShareSheet";
 import MainMenu, { initAccent } from "@/components/MainMenu";
 import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
@@ -48,6 +49,7 @@ function HomeContent() {
   var [aiSheetOpen, setAiSheetOpen] = useState(false);
   var [captionSheetOpen, setCaptionSheetOpen] = useState(false);
   var [captionInitialDumpId, setCaptionInitialDumpId] = useState<string | null>(null);
+  var [shareSheetDumpId, setShareSheetDumpId] = useState<string | null>(null);
   var [selectionMode, setSelectionMode] = useState(false);
   var [selectionTargetDumpId, setSelectionTargetDumpId] = useState<string | null>(null);
   var [selectedPoolPhotoIds, setSelectedPoolPhotoIds] = useState<string[]>([]);
@@ -392,6 +394,7 @@ function HomeContent() {
               onDoubleTapPhoto={handleDoubleTapPhoto} onDropPhoto={handleDropOnDump}
               onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
               onRenameDump={renameDump} onPlusClick={handlePlusClick}
+              onShareDump={function(dumpId) { setShareSheetDumpId(dumpId); }}
               isCustom={!originalDumpIds.includes(dump.id)}
             />
           </div>
@@ -539,6 +542,11 @@ function HomeContent() {
         onClose={function() { setAiSheetOpen(false); }}
         poolPhotos={pool}
         onCreateDumps={handleAICreateDumps}
+      />
+      <DumpShareSheet
+        open={shareSheetDumpId !== null}
+        dump={shareSheetDumpId ? (dumps.find(function(d) { return d.id === shareSheetDumpId; }) || null) : null}
+        onClose={function() { setShareSheetDumpId(null); }}
       />
       <DragGhost />
       <PhotoLightbox photo={lightboxPhoto} onClose={function() { setLightboxPhoto(null); }} />

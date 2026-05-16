@@ -7,7 +7,7 @@ import { useRef, useState, useEffect } from "react";
 import PhotoCard from "./PhotoCard";
 import { useDrag } from "@/contexts/DragContext";
 import type { Dump, Photo } from "@/lib/photoData";
-import { Trash2, Plus, Pencil } from "lucide-react";
+import { Trash2, Plus, Pencil, Share2 } from "lucide-react";
 
 interface DumpStripProps {
   dump: Dump;
@@ -19,12 +19,13 @@ interface DumpStripProps {
   onDeleteDump?: (dumpId: string) => void;
   onRenameDump?: (dumpId: string, title: string) => void;
   onPlusClick: (dumpId: string) => void;
+  onShareDump?: (dumpId: string) => void;
   isCustom?: boolean;
 }
 
 export default function DumpStrip({
   dump, selectedPhotoId, onSelectPhoto, onDotsClick, onDoubleTapPhoto,
-  onDropPhoto, onDeleteDump, onRenameDump, onPlusClick, isCustom = false,
+  onDropPhoto, onDeleteDump, onRenameDump, onPlusClick, onShareDump, isCustom = false,
 }: DumpStripProps) {
   var stripRef = useRef<HTMLDivElement>(null);
   var { dragState } = useDrag();
@@ -125,15 +126,28 @@ export default function DumpStrip({
             )}
           </div>
         </div>
-        {isCustom && onDeleteDump && (
-          <button onClick={function() { if (onDeleteDump) onDeleteDump(dump.id); }}
-            style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "6px 10px", color: "#666", cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", fontFamily: "inherit" }}
-            onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#e74c3c"; e.currentTarget.style.color = "#e74c3c"; }}
-            onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
-          >
-            <Trash2 size={12} /> Delete
-          </button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Share button — always visible when dump has photos */}
+          {dump.photos.length > 0 && onShareDump && (
+            <button
+              onClick={function() { onShareDump(dump.id); }}
+              style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "6px 10px", color: "#666", cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", fontFamily: "inherit" }}
+              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#c8a96e"; e.currentTarget.style.color = "#c8a96e"; }}
+              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
+            >
+              <Share2 size={12} /> Export
+            </button>
+          )}
+          {isCustom && onDeleteDump && (
+            <button onClick={function() { if (onDeleteDump) onDeleteDump(dump.id); }}
+              style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "6px 10px", color: "#666", cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", fontFamily: "inherit" }}
+              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#e74c3c"; e.currentTarget.style.color = "#e74c3c"; }}
+              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
+            >
+              <Trash2 size={12} /> Delete
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Slide Strip */}
