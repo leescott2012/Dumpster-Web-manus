@@ -113,7 +113,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
   const folders: Folder[] = [
     {
       id: "ai", title: "AI TOOLS", tabColor: "#C8A96E",
-      subtitle: "Auto-arrange & Captions · Claude",
+      subtitle: "Auto-arrange · Captions · IG Scrub",
       icon: <Sparkles size={18} strokeWidth={1.5} />,
     },
     {
@@ -132,7 +132,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
       icon: <Paintbrush size={18} strokeWidth={1.5} />,
     },
     {
-      id: "about", title: "ABOUT", tabColor: "#C8B8A0",
+      id: "about", title: "ABOUT / HELP", tabColor: "#C8B8A0",
       subtitle: "Dumpster · Version 1.0",
       icon: <Info size={18} strokeWidth={1.5} />,
     },
@@ -395,7 +395,7 @@ function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 4 }}>
-        Powered by Claude Haiku
+        Powered by Claude Haiku & Apify
       </div>
 
       {tools.map(tool => (
@@ -404,6 +404,7 @@ function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount
           onClick={tool.enabled ? tool.onClick : undefined}
           disabled={!tool.enabled}
           style={{
+            width: "100%",
             background: tool.enabled ? "#141414" : "#0d0d0d",
             border: tool.enabled ? "1px solid " + tool.tone + "33" : "1px solid #1a1a1a",
             borderRadius: 14, padding: "16px 18px",
@@ -411,6 +412,7 @@ function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount
             textAlign: "left", cursor: tool.enabled ? "pointer" : "not-allowed",
             fontFamily: "inherit", transition: "all 0.15s",
             opacity: tool.enabled ? 1 : 0.5,
+            boxSizing: "border-box" as const,
           }}
           onMouseEnter={e => { if (tool.enabled) { e.currentTarget.style.borderColor = tool.tone + "66"; e.currentTarget.style.background = "#181818"; } }}
           onMouseLeave={e => { if (tool.enabled) { e.currentTarget.style.borderColor = tool.tone + "33"; e.currentTarget.style.background = "#141414"; } }}

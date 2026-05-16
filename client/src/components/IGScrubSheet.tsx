@@ -2,7 +2,7 @@
  * IGScrubSheet — paste Instagram post URLs or any image URLs,
  * preview what was found, then add selected items to the pool.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { X, Instagram, Search, Plus, Check, AlertCircle, Loader } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
@@ -26,6 +26,19 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
   var [selected, setSelected] = useState<Set<number>>(new Set());
   var [phase, setPhase] = useState<"input" | "preview">("input");
   var [error, setError] = useState<string | null>(null);
+
+  // Reset all state when sheet opens fresh
+  useEffect(function() {
+    if (open) {
+      setUrlText("");
+      setLoading(false);
+      setResults([]);
+      setFailedUrls([]);
+      setSelected(new Set());
+      setPhase("input");
+      setError(null);
+    }
+  }, [open]);
 
   var handleScrub = useCallback(async function() {
     var lines = urlText.split(/[\n,]+/).map(function(s) { return s.trim(); }).filter(Boolean);
@@ -129,8 +142,8 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
               width: 34, height: 34, borderRadius: 10,
-              background: "rgba(200,169,110,0.1)", border: "1px solid rgba(200,169,110,0.25)",
-              display: "flex", alignItems: "center", justifyContent: "center", color: "#c8a96e",
+              background: "rgba(200,126,200,0.1)", border: "1px solid rgba(200,126,200,0.25)",
+              display: "flex", alignItems: "center", justifyContent: "center", color: "#C87EC8",
             }}>
               <Instagram size={17} />
             </div>
