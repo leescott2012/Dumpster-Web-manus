@@ -32,6 +32,8 @@ interface DumpChatSheetProps {
   onSwapIn: (photoId: string, dumpId: string, position: number) => void;
   onSwapOut: (dumpId: string, photoIndex: number) => void;
   onUpdateVibe: (dumpId: string, vibe: string) => void;
+  /** Auto-send this message when the sheet opens (e.g. from thumbs-down) */
+  initialMessage?: string | null;
 }
 
 // Persist chat history per dump
@@ -65,11 +67,13 @@ var ACTION_META: Record<string, { icon: typeof ArrowUpDown; label: string; color
 export default function DumpChatSheet({
   open, dump, pool, onClose,
   onReorder, onSwapIn, onSwapOut, onUpdateVibe,
+  initialMessage,
 }: DumpChatSheetProps) {
   var [messages, setMessages] = useState<ChatMessage[]>([]);
   var [input, setInput] = useState("");
   var [loading, setLoading] = useState(false);
   var scrollRef = useRef<HTMLDivElement>(null);
+  var autoSentRef = useRef<string | null>(null);
 
   // Load chat history when opening for a dump
   useEffect(function() {
@@ -78,6 +82,7 @@ export default function DumpChatSheet({
       setMessages(saved);
       setInput("");
       setLoading(false);
+      autoSentRef.current = null;
     }
   }, [open, dump ? dump.id : null]);
 
@@ -109,10 +114,10 @@ export default function DumpChatSheet({
     }
   }, [onReorder, onSwapIn, onSwapOut, onUpdateVibe]);
 
-  var handleSend = useCallback(async function() {
-    if (!input.trim() || !dump || loading) return;
+  var sendMessage = useCallback(async function(messageText: string) {
+    if (!messageText.trim() || !dump || loading) return;
 
-    var userMsg: ChatMessage = { role: "user", text: input.trim() };
+    var userMsg: ChatMessage = { role: "user", text: messageText.trim() };
     var newMessages = messages.concat([userMsg]);
     setMessages(newMessages);
     setInput("");
@@ -171,7 +176,23 @@ export default function DumpChatSheet({
     } finally {
       setLoading(false);
     }
-  }, [input, dump, pool, loading, messages, executeActions]);
+  }, [dump, pool, loading, messages, executeActions]);
+
+  var handleSend = useCallback(function() {
+    if (input.trim()) {
+      sendMessage(input);
+      setInput("");
+    }
+  }, [input, sendMessage]);
+
+  // Auto-send initialMessage on thumbs-down (once per open)
+  useEffect(function() {
+    if (open && dump && initialMessage && autoSentRef.current !== dump.id + initialMessage) {
+      autoSentRef.current = dump.id + initialMessage;
+      // Small delay so the sheet renders first
+      setTimeout(function() { sendMessage(initialMessage); }, 300);
+    }
+  }, [open, dump, initialMessage, sendMessage]);
 
   var handleKeyDown = useCallback(function(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {

@@ -33,7 +33,7 @@ function deepCloneDumps(dumps: Dump[]): Dump[] {
       photos: d.photos.map(function(p) {
         return { id: p.id, url: p.url, alt: p.alt, isFavorite: p.isFavorite, category: p.category };
       }),
-      captions: d.captions, vibe: d.vibe, favorited: d.favorited,
+      captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating,
     };
   });
 }
@@ -118,7 +118,7 @@ export function useCarouselState() {
         var photos = d.photos.slice();
         var moved = photos.splice(fromIndex, 1)[0];
         photos.splice(toIndex, 0, moved);
-        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
+        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
       });
     });
   }, []);
@@ -136,12 +136,12 @@ export function useCarouselState() {
       var photo = fromDump.photos[fromIndex];
       return prev.map(function(d) {
         if (d.id === fromDumpId) {
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== fromIndex; }), captions: d.captions, vibe: d.vibe, favorited: d.favorited };
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== fromIndex; }), captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
         }
         if (d.id === toDumpId) {
           var photos = d.photos.slice();
           photos.splice(toIndex, 0, photo);
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
         }
         return d;
       });
@@ -162,7 +162,7 @@ export function useCarouselState() {
           if (d.photos.length >= 20) return d;
           var photos = d.photos.slice();
           photos.splice(toIndex, 0, capturedPhoto);
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
         });
       });
       return prev.filter(function(p) { return p.id !== photoId; });
@@ -180,7 +180,7 @@ export function useCarouselState() {
       setPool(function(prevPool) { return prevPool.concat([photo]); });
       return prev.map(function(d) {
         if (d.id !== dumpId) return d;
-        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== photoIndex; }), captions: d.captions, vibe: d.vibe, favorited: d.favorited };
+        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== photoIndex; }), captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
       });
     });
   }, []);
@@ -212,7 +212,7 @@ export function useCarouselState() {
       var dumpPhotos = dump.photos.slice();
       setPool(function(prevPool) { return prevPool.concat(dumpPhotos); });
       return prev.filter(function(d) { return d.id !== dumpId; }).map(function(d, i) {
-        return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
+        return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
       });
     });
   }, []);
@@ -222,7 +222,7 @@ export function useCarouselState() {
       return prev.map(function(d) {
         return {
           id: d.id, number: d.number, title: d.title, subtitle: d.subtitle,
-          captions: d.captions, vibe: d.vibe, favorited: d.favorited,
+          captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating,
           photos: d.photos.map(function(p) {
             return p.id === photoId ? { id: p.id, url: p.url, alt: p.alt, isFavorite: !p.isFavorite, category: p.category } : p;
           }),
@@ -259,7 +259,7 @@ export function useCarouselState() {
   var toggleDumpFavorite = useCallback(function(dumpId: string) {
     setDumps(function(prev) {
       return prev.map(function(d) {
-        return d.id === dumpId ? { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: !d.favorited } : d;
+        return d.id === dumpId ? { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: !d.favorited, rating: d.rating } : d;
       });
     });
   }, []);
@@ -299,7 +299,7 @@ export function useCarouselState() {
       // Merge new dumps into state
       setDumps(function(prevDumps) {
         var combined = prevDumps.concat(newDumps).map(function(d, i) {
-          return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
+          return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
         });
         return combined;
       });
@@ -330,7 +330,7 @@ export function useCarouselState() {
           }
           if (!found) reordered.push(d.photos[k]);
         }
-        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: reordered, captions: d.captions, vibe: d.vibe, favorited: d.favorited };
+        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: reordered, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
       });
     });
   }, []);
@@ -344,6 +344,15 @@ export function useCarouselState() {
     });
   }, []);
 
+  // Rate a dump thumbs up/down (or clear)
+  var rateDump = useCallback(function(dumpId: string, rating: "up" | "down" | null) {
+    setDumps(function(prev) {
+      return prev.map(function(d) {
+        return d.id === dumpId ? { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: rating } : d;
+      });
+    });
+  }, []);
+
   return {
     dumps, pool, resetAll,
     movePhotoWithinDump, movePhotoBetweenDumps,
@@ -351,6 +360,6 @@ export function useCarouselState() {
     removePhotoFromPool, createNewDump, deleteDump,
     toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
-    reorderDumpPhotos, setDumpVibe,
+    reorderDumpPhotos, setDumpVibe, rateDump,
   };
 }

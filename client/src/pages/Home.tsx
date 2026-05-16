@@ -35,7 +35,7 @@ function HomeContent() {
     removePhotoFromPool, createNewDump, deleteDump,
     toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
-    reorderDumpPhotos, setDumpVibe,
+    reorderDumpPhotos, setDumpVibe, rateDump,
   } = useCarouselState();
 
   var { dragState, updateDragPosition, endDrag } = useDrag();
@@ -57,6 +57,7 @@ function HomeContent() {
   var [shareSheetDumpId, setShareSheetDumpId] = useState<string | null>(null);
   var [actionSheetDumpId, setActionSheetDumpId] = useState<string | null>(null);
   var [chatDumpId, setChatDumpId] = useState<string | null>(null);
+  var [chatInitialMsg, setChatInitialMsg] = useState<string | null>(null);
   var [selectionMode, setSelectionMode] = useState(false);
   var [selectionTargetDumpId, setSelectionTargetDumpId] = useState<string | null>(null);
   var [selectedPoolPhotoIds, setSelectedPoolPhotoIds] = useState<string[]>([]);
@@ -581,7 +582,12 @@ function HomeContent() {
         dump={actionSheetDumpId ? (dumps.find(function(d) { return d.id === actionSheetDumpId; }) || null) : null}
         onClose={function() { setActionSheetDumpId(null); }}
         onHeart={function(dumpId) { toggleDumpFavorite(dumpId); }}
-        onChat={function(dumpId) { setChatDumpId(dumpId); }}
+        onChat={function(dumpId) { setChatInitialMsg(null); setChatDumpId(dumpId); }}
+        onRate={function(dumpId, rating) { rateDump(dumpId, rating); }}
+        onThumbsDown={function(dumpId) {
+          setChatInitialMsg("I rated this dump thumbs down. What could be better about it? Ask me what I don't like.");
+          setChatDumpId(dumpId);
+        }}
         onCaptions={function(dumpId) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); }}
         onExport={function(dumpId) { setShareSheetDumpId(dumpId); }}
         onDelete={function(dumpId) { handleDeleteDump(dumpId); }}
@@ -595,11 +601,12 @@ function HomeContent() {
         open={chatDumpId !== null}
         dump={chatDumpId ? (dumps.find(function(d) { return d.id === chatDumpId; }) || null) : null}
         pool={pool}
-        onClose={function() { setChatDumpId(null); }}
+        onClose={function() { setChatDumpId(null); setChatInitialMsg(null); }}
         onReorder={reorderDumpPhotos}
         onSwapIn={movePhotoFromPoolToDump}
         onSwapOut={movePhotoFromDumpToPool}
         onUpdateVibe={setDumpVibe}
+        initialMessage={chatInitialMsg}
       />
       <DragGhost />
       <PhotoLightbox photo={lightboxPhoto} onClose={function() { setLightboxPhoto(null); }} />

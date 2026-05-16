@@ -16,6 +16,7 @@ export interface Dump {
   captions?: string[];
   vibe?: string;
   favorited?: boolean;
+  rating?: "up" | "down" | null;
 }
 
 // ── Owner detection ────────────────────────────────────────────────────────
