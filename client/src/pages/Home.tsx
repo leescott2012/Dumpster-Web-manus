@@ -231,31 +231,49 @@ function HomeContent() {
     setSelectedPhotoId(null);
   }, [contextMenu, dumps, movePhotoFromDumpToPool, removePhotoFromPool]);
 
-  // Upload photos from device
+  // Upload photos/videos from device
   var handleUploadPhotos = useCallback(function(files: FileList) {
     var newPhotos: Photo[] = [];
     var processed = 0;
     var total = files.length;
     for (var i = 0; i < total; i++) {
       (function(file: File) {
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          if (e.target && e.target.result) {
-            newPhotos.push({
-              id: "upload-" + nanoid(8),
-              url: e.target.result as string,
-              alt: file.name,
-              isFavorite: false,
-              category: "Uploaded",
-            });
-          }
+        var isVideo = file.type.startsWith("video/");
+        if (isVideo) {
+          // Videos: use createObjectURL for instant preview
+          var url = URL.createObjectURL(file);
+          newPhotos.push({
+            id: "upload-" + nanoid(8),
+            url: url,
+            alt: file.name,
+            isFavorite: false,
+            category: "Video",
+          });
           processed++;
           if (processed === total) {
             addUploadedPhotos(newPhotos);
-            toast("Added " + newPhotos.length + " photos to pool");
+            toast("Added " + newPhotos.length + (newPhotos.length === 1 ? " item" : " items") + " to pool");
           }
-        };
-        reader.readAsDataURL(file);
+        } else {
+          var reader = new FileReader();
+          reader.onload = function(e) {
+            if (e.target && e.target.result) {
+              newPhotos.push({
+                id: "upload-" + nanoid(8),
+                url: e.target.result as string,
+                alt: file.name,
+                isFavorite: false,
+                category: "Uploaded",
+              });
+            }
+            processed++;
+            if (processed === total) {
+              addUploadedPhotos(newPhotos);
+              toast("Added " + newPhotos.length + (newPhotos.length === 1 ? " item" : " items") + " to pool");
+            }
+          };
+          reader.readAsDataURL(file);
+        }
       })(files[i]);
     }
   }, [addUploadedPhotos]);
@@ -497,6 +515,7 @@ function HomeContent() {
         {poolTab === "photos" ? (
           <PhotoPool
             photos={pool}
+            dumps={dumps}
             selectedPhotoId={selectedPhotoId}
             onSelectPhoto={handleSelectPhoto}
             onDotsClick={handleDotsClick}

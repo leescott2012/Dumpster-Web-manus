@@ -1,6 +1,6 @@
 /*
  * PhotoPool — Bottom section: unused photos grid
- * Sort/filter: Starred first, Huji only
+ * Sort/filter: All, Starred, Used (in dumps), Videos
  * Upload "+" card at end
  * Full dots menu for pool photos (same as dump)
  * Selection mode: green outlines, multi-select, confirm
@@ -8,11 +8,14 @@
 import { useRef, useEffect, useState } from "react";
 import PhotoCard from "./PhotoCard";
 import { useDrag } from "@/contexts/DragContext";
-import type { Photo } from "@/lib/photoData";
-import { Plus } from "lucide-react";
+import type { Dump, Photo } from "@/lib/photoData";
+import { Plus, Play } from "lucide-react";
+
+type FilterMode = "all" | "starred" | "used" | "videos";
 
 interface PhotoPoolProps {
   photos: Photo[];
+  dumps?: Dump[];           // for "Used" filter — photos in dumps
   onSelectPhoto: (photo: Photo) => void;
   onDotsClick: (photo: Photo, position: { x: number; y: number }) => void;
   onDoubleTapPhoto: (photo: Photo) => void;
@@ -28,7 +31,7 @@ interface PhotoPoolProps {
 }
 
 export default function PhotoPool({
-  photos, onSelectPhoto, onDotsClick, onDoubleTapPhoto, onDropToPool, onUploadPhotos,
+  photos, dumps = [], onSelectPhoto, onDotsClick, onDoubleTapPhoto, onDropToPool, onUploadPhotos,
   selectionMode, selectedIds, onTogglePoolSelection, onConfirmSelection, onCancelSelection,
   targetDumpId, selectedPhotoId,
 }: PhotoPoolProps) {
@@ -37,7 +40,7 @@ export default function PhotoPool({
   var { dragState } = useDrag();
   var [isOver, setIsOver] = useState(false);
   var isOverRef = useRef(false);
-  var [sortBy, setSortBy] = useState<"all" | "starred">("all");
+  var [filter, setFilter] = useState<FilterMode>("all");
 
   useEffect(function() { isOverRef.current = isOver; }, [isOver]);
 
@@ -63,12 +66,26 @@ export default function PhotoPool({
     };
   }, [dragState.isDragging, dragState.source, onDropToPool]);
 
-  // Filter/sort photos
+  // Build "used" data — photos in dumps with their dump number label
+  var usedPhotos: Photo[] = [];
+  var usedDumpLabel: Record<string, string> = {};
+  for (var di = 0; di < dumps.length; di++) {
+    var dumpNum = String(dumps[di].number).padStart(2, "0");
+    for (var pi = 0; pi < dumps[di].photos.length; pi++) {
+      var up = dumps[di].photos[pi];
+      usedPhotos.push(up);
+      usedDumpLabel[up.id] = "DUMP " + dumpNum;
+    }
+  }
+
+  // Filter/sort pool photos
   var displayPhotos: Photo[];
-  if (sortBy === "starred") {
+  if (filter === "starred") {
     displayPhotos = photos.filter(function(p) { return p.isFavorite; });
+  } else if (filter === "videos") {
+    displayPhotos = photos.filter(function(p) { return p.category === "Video"; });
   } else {
-    // Default: starred first, then rest
+    // "all" — starred first, then rest
     var starred: Photo[] = [];
     var rest: Photo[] = [];
     for (var i = 0; i < photos.length; i++) {
@@ -77,6 +94,11 @@ export default function PhotoPool({
     }
     displayPhotos = starred.concat(rest);
   }
+
+  // Counts for chip badges
+  var starredCount = photos.filter(function(p) { return p.isFavorite; }).length;
+  var videoCount = photos.filter(function(p) { return p.category === "Video"; }).length;
+  var usedCount = usedPhotos.length;
 
   var handleUploadClick = function() {
     if (fileInputRef.current) fileInputRef.current.click();
@@ -96,7 +118,7 @@ export default function PhotoPool({
       borderRadius: "100px", padding: "5px 14px", fontSize: "11px",
       color: active ? "#c8a96e" : "#666", cursor: "pointer",
       fontFamily: "inherit", letterSpacing: "0.04em", fontWeight: active ? 600 : 400,
-      transition: "all 0.2s",
+      transition: "all 0.2s", display: "inline-flex", alignItems: "center",
     };
   };
 
@@ -112,7 +134,7 @@ export default function PhotoPool({
             Tap photos to add them
           </h3>
           <div style={{ fontSize: "13px", color: "#666", fontStyle: "italic" }}>
-            {selectedIds.length + " selected \u00B7 Tap to select/deselect \u00B7 Confirm when ready"}
+            {selectedIds.length + " selected · Tap to select/deselect · Confirm when ready"}
           </div>
           <button onClick={onCancelSelection}
             style={{ marginTop: "12px", background: "transparent", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "6px 16px", color: "#999", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}
@@ -124,65 +146,119 @@ export default function PhotoPool({
 
       {/* Sort/Filter bar — only when NOT in selection mode */}
       {!selectionMode && (
-        <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
-          <button onClick={function() { setSortBy("all"); }} style={filterBtnStyle(sortBy === "all")}>All</button>
-          <button onClick={function() { setSortBy("starred"); }} style={filterBtnStyle(sortBy === "starred")}>
-            <span style={{ marginRight: "4px" }}>{"\u2605"}</span>Starred
+        <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" as const }}>
+          <button onClick={function() { setFilter("all"); }} style={filterBtnStyle(filter === "all")}>All</button>
+          <button onClick={function() { setFilter("starred"); }} style={filterBtnStyle(filter === "starred")}>
+            <span style={{ marginRight: "4px" }}>{"★"}</span>Starred
+            {starredCount > 0 && (
+              <span style={{ marginLeft: "5px", background: "rgba(200,169,110,0.2)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
+                {starredCount}
+              </span>
+            )}
           </button>
+          <button onClick={function() { setFilter("used"); }} style={filterBtnStyle(filter === "used")}>
+            <span style={{ marginRight: "4px" }}>{"✓"}</span>Used
+            {usedCount > 0 && (
+              <span style={{ marginLeft: "5px", background: filter === "used" ? "rgba(200,169,110,0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
+                {usedCount}
+              </span>
+            )}
+          </button>
+          {videoCount > 0 && (
+            <button onClick={function() { setFilter("videos"); }} style={filterBtnStyle(filter === "videos")}>
+              <Play size={10} style={{ marginRight: "4px" }} />Videos
+              <span style={{ marginLeft: "5px", background: filter === "videos" ? "rgba(200,169,110,0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
+                {videoCount}
+              </span>
+            </button>
+          )}
         </div>
       )}
 
-      {/* Photo Grid */}
-      <div style={{
-        display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "12px",
-        outline: isOver ? "2px dashed rgba(200,169,110,0.5)" : "none", outlineOffset: "8px",
-        borderRadius: "12px", transition: "all 0.2s",
-        padding: isOver ? "8px" : "0", background: isOver ? "rgba(200,169,110,0.03)" : "transparent",
-      }}>
-        {displayPhotos.map(function(photo, i) {
-          var selIdx = selectedIds.indexOf(photo.id);
-          return (
-            <PhotoCard key={photo.id} photo={photo} index={i}
-              source={{ type: "pool" }}
-              isSelected={selectionMode ? selIdx >= 0 : selectedPhotoId === photo.id}
-              onSelect={selectionMode ? onTogglePoolSelection : onSelectPhoto}
-              onDotsClick={selectionMode ? undefined : onDotsClick}
-              onDoubleTap={selectionMode ? undefined : onDoubleTapPhoto}
-              width={140} height={180}
-              selectionMode={selectionMode}
-              selectionIndex={selIdx >= 0 ? selIdx : undefined}
-            />
-          );
-        })}
+      {/* Used filter — read-only grid of photos already placed in dumps */}
+      {filter === "used" && !selectionMode && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "12px" }}>
+          {usedPhotos.map(function(photo, i) {
+            return (
+              <div key={photo.id + "-used-" + i} style={{ position: "relative" }}>
+                <PhotoCard photo={photo} index={i}
+                  source={{ type: "pool" }}
+                  isSelected={false}
+                  onSelect={function() {}}
+                  width={140} height={180}
+                />
+                <div style={{
+                  position: "absolute", top: "6px", left: "6px",
+                  background: "rgba(200,169,110,0.9)", borderRadius: "4px",
+                  padding: "2px 6px", fontSize: "8px", fontWeight: 700,
+                  letterSpacing: "0.08em", color: "#0a0a0a", pointerEvents: "none",
+                }}>
+                  {usedDumpLabel[photo.id]}
+                </div>
+              </div>
+            );
+          })}
+          {usedPhotos.length === 0 && (
+            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "#666", fontSize: "14px", border: "1px dashed #2a2a2a", borderRadius: "10px" }}>
+              No photos in dumps yet
+            </div>
+          )}
+        </div>
+      )}
 
-        {/* Upload "+" card at end of pool — matches photo card 140×180 exactly */}
-        {!selectionMode && (
-          <div onClick={handleUploadClick}
-            style={{
-              width: "140px", height: "184px", flexShrink: 0,
-              borderRadius: "10px", border: "2px dashed #2a2a2a",
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              color: "#666", fontSize: "13px", textAlign: "center", cursor: "pointer",
-              transition: "all 0.2s", background: "rgba(255,255,255,0.02)",
-              boxSizing: "border-box",
-            }}
-            onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#c8a96e"; e.currentTarget.style.color = "#c8a96e"; }}
-            onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
-          >
-            <Plus size={28} strokeWidth={1.5} />
-            <span style={{ marginTop: "6px", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>Add Photos</span>
-          </div>
-        )}
+      {/* Photo Grid — all / starred / videos */}
+      {filter !== "used" && (
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "12px",
+          outline: isOver ? "2px dashed rgba(200,169,110,0.5)" : "none", outlineOffset: "8px",
+          borderRadius: "12px", transition: "all 0.2s",
+          padding: isOver ? "8px" : "0", background: isOver ? "rgba(200,169,110,0.03)" : "transparent",
+        }}>
+          {displayPhotos.map(function(photo, i) {
+            var selIdx = selectedIds.indexOf(photo.id);
+            return (
+              <PhotoCard key={photo.id} photo={photo} index={i}
+                source={{ type: "pool" }}
+                isSelected={selectionMode ? selIdx >= 0 : selectedPhotoId === photo.id}
+                onSelect={selectionMode ? onTogglePoolSelection : onSelectPhoto}
+                onDotsClick={selectionMode ? undefined : onDotsClick}
+                onDoubleTap={selectionMode ? undefined : onDoubleTapPhoto}
+                width={140} height={180}
+                selectionMode={selectionMode}
+                selectionIndex={selIdx >= 0 ? selIdx : undefined}
+              />
+            );
+          })}
 
-        {displayPhotos.length === 0 && !selectionMode && (
-          <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "#666", fontSize: "14px", border: "1px dashed #2a2a2a", borderRadius: "10px" }}>
-            {sortBy === "starred" ? "No starred photos yet" : "All photos are in dumps"}
-          </div>
-        )}
-      </div>
+          {/* Upload "+" card at end of pool */}
+          {!selectionMode && (
+            <div onClick={handleUploadClick}
+              style={{
+                width: "140px", height: "184px", flexShrink: 0,
+                borderRadius: "10px", border: "2px dashed #2a2a2a",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                color: "#666", fontSize: "13px", textAlign: "center", cursor: "pointer",
+                transition: "all 0.2s", background: "rgba(255,255,255,0.02)",
+                boxSizing: "border-box" as const,
+              }}
+              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#c8a96e"; e.currentTarget.style.color = "#c8a96e"; }}
+              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
+            >
+              <Plus size={28} strokeWidth={1.5} />
+              <span style={{ marginTop: "6px", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>Add Photos</span>
+            </div>
+          )}
 
-      {/* Hidden file input for upload */}
-      <input ref={fileInputRef} type="file" accept="image/*" multiple
+          {displayPhotos.length === 0 && !selectionMode && (
+            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "#666", fontSize: "14px", border: "1px dashed #2a2a2a", borderRadius: "10px" }}>
+              {filter === "starred" ? "No starred photos yet" : filter === "videos" ? "No videos yet — upload one" : "No photos in pool"}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Hidden file input — accepts images and videos */}
+      <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple
         style={{ display: "none" }} onChange={handleFileChange}
       />
 

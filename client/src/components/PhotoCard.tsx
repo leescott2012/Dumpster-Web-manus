@@ -7,6 +7,7 @@
  */
 import { useRef, useCallback, useState } from "react";
 import { useDrag } from "@/contexts/DragContext";
+import { Play } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
 
 interface PhotoCardProps {
@@ -213,6 +214,22 @@ export default function PhotoCard({
         src={photo.url} alt={photo.alt} draggable={false} loading="lazy"
         style={{ width: widthPx, height: heightPx, objectFit: "cover", display: "block", pointerEvents: "none" }}
       />
+
+      {/* Video play icon overlay */}
+      {photo.category === "Video" && (
+        <div style={{
+          position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+          pointerEvents: "none",
+        }}>
+          <div style={{
+            width: "36px", height: "36px", borderRadius: "50%",
+            background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Play size={16} color="#fff" fill="#fff" style={{ marginLeft: "2px" }} />
+          </div>
+        </div>
+      )}
 
       {/* Slide number badge — top left */}
       <div style={{
