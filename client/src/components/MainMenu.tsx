@@ -27,6 +27,7 @@ interface MainMenuProps {
   onAISuggest: () => void;
   onCaptions: () => void;
   onIGScrub: () => void;
+  onReset?: () => void;
   dumpCount: number;
   poolCount: number;
 }
@@ -58,7 +59,7 @@ export function initAccent() {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount }: MainMenuProps) {
+export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, onReset, dumpCount, poolCount }: MainMenuProps) {
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const [visible, setVisible] = useState(false);
   const [accent, setAccent] = useState(loadAccent);
@@ -255,7 +256,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
               {activeTab === "appearance" && (
                 <AppearancePanel accent={accent} onAccentChange={handleAccentChange} />
               )}
-              {activeTab === "about" && <AboutPanel />}
+              {activeTab === "about" && <AboutPanel onReset={onReset} />}
             </div>
           )}
         </div>
@@ -609,7 +610,7 @@ function AppearancePanel({ accent, onAccentChange }: {
 
 // ── About Panel ──────────────────────────────────────────────────────────────
 
-function AboutPanel() {
+function AboutPanel({ onReset }: { onReset?: () => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {[
@@ -624,6 +625,26 @@ function AboutPanel() {
           <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>{row.value}</span>
         </div>
       ))}
+
+      {onReset && (
+        <div style={{ marginTop: 10 }}>
+          <button
+            onClick={() => {
+              if (confirm("Reset all dumps and photos to original state? This cannot be undone.")) {
+                onReset();
+              }
+            }}
+            style={{
+              width: "100%", padding: "12px", borderRadius: 10,
+              background: "rgba(255,59,48,0.1)", border: "1px solid rgba(255,59,48,0.2)",
+              color: "#ff3b30", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              fontFamily: "inherit", letterSpacing: "0.04em",
+            }}
+          >
+            RESET TO ORIGINAL STATE
+          </button>
+        </div>
+      )}
     </div>
   );
 }

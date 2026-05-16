@@ -42,7 +42,7 @@ function checkOwner(): boolean {
   return false;
 }
 
-var IS_OWNER = checkOwner();
+export var IS_OWNER = checkOwner();
 
 // ── Owner photos (your CloudFront images) ──────────────────────────────────
 

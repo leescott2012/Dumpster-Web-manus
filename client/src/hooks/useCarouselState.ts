@@ -5,8 +5,10 @@ import type { SuggestedCluster } from "@/components/AISuggestSheet";
 
 // ── localStorage persistence ───────────────────────────────────────────────
 
-var SK_DUMPS = "dumpster_state_dumps";
-var SK_POOL  = "dumpster_state_pool";
+import { IS_OWNER } from "@/lib/photoData";
+
+var SK_DUMPS = IS_OWNER ? "dumpster_state_dumps_owner" : "dumpster_state_dumps_guest";
+var SK_POOL  = IS_OWNER ? "dumpster_state_pool_owner" : "dumpster_state_pool_guest";
 
 function loadSaved<T>(key: string): T | null {
   try {
@@ -49,7 +51,7 @@ function deepClonePool(pool: Photo[]): Photo[] {
 export function useCarouselState() {
   var [dumps, rawSetDumps] = useState<Dump[]>(function() {
     var saved = loadSaved<Dump[]>(SK_DUMPS);
-    return saved && saved.length > 0 ? saved : deepCloneDumps(INITIAL_DUMPS);
+    return saved !== null ? saved : deepCloneDumps(INITIAL_DUMPS);
   });
   var [pool, rawSetPool] = useState<Photo[]>(function() {
     var saved = loadSaved<Photo[]>(SK_POOL);

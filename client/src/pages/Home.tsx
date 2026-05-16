@@ -556,6 +556,7 @@ function HomeContent() {
         onAISuggest={function() { setAiSheetOpen(true); }}
         onCaptions={function() { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); }}
         onIGScrub={function() { setIGScrubOpen(true); }}
+        onReset={handleReset}
         dumpCount={dumps.length}
         poolCount={pool.length}
       />
