@@ -53,10 +53,8 @@ export function useCarouselState() {
     return saved !== null ? saved : deepClonePool(INITIAL_POOL);
   });
 
-  // Persist on every change (skip initial render to avoid writing defaults immediately)
-  var isFirstRender = useRef(true);
+  // Persist on every change
   useEffect(function() {
-    if (isFirstRender.current) { isFirstRender.current = false; return; }
     persist(SK_DUMPS, dumps);
   }, [dumps]);
   useEffect(function() {
