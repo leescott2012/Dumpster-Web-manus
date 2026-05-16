@@ -19,6 +19,7 @@ import { nanoid } from "nanoid";
 import AISuggestSheet, { type SuggestedCluster } from "@/components/AISuggestSheet";
 import CaptionSheet from "@/components/CaptionSheet";
 import DumpShareSheet from "@/components/DumpShareSheet";
+import DumpActionSheet from "@/components/DumpActionSheet";
 import MainMenu, { initAccent } from "@/components/MainMenu";
 import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
@@ -30,7 +31,7 @@ function HomeContent() {
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, createNewDump, deleteDump,
-    toggleFavorite, addUploadedPhotos, renameDump,
+    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
   } = useCarouselState();
 
@@ -50,6 +51,7 @@ function HomeContent() {
   var [captionSheetOpen, setCaptionSheetOpen] = useState(false);
   var [captionInitialDumpId, setCaptionInitialDumpId] = useState<string | null>(null);
   var [shareSheetDumpId, setShareSheetDumpId] = useState<string | null>(null);
+  var [actionSheetDumpId, setActionSheetDumpId] = useState<string | null>(null);
   var [selectionMode, setSelectionMode] = useState(false);
   var [selectionTargetDumpId, setSelectionTargetDumpId] = useState<string | null>(null);
   var [selectedPoolPhotoIds, setSelectedPoolPhotoIds] = useState<string[]>([]);
@@ -394,7 +396,7 @@ function HomeContent() {
               onDoubleTapPhoto={handleDoubleTapPhoto} onDropPhoto={handleDropOnDump}
               onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
               onRenameDump={renameDump} onPlusClick={handlePlusClick}
-              onShareDump={function(dumpId) { setShareSheetDumpId(dumpId); }}
+              onMenuClick={function(dumpId) { setActionSheetDumpId(dumpId); }}
               isCustom={!originalDumpIds.includes(dump.id)}
             />
           </div>
@@ -542,6 +544,15 @@ function HomeContent() {
         onClose={function() { setAiSheetOpen(false); }}
         poolPhotos={pool}
         onCreateDumps={handleAICreateDumps}
+      />
+      <DumpActionSheet
+        open={actionSheetDumpId !== null}
+        dump={actionSheetDumpId ? (dumps.find(function(d) { return d.id === actionSheetDumpId; }) || null) : null}
+        onClose={function() { setActionSheetDumpId(null); }}
+        onHeart={function(dumpId) { toggleDumpFavorite(dumpId); }}
+        onCaptions={function(dumpId) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); }}
+        onExport={function(dumpId) { setShareSheetDumpId(dumpId); }}
+        onDelete={function(dumpId) { handleDeleteDump(dumpId); }}
       />
       <DumpShareSheet
         open={shareSheetDumpId !== null}

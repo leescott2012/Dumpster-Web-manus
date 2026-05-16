@@ -168,7 +168,15 @@ export function useCarouselState() {
   var setDumpCaptions = useCallback(function(dumpId: string, captions: string[], vibe: string) {
     setDumps(function(prev) {
       return prev.map(function(d) {
-        return d.id === dumpId ? { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: captions, vibe: vibe } : d;
+        return d.id === dumpId ? { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: captions, vibe: vibe, favorited: d.favorited } : d;
+      });
+    });
+  }, []);
+
+  var toggleDumpFavorite = useCallback(function(dumpId: string) {
+    setDumps(function(prev) {
+      return prev.map(function(d) {
+        return d.id === dumpId ? { ...d, favorited: !d.favorited } : d;
       });
     });
   }, []);
@@ -223,7 +231,7 @@ export function useCarouselState() {
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, createNewDump, deleteDump,
-    toggleFavorite, addUploadedPhotos, renameDump,
+    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
   };
 }

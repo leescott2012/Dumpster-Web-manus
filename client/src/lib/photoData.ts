@@ -15,6 +15,7 @@ export interface Dump {
   photos: Photo[];
   captions?: string[];
   vibe?: string;
+  favorited?: boolean;
 }
 
 var C = "https://d2xsxph8kpxj0f.cloudfront.net/310519663373215716/mQthSgftBhhpNNbz94sY8A";
