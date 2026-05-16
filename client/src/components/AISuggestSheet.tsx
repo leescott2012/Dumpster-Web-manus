@@ -33,6 +33,11 @@ export default function AISuggestSheet({
   const [phase, setPhase] = useState<Phase>("idle");
   const [cluster, setCluster] = useState<SuggestedCluster | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  // Re-evaluate taste block each time the sheet opens so edits in MainMenu are picked up
+  const [tasteActive, setTasteActive] = useState(false);
+  useEffect(() => {
+    if (open) setTasteActive(Boolean(buildTasteBlock()));
+  }, [open]);
   const variationRef = useRef(0);
 
   const photosToAnalyze = poolPhotos.slice(0, MAX_PHOTOS);
@@ -311,6 +316,20 @@ export default function AISuggestSheet({
                       </div>
                     </div>
                   </div>
+
+                  {/* Taste active indicator */}
+                  {tasteActive && (
+                    <div style={{
+                      display: "inline-flex", alignItems: "center", gap: 5,
+                      background: "rgba(200,169,110,0.08)", border: "1px solid rgba(200,169,110,0.25)",
+                      borderRadius: 100, padding: "5px 12px", marginBottom: 14,
+                    }}>
+                      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#c8a96e", flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#c8a96e", letterSpacing: "0.1em" }}>
+                        TASTE PROFILE ACTIVE
+                      </span>
+                    </div>
+                  )}
 
                   <button onClick={handleAnalyze} style={{
                     display: "inline-flex", alignItems: "center", gap: 8,

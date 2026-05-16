@@ -478,6 +478,7 @@ function TasteProfileSection() {
           value={profile}
           maxLength={750}
           onChange={e => setProfile(e.target.value)}
+          onBlur={() => saveTasteProfile(profile)}
           placeholder="dark editorial, gold accents, automotive, late-night, no clichés..."
           style={{
             width: "100%", minHeight: 80, resize: "vertical",
@@ -516,6 +517,7 @@ function TasteProfileSection() {
           value={rules}
           maxLength={500}
           onChange={e => setRules(e.target.value)}
+          onBlur={() => saveAIRules(rules)}
           placeholder={"no emojis\nno hashtags\nlowercase only"}
           style={{
             width: "100%", minHeight: 80, resize: "vertical",

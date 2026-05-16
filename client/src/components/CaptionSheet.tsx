@@ -34,6 +34,7 @@ export default function CaptionSheet({
   const [vibe, setVibe] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [tasteActive, setTasteActive] = useState(false);
 
   // When the sheet opens, pre-select the deep-linked dump if any
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function CaptionSheet({
       setCaptions([]);
       setVibe("");
       setErrorMsg("");
+      setTasteActive(Boolean(buildTasteBlock()));
     }
   }, [open, initialDumpId, dumps]);
 
@@ -247,6 +249,20 @@ export default function CaptionSheet({
                   );
                 })}
               </div>
+
+              {/* Taste active indicator */}
+              {tasteActive && (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  background: "rgba(110,142,200,0.08)", border: "1px solid rgba(110,142,200,0.25)",
+                  borderRadius: 100, padding: "5px 12px", marginBottom: 12,
+                }}>
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#6E8EC8", flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#6E8EC8", letterSpacing: "0.1em" }}>
+                    TASTE PROFILE ACTIVE
+                  </span>
+                </div>
+              )}
 
               {/* Generate button */}
               <button

@@ -135,13 +135,14 @@ export async function handleAISuggest(
     ? ` This is attempt #${variation + 1} — pick a DIFFERENT theme or photo selection than you would have chosen before.`
     : "";
 
-  const tasteHint = tasteBlock
-    ? `\n\nCONTEXT — the user's taste:\n${tasteBlock}\n\nApply this taste when picking the theme and selection.`
+  // Put taste/rules BEFORE photos so they frame the entire analysis
+  const tastePrefix = tasteBlock
+    ? `MANDATORY USER REQUIREMENTS — these apply to your photo selection, carousel name, and subtitle. Violations are not acceptable:\n${tasteBlock}\n\n`
     : "";
 
   content.push({
     type: "text",
-    text: `You are an expert Instagram content strategist. I'm going to show you ${capped.length} photos. Pick the BEST single Instagram carousel sequence from these photos.${variationHint}${tasteHint}\n\nHere are the photos (numbered for reference):`,
+    text: `You are an expert Instagram content strategist. I'm going to show you ${capped.length} photos. Pick the BEST single Instagram carousel sequence from these photos.${variationHint}\n\n${tastePrefix}Here are the photos (numbered for reference):`,
   });
 
   for (let i = 0; i < capped.length; i++) {
