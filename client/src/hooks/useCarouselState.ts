@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { INITIAL_DUMPS, INITIAL_POOL, type Dump, type Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
 import type { SuggestedCluster } from "@/components/AISuggestSheet";
@@ -17,8 +17,11 @@ function loadSaved<T>(key: string): T | null {
 }
 
 function persist(key: string, value: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(value)); }
-  catch { /* quota exceeded — silently skip */ }
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn("[Dumpster] localStorage write failed for " + key + ":", e);
+  }
 }
 
 // ── Deep clone helpers ─────────────────────────────────────────────────────
@@ -53,12 +56,17 @@ export function useCarouselState() {
     return saved !== null ? saved : deepClonePool(INITIAL_POOL);
   });
 
+  // Refs that always track latest state (for beforeunload backup)
+  var dumpsRef = useRef(dumps);
+  var poolRef = useRef(pool);
+
   // Wrapped setters — persist to localStorage synchronously inside the updater
   // so every state change is guaranteed to be saved (no useEffect timing issues)
   var setDumps = useCallback(function(action: Dump[] | ((prev: Dump[]) => Dump[])) {
     rawSetDumps(function(prev) {
       var next = typeof action === "function" ? action(prev) : action;
       persist(SK_DUMPS, next);
+      dumpsRef.current = next;
       return next;
     });
   }, []);
@@ -67,8 +75,31 @@ export function useCarouselState() {
     rawSetPool(function(prev) {
       var next = typeof action === "function" ? action(prev) : action;
       persist(SK_POOL, next);
+      poolRef.current = next;
       return next;
     });
+  }, []);
+
+  // Belt-and-suspenders: also persist via useEffect as a fallback
+  useEffect(function() {
+    persist(SK_DUMPS, dumps);
+    dumpsRef.current = dumps;
+  }, [dumps]);
+  useEffect(function() {
+    persist(SK_POOL, pool);
+    poolRef.current = pool;
+  }, [pool]);
+
+  // Last-resort backup: save on page unload
+  useEffect(function() {
+    var handleBeforeUnload = function() {
+      persist(SK_DUMPS, dumpsRef.current);
+      persist(SK_POOL, poolRef.current);
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return function() {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
   }, []);
 
   var resetAll = useCallback(function() {
