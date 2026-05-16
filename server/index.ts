@@ -2,6 +2,8 @@ import express from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import { handleAISuggest } from "./aiSuggest.js";
+import { handleAICaption } from "./aiCaption.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,6 +11,16 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  // AI Suggest API route
+  app.post("/api/ai-suggest", (req, res) => {
+    handleAISuggest(req, res);
+  });
+
+  // AI Caption API route
+  app.post("/api/ai-caption", (req, res) => {
+    handleAICaption(req, res);
+  });
 
   // Serve static files from dist/public in production
   const staticPath =

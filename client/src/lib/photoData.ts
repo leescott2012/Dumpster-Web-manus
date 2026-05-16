@@ -3,7 +3,6 @@ export interface Photo {
   id: string;
   url: string;
   alt: string;
-  isHuji: boolean;
   isFavorite: boolean;
   category: string;
 }
@@ -14,13 +13,15 @@ export interface Dump {
   title: string;
   subtitle: string;
   photos: Photo[];
+  captions?: string[];
+  vibe?: string;
 }
 
 var C = "https://d2xsxph8kpxj0f.cloudfront.net/310519663373215716/mQthSgftBhhpNNbz94sY8A";
 function u(f: string): string { return C + "/" + f; }
 
-function p(id: string, file: string, alt: string, huji: boolean, cat: string): Photo {
-  return { id: id, url: u(file), alt: alt, isHuji: huji, isFavorite: false, category: cat };
+function p(id: string, file: string, alt: string, _huji: boolean, cat: string): Photo {
+  return { id: id, url: u(file), alt: alt, isFavorite: false, category: cat };
 }
 
 export var INITIAL_DUMPS: Dump[] = [

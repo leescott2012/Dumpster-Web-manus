@@ -37,7 +37,7 @@ export default function PhotoPool({
   var { dragState } = useDrag();
   var [isOver, setIsOver] = useState(false);
   var isOverRef = useRef(false);
-  var [sortBy, setSortBy] = useState<"all" | "starred" | "huji">("all");
+  var [sortBy, setSortBy] = useState<"all" | "starred">("all");
 
   useEffect(function() { isOverRef.current = isOver; }, [isOver]);
 
@@ -67,8 +67,6 @@ export default function PhotoPool({
   var displayPhotos: Photo[];
   if (sortBy === "starred") {
     displayPhotos = photos.filter(function(p) { return p.isFavorite; });
-  } else if (sortBy === "huji") {
-    displayPhotos = photos.filter(function(p) { return p.isHuji; });
   } else {
     // Default: starred first, then rest
     var starred: Photo[] = [];
@@ -103,29 +101,26 @@ export default function PhotoPool({
   };
 
   return (
-    <section ref={poolRef} id="photo-pool" style={{ maxWidth: "1100px", margin: "56px auto", padding: "0 32px 120px", position: "relative" }}>
-      {/* Section Header */}
-      <div style={{ marginBottom: "24px", paddingBottom: "24px", borderBottom: "1px solid #1e1e1e" }}>
-        <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase" as const, color: selectionMode ? "#22c55e" : "#c8a96e", marginBottom: "8px", transition: "color 0.3s" }}>
-          {selectionMode ? "SELECT PHOTOS" : "PHOTO POOL"}
-        </div>
-        <h2 style={{ fontSize: "clamp(20px, 2.5vw, 28px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: "4px" }}>
-          {selectionMode ? "Tap photos to add them" : "Available Photos"}
-        </h2>
-        <div style={{ fontSize: "14px", color: "#666", fontStyle: "italic" }}>
-          {selectionMode
-            ? selectedIds.length + " selected \u00B7 Tap to select/deselect \u00B7 Confirm when ready"
-            : photos.length + " photos available"
-          }
-        </div>
-        {selectionMode && (
+    <section ref={poolRef} style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 32px 120px", position: "relative" }}>
+      {/* Selection-mode banner */}
+      {selectionMode && (
+        <div style={{ marginBottom: "20px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "#22c55e", marginBottom: "6px" }}>
+            SELECT PHOTOS
+          </div>
+          <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: "4px" }}>
+            Tap photos to add them
+          </h3>
+          <div style={{ fontSize: "13px", color: "#666", fontStyle: "italic" }}>
+            {selectedIds.length + " selected \u00B7 Tap to select/deselect \u00B7 Confirm when ready"}
+          </div>
           <button onClick={onCancelSelection}
             style={{ marginTop: "12px", background: "transparent", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "6px 16px", color: "#999", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}
           >
             Cancel
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Sort/Filter bar — only when NOT in selection mode */}
       {!selectionMode && (
@@ -134,7 +129,6 @@ export default function PhotoPool({
           <button onClick={function() { setSortBy("starred"); }} style={filterBtnStyle(sortBy === "starred")}>
             <span style={{ marginRight: "4px" }}>{"\u2605"}</span>Starred
           </button>
-          <button onClick={function() { setSortBy("huji"); }} style={filterBtnStyle(sortBy === "huji")}>Huji Only</button>
         </div>
       )}
 
@@ -161,14 +155,16 @@ export default function PhotoPool({
           );
         })}
 
-        {/* Upload "+" card at end of pool */}
+        {/* Upload "+" card at end of pool — matches photo card 140×180 exactly */}
         {!selectionMode && (
           <div onClick={handleUploadClick}
             style={{
-              width: "100%", minHeight: "180px", borderRadius: "10px", border: "2px dashed #2a2a2a",
+              width: "140px", height: "184px", flexShrink: 0,
+              borderRadius: "10px", border: "2px dashed #2a2a2a",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
               color: "#666", fontSize: "13px", textAlign: "center", cursor: "pointer",
               transition: "all 0.2s", background: "rgba(255,255,255,0.02)",
+              boxSizing: "border-box",
             }}
             onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#c8a96e"; e.currentTarget.style.color = "#c8a96e"; }}
             onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
@@ -180,7 +176,7 @@ export default function PhotoPool({
 
         {displayPhotos.length === 0 && !selectionMode && (
           <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "#666", fontSize: "14px", border: "1px dashed #2a2a2a", borderRadius: "10px" }}>
-            {sortBy === "starred" ? "No starred photos yet" : sortBy === "huji" ? "No Huji photos" : "All photos are in dumps"}
+            {sortBy === "starred" ? "No starred photos yet" : "All photos are in dumps"}
           </div>
         )}
       </div>

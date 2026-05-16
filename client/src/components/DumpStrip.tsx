@@ -7,7 +7,7 @@ import { useRef, useState, useEffect } from "react";
 import PhotoCard from "./PhotoCard";
 import { useDrag } from "@/contexts/DragContext";
 import type { Dump, Photo } from "@/lib/photoData";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, Pencil } from "lucide-react";
 
 interface DumpStripProps {
   dump: Dump;
@@ -101,17 +101,20 @@ export default function DumpStrip({
             <input value={editTitle}
               onChange={function(e) { setEditTitle(e.target.value); }}
               onBlur={handleTitleSubmit}
-              onKeyDown={function(e) { if (e.key === "Enter") handleTitleSubmit(); }}
+              onKeyDown={function(e) { if (e.key === "Enter") handleTitleSubmit(); if (e.key === "Escape") { setEditTitle(dump.title); setIsEditing(false); } }}
               autoFocus
-              style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", background: "transparent", border: "1px solid #c8a96e", borderRadius: "4px", padding: "2px 8px", outline: "none", width: "100%", maxWidth: "400px", fontFamily: "inherit" }}
+              style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", background: "transparent", border: "none", borderBottom: "2px solid #c8a96e", borderRadius: "0", padding: "2px 0", outline: "none", width: "100%", maxWidth: "500px", fontFamily: "inherit" }}
             />
           ) : (
-            <h2
-              style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: "4px", cursor: isCustom ? "pointer" : "default" }}
-              onClick={function() { if (isCustom) setIsEditing(true); }}
-            >
-              {dump.title}
-            </h2>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={function() { setIsEditing(true); }}>
+              <h2 style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: "0" }}>
+                {dump.title}
+              </h2>
+              <Pencil size={14} color="#555" style={{ flexShrink: 0, marginTop: "4px", transition: "color 0.15s" }}
+                onMouseEnter={function(e) { (e.currentTarget as SVGElement).style.color = "#c8a96e"; }}
+                onMouseLeave={function(e) { (e.currentTarget as SVGElement).style.color = "#555"; }}
+              />
+            </div>
           )}
           <div style={{ fontSize: "14px", color: "#666", fontStyle: "italic" }}>
             {dump.subtitle}

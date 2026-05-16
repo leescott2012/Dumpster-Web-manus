@@ -175,8 +175,6 @@ export default function PhotoCard({
     borderColor = "#c8a96e";
   } else if (isDragOver) {
     borderColor = "#c8a96e";
-  } else if (photo.isHuji) {
-    borderColor = "#e74c3c";
   } else {
     borderColor = "#1e1e1e";
   }
@@ -238,18 +236,6 @@ export default function PhotoCard({
           <svg width="12" height="12" viewBox="0 0 24 24" fill="#c8a96e" stroke="none">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
           </svg>
-        </div>
-      )}
-
-      {/* Huji badge — top right (when not selected) */}
-      {photo.isHuji && !isSelected && !selectionMode && (
-        <div style={{
-          position: "absolute", top: "8px", right: "8px",
-          background: "#e74c3c", color: "#fff", fontSize: "8px", fontWeight: 700,
-          letterSpacing: "0.1em", padding: "2px 6px", borderRadius: "4px",
-          pointerEvents: "none",
-        }}>
-          HUJI
         </div>
       )}
 

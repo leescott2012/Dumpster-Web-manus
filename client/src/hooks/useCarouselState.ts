@@ -1,13 +1,14 @@
 import { useState, useCallback } from "react";
 import { INITIAL_DUMPS, INITIAL_POOL, type Dump, type Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
+import type { SuggestedCluster } from "@/components/AISuggestSheet";
 
 function deepCloneDumps(dumps: Dump[]): Dump[] {
   return dumps.map(function(d) {
     return {
       id: d.id, number: d.number, title: d.title, subtitle: d.subtitle,
       photos: d.photos.map(function(p) {
-        return { id: p.id, url: p.url, alt: p.alt, isHuji: p.isHuji, isFavorite: p.isFavorite, category: p.category };
+        return { id: p.id, url: p.url, alt: p.alt, isFavorite: p.isFavorite, category: p.category };
       }),
     };
   });
@@ -15,7 +16,7 @@ function deepCloneDumps(dumps: Dump[]): Dump[] {
 
 function deepClonePool(pool: Photo[]): Photo[] {
   return pool.map(function(p) {
-    return { id: p.id, url: p.url, alt: p.alt, isHuji: p.isHuji, isFavorite: p.isFavorite, category: p.category };
+    return { id: p.id, url: p.url, alt: p.alt, isFavorite: p.isFavorite, category: p.category };
   });
 }
 
@@ -134,38 +135,20 @@ export function useCarouselState() {
     });
   }, []);
 
-  var toggleHuji = useCallback(function(photoId: string) {
-    setDumps(function(prev) {
-      return prev.map(function(d) {
-        return {
-          id: d.id, number: d.number, title: d.title, subtitle: d.subtitle,
-          photos: d.photos.map(function(p) {
-            return p.id === photoId ? { id: p.id, url: p.url, alt: p.alt, isHuji: !p.isHuji, isFavorite: p.isFavorite, category: p.category } : p;
-          }),
-        };
-      });
-    });
-    setPool(function(prev) {
-      return prev.map(function(p) {
-        return p.id === photoId ? { id: p.id, url: p.url, alt: p.alt, isHuji: !p.isHuji, isFavorite: p.isFavorite, category: p.category } : p;
-      });
-    });
-  }, []);
-
   var toggleFavorite = useCallback(function(photoId: string) {
     setDumps(function(prev) {
       return prev.map(function(d) {
         return {
           id: d.id, number: d.number, title: d.title, subtitle: d.subtitle,
           photos: d.photos.map(function(p) {
-            return p.id === photoId ? { id: p.id, url: p.url, alt: p.alt, isHuji: p.isHuji, isFavorite: !p.isFavorite, category: p.category } : p;
+            return p.id === photoId ? { id: p.id, url: p.url, alt: p.alt, isFavorite: !p.isFavorite, category: p.category } : p;
           }),
         };
       });
     });
     setPool(function(prev) {
       return prev.map(function(p) {
-        return p.id === photoId ? { id: p.id, url: p.url, alt: p.alt, isHuji: p.isHuji, isFavorite: !p.isFavorite, category: p.category } : p;
+        return p.id === photoId ? { id: p.id, url: p.url, alt: p.alt, isFavorite: !p.isFavorite, category: p.category } : p;
       });
     });
   }, []);
@@ -177,8 +160,61 @@ export function useCarouselState() {
   var renameDump = useCallback(function(dumpId: string, title: string) {
     setDumps(function(prev) {
       return prev.map(function(d) {
-        return d.id === dumpId ? { id: d.id, number: d.number, title: title, subtitle: d.subtitle, photos: d.photos } : d;
+        return d.id === dumpId ? { id: d.id, number: d.number, title: title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe } : d;
       });
+    });
+  }, []);
+
+  var setDumpCaptions = useCallback(function(dumpId: string, captions: string[], vibe: string) {
+    setDumps(function(prev) {
+      return prev.map(function(d) {
+        return d.id === dumpId ? { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: captions, vibe: vibe } : d;
+      });
+    });
+  }, []);
+
+  // Create dumps from AI suggestions — moves photos from pool into new dumps
+  var createDumpsFromSuggestions = useCallback(function(clusters: SuggestedCluster[]) {
+    setPool(function(prevPool) {
+      // Build a lookup of remaining pool photos
+      var poolMap: Record<string, Photo> = {};
+      for (var i = 0; i < prevPool.length; i++) {
+        poolMap[prevPool[i].id] = prevPool[i];
+      }
+
+      var newDumps: Dump[] = [];
+      var usedIds = new Set<string>();
+
+      for (var ci = 0; ci < clusters.length; ci++) {
+        var cluster = clusters[ci];
+        var photos: Photo[] = [];
+        for (var pi = 0; pi < cluster.photoIds.length; pi++) {
+          var id = cluster.photoIds[pi];
+          if (poolMap[id] && !usedIds.has(id)) {
+            photos.push(poolMap[id]);
+            usedIds.add(id);
+          }
+        }
+        if (photos.length === 0) continue;
+        newDumps.push({
+          id: "dump-ai-" + nanoid(6),
+          number: 0, // will be renumbered below
+          title: cluster.name,
+          subtitle: cluster.subtitle,
+          photos: photos,
+        });
+      }
+
+      // Merge new dumps into state
+      setDumps(function(prevDumps) {
+        var combined = prevDumps.concat(newDumps).map(function(d, i) {
+          return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos };
+        });
+        return combined;
+      });
+
+      // Remove used photos from pool
+      return prevPool.filter(function(p) { return !usedIds.has(p.id); });
     });
   }, []);
 
@@ -187,6 +223,7 @@ export function useCarouselState() {
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, createNewDump, deleteDump,
-    toggleHuji, toggleFavorite, addUploadedPhotos, renameDump,
+    toggleFavorite, addUploadedPhotos, renameDump,
+    createDumpsFromSuggestions, setDumpCaptions,
   };
 }

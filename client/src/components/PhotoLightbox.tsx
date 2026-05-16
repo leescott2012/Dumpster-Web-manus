@@ -14,7 +14,7 @@ interface PhotoLightboxProps {
 export default function PhotoLightbox({ photo, onClose }: PhotoLightboxProps) {
   if (!photo) return null;
 
-  var imgBorder = photo.isHuji ? "3px solid #e74c3c" : "2px solid #2a2a2a";
+  var imgBorder = "2px solid #2a2a2a";
 
   return (
     <div
@@ -88,11 +88,6 @@ export default function PhotoLightbox({ photo, onClose }: PhotoLightboxProps) {
             }}
           >
             {photo.category}
-            {photo.isHuji && (
-              <span style={{ color: "#e74c3c", marginLeft: "8px" }}>
-                · HUJI
-              </span>
-            )}
           </div>
         </div>
       </div>

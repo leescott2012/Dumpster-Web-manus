@@ -1,6 +1,6 @@
 /*
  * Home — Dumpster main page
- * Tap = yellow highlight + dots, Dots = menu (Huji/Favorite/Remove)
+ * Tap = yellow highlight + dots, Dots = menu (Favorite/Remove)
  * "+" card = pool selection mode, Double tap = lightbox, Hold+move = drag
  * No rules, no onboarding hints. App name: Dumpster.
  */
@@ -13,9 +13,15 @@ import PhotoLightbox from "@/components/PhotoLightbox";
 import PhotoContextMenu from "@/components/PhotoContextMenu";
 import DragGhost from "@/components/DragGhost";
 import type { Photo } from "@/lib/photoData";
-import { Plus, RotateCcw } from "lucide-react";
+import { Plus, RotateCcw, Sparkles, Menu } from "lucide-react";
 import { toast } from "sonner";
 import { nanoid } from "nanoid";
+import AISuggestSheet, { type SuggestedCluster } from "@/components/AISuggestSheet";
+import CaptionSheet from "@/components/CaptionSheet";
+import MainMenu, { initAccent } from "@/components/MainMenu";
+import PoolPill, { type PoolTab } from "@/components/PoolPill";
+import CaptionPool from "@/components/CaptionPool";
+import { loadCaptions } from "@/lib/captionPool";
 
 function HomeContent() {
   var {
@@ -23,7 +29,8 @@ function HomeContent() {
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, createNewDump, deleteDump,
-    toggleHuji, toggleFavorite, addUploadedPhotos, renameDump,
+    toggleFavorite, addUploadedPhotos, renameDump,
+    createDumpsFromSuggestions, setDumpCaptions,
   } = useCarouselState();
 
   var { dragState, updateDragPosition, endDrag } = useDrag();
@@ -33,10 +40,21 @@ function HomeContent() {
   var [contextMenu, setContextMenu] = useState<{
     photo: Photo; position: { x: number; y: number }; dumpId?: string;
   } | null>(null);
+  var [menuOpen, setMenuOpen] = useState(false);
+  var [poolTab, setPoolTab] = useState<PoolTab>("photos");
+  var [captionCount, setCaptionCount] = useState<number>(function() { return loadCaptions().length; });
+  // Refresh caption count when the tab changes (in case caps were added)
+  useEffect(function() { setCaptionCount(loadCaptions().length); }, [poolTab]);
+  var [aiSheetOpen, setAiSheetOpen] = useState(false);
+  var [captionSheetOpen, setCaptionSheetOpen] = useState(false);
+  var [captionInitialDumpId, setCaptionInitialDumpId] = useState<string | null>(null);
   var [selectionMode, setSelectionMode] = useState(false);
   var [selectionTargetDumpId, setSelectionTargetDumpId] = useState<string | null>(null);
   var [selectedPoolPhotoIds, setSelectedPoolPhotoIds] = useState<string[]>([]);
   var scrollBackRef = useRef<string | null>(null);
+
+  // Init accent color from localStorage on mount
+  useEffect(function() { initAccent(); }, []);
 
   // Global drag ghost positioning
   useEffect(function() {
@@ -223,7 +241,6 @@ function HomeContent() {
               id: "upload-" + nanoid(8),
               url: e.target.result as string,
               alt: file.name,
-              isHuji: false,
               isFavorite: false,
               category: "Uploaded",
             });
@@ -238,6 +255,11 @@ function HomeContent() {
       })(files[i]);
     }
   }, [addUploadedPhotos]);
+
+  var handleAICreateDumps = useCallback(function(clusters: SuggestedCluster[]) {
+    createDumpsFromSuggestions(clusters);
+    toast("Created " + clusters.length + " AI-suggested dump" + (clusters.length !== 1 ? "s" : ""));
+  }, [createDumpsFromSuggestions]);
 
   var handleReset = useCallback(function() {
     resetAll();
@@ -284,7 +306,32 @@ function HomeContent() {
   var originalDumpIds = ["dump-1", "dump-2", "dump-3"];
 
   return (
-    <div style={{ minHeight: "100vh" }} onClick={handleBackgroundClick} onTouchEnd={handleBackgroundTouch}>
+    <div style={{ minHeight: "100vh", paddingTop: "52px" }} onClick={handleBackgroundClick} onTouchEnd={handleBackgroundTouch}>
+      {/* Fixed top navbar */}
+      <nav style={{
+        position: "fixed", top: 0, left: 0, right: 0, height: 52, zIndex: 300,
+        background: "rgba(5,5,5,0.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+        borderBottom: "1px solid #1a1a1a",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 20px",
+      }}>
+        <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.3em", color: "#c8a96e", textTransform: "uppercase" as const }}>
+          DUMPSTER
+        </span>
+        <button
+          onClick={function(e) { e.stopPropagation(); setMenuOpen(true); }}
+          style={{
+            width: 36, height: 36, borderRadius: 9,
+            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", color: "#e8e8e8", transition: "all 0.15s",
+          }}
+          onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(200,169,110,0.12)"; e.currentTarget.style.borderColor = "rgba(200,169,110,0.3)"; }}
+          onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
+        >
+          <Menu size={17} />
+        </button>
+      </nav>
       {/* Dimming overlay when in selection mode */}
       {selectionMode && (
         <div id="selection-dimmer" style={{
@@ -359,6 +406,19 @@ function HomeContent() {
         opacity: selectionMode ? 0.3 : 1, transition: "opacity 0.3s",
         pointerEvents: selectionMode ? "none" : "auto",
       }}>
+        <button
+          onClick={function() { setAiSheetOpen(true); }}
+          style={{
+            display: "flex", alignItems: "center", gap: "8px",
+            background: "rgba(200,169,110,0.1)", border: "1px solid rgba(200,169,110,0.3)", borderRadius: "10px",
+            padding: "12px 20px", color: "#c8a96e", fontSize: "13px", fontWeight: 700,
+            cursor: "pointer", transition: "all 0.2s", fontFamily: "inherit", letterSpacing: "0.04em",
+          }}
+          onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(200,169,110,0.18)"; e.currentTarget.style.borderColor = "#c8a96e"; }}
+          onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(200,169,110,0.1)"; e.currentTarget.style.borderColor = "rgba(200,169,110,0.3)"; }}
+        >
+          <Sparkles size={15} /> AI Suggest
+        </button>
         <button onClick={handleCreateDump} style={{
           display: "flex", alignItems: "center", gap: "8px",
           background: "#151515", border: "1px solid #2a2a2a", borderRadius: "10px",
@@ -388,23 +448,66 @@ function HomeContent() {
         <hr style={{ border: "none", borderTop: "1px solid #1e1e1e" }} />
       </div>
 
-      {/* Photo Pool */}
-      <div style={{ position: "relative", zIndex: selectionMode ? 200 : "auto" }}>
-        <PhotoPool
-          photos={pool}
-          selectedPhotoId={selectedPhotoId}
-          onSelectPhoto={handleSelectPhoto}
-          onDotsClick={handleDotsClick}
-          onDoubleTapPhoto={handleDoubleTapPhoto}
-          onDropToPool={handleDropToPool}
-          onUploadPhotos={handleUploadPhotos}
-          selectionMode={selectionMode}
-          selectedIds={selectedPoolPhotoIds}
-          onTogglePoolSelection={handleTogglePoolSelection}
-          onConfirmSelection={handleConfirmSelection}
-          onCancelSelection={handleCancelSelection}
-          targetDumpId={selectionTargetDumpId}
+      {/* Pool Section — pill toggle + Photos or Captions tab */}
+      <div id="photo-pool" style={{ position: "relative", zIndex: selectionMode ? 200 : "auto", paddingTop: 40 }}>
+        {/* Centered POOL divider — matches iOS native */}
+        <div style={{
+          maxWidth: 1100, margin: "0 auto 18px", padding: "0 32px",
+          display: "flex", alignItems: "center", gap: 16,
+        }}>
+          <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
+          <div style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: "0.35em",
+            textTransform: "uppercase" as const, color: "#666",
+            flexShrink: 0,
+          }}>
+            POOL
+          </div>
+          <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
+        </div>
+
+        <PoolPill
+          active={poolTab}
+          onChange={function(t) { setPoolTab(t); }}
+          photoCount={pool.length}
+          captionCount={captionCount}
         />
+
+        {/* Sub-section header — left aligned below pill */}
+        <div style={{ maxWidth: 1100, margin: "8px auto 18px", padding: "0 32px" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "#c8a96e", marginBottom: 6 }}>
+            {poolTab === "photos" ? "PHOTO POOL" : "CAPTION POOL"}
+          </div>
+          <h2 style={{ fontSize: "clamp(20px, 2.5vw, 28px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: 4 }}>
+            {poolTab === "photos" ? "Available Photos" : "Caption Library"}
+          </h2>
+          <div style={{ fontSize: 14, color: "#666", fontStyle: "italic" as const }}>
+            {poolTab === "photos"
+              ? pool.length + " available · " + dumps.reduce(function(s, d) { return s + d.photos.length; }, 0) + " in dumps"
+              : captionCount + " captions in library"
+            }
+          </div>
+        </div>
+
+        {poolTab === "photos" ? (
+          <PhotoPool
+            photos={pool}
+            selectedPhotoId={selectedPhotoId}
+            onSelectPhoto={handleSelectPhoto}
+            onDotsClick={handleDotsClick}
+            onDoubleTapPhoto={handleDoubleTapPhoto}
+            onDropToPool={handleDropToPool}
+            onUploadPhotos={handleUploadPhotos}
+            selectionMode={selectionMode}
+            selectedIds={selectedPoolPhotoIds}
+            onTogglePoolSelection={handleTogglePoolSelection}
+            onConfirmSelection={handleConfirmSelection}
+            onCancelSelection={handleCancelSelection}
+            targetDumpId={selectionTargetDumpId}
+          />
+        ) : (
+          <CaptionPool />
+        )}
       </div>
 
       {/* Footer */}
@@ -416,6 +519,27 @@ function HomeContent() {
       </footer>
 
       {/* Overlays */}
+      <MainMenu
+        open={menuOpen}
+        onClose={function() { setMenuOpen(false); }}
+        onAISuggest={function() { setAiSheetOpen(true); }}
+        onCaptions={function() { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); }}
+        dumpCount={dumps.length}
+        poolCount={pool.length}
+      />
+      <CaptionSheet
+        open={captionSheetOpen}
+        onClose={function() { setCaptionSheetOpen(false); }}
+        dumps={dumps}
+        initialDumpId={captionInitialDumpId}
+        onCaptionsGenerated={function(dumpId, captions, vibe) { setDumpCaptions(dumpId, captions, vibe); }}
+      />
+      <AISuggestSheet
+        open={aiSheetOpen}
+        onClose={function() { setAiSheetOpen(false); }}
+        poolPhotos={pool}
+        onCreateDumps={handleAICreateDumps}
+      />
       <DragGhost />
       <PhotoLightbox photo={lightboxPhoto} onClose={function() { setLightboxPhoto(null); }} />
       <PhotoContextMenu
@@ -423,7 +547,6 @@ function HomeContent() {
         position={contextMenu ? contextMenu.position : null}
         onClose={function() { setContextMenu(null); setSelectedPhotoId(null); }}
         onRemove={handleRemove}
-        onToggleHuji={toggleHuji}
         onToggleFavorite={toggleFavorite}
       />
     </div>
