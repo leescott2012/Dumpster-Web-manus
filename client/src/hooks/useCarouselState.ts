@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 import { INITIAL_DUMPS, INITIAL_POOL, type Dump, type Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
 import type { SuggestedCluster } from "@/components/AISuggestSheet";
@@ -44,26 +44,36 @@ function deepClonePool(pool: Photo[]): Photo[] {
 // ── Hook ───────────────────────────────────────────────────────────────────
 
 export function useCarouselState() {
-  var [dumps, setDumps] = useState<Dump[]>(function() {
+  var [dumps, rawSetDumps] = useState<Dump[]>(function() {
     var saved = loadSaved<Dump[]>(SK_DUMPS);
     return saved && saved.length > 0 ? saved : deepCloneDumps(INITIAL_DUMPS);
   });
-  var [pool, setPool] = useState<Photo[]>(function() {
+  var [pool, rawSetPool] = useState<Photo[]>(function() {
     var saved = loadSaved<Photo[]>(SK_POOL);
     return saved !== null ? saved : deepClonePool(INITIAL_POOL);
   });
 
-  // Persist on every change
-  useEffect(function() {
-    persist(SK_DUMPS, dumps);
-  }, [dumps]);
-  useEffect(function() {
-    persist(SK_POOL, pool);
-  }, [pool]);
+  // Wrapped setters — persist to localStorage synchronously inside the updater
+  // so every state change is guaranteed to be saved (no useEffect timing issues)
+  var setDumps = useCallback(function(action: Dump[] | ((prev: Dump[]) => Dump[])) {
+    rawSetDumps(function(prev) {
+      var next = typeof action === "function" ? action(prev) : action;
+      persist(SK_DUMPS, next);
+      return next;
+    });
+  }, []);
+
+  var setPool = useCallback(function(action: Photo[] | ((prev: Photo[]) => Photo[])) {
+    rawSetPool(function(prev) {
+      var next = typeof action === "function" ? action(prev) : action;
+      persist(SK_POOL, next);
+      return next;
+    });
+  }, []);
 
   var resetAll = useCallback(function() {
-    setDumps(deepCloneDumps(INITIAL_DUMPS));
-    setPool(deepClonePool(INITIAL_POOL));
+    rawSetDumps(deepCloneDumps(INITIAL_DUMPS));
+    rawSetPool(deepClonePool(INITIAL_POOL));
     try {
       localStorage.removeItem(SK_DUMPS);
       localStorage.removeItem(SK_POOL);
