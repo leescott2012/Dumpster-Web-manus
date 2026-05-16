@@ -7,7 +7,7 @@ import { useRef, useState, useEffect } from "react";
 import PhotoCard from "./PhotoCard";
 import { useDrag } from "@/contexts/DragContext";
 import type { Dump, Photo } from "@/lib/photoData";
-import { Plus, Pencil, MoreHorizontal, Heart } from "lucide-react";
+import { Plus, Pencil, MoreHorizontal, Heart, ChevronLeft, ChevronRight, Copy, Check } from "lucide-react";
 
 interface DumpStripProps {
   dump: Dump;
@@ -20,12 +20,13 @@ interface DumpStripProps {
   onRenameDump?: (dumpId: string, title: string) => void;
   onPlusClick: (dumpId: string) => void;
   onMenuClick?: (dumpId: string) => void;
+  onCaptionClick?: (dumpId: string) => void;
   isCustom?: boolean;
 }
 
 export default function DumpStrip({
   dump, selectedPhotoId, onSelectPhoto, onDotsClick, onDoubleTapPhoto,
-  onDropPhoto, onDeleteDump, onRenameDump, onPlusClick, onMenuClick, isCustom = false,
+  onDropPhoto, onDeleteDump, onRenameDump, onPlusClick, onMenuClick, onCaptionClick, isCustom = false,
 }: DumpStripProps) {
   var stripRef = useRef<HTMLDivElement>(null);
   var { dragState } = useDrag();
@@ -33,6 +34,8 @@ export default function DumpStrip({
   var [isEditing, setIsEditing] = useState(false);
   var [editTitle, setEditTitle] = useState(dump.title);
   var dropIndexRef = useRef<number | null>(null);
+  var [captionIdx, setCaptionIdx] = useState(0);
+  var [copied, setCopied] = useState(false);
 
   useEffect(function() { dropIndexRef.current = dropIndex; }, [dropIndex]);
 
@@ -149,6 +152,81 @@ export default function DumpStrip({
           )}
         </div>
       </div>
+
+      {/* Caption Bubble — shown when captions exist */}
+      {dump.captions && dump.captions.length > 0 && (function() {
+        var captions = dump.captions!;
+        var total = captions.length;
+        var current = captions[Math.min(captionIdx, total - 1)];
+        var handleCopy = function(e: React.MouseEvent) {
+          e.stopPropagation();
+          navigator.clipboard.writeText(current).then(function() {
+            setCopied(true);
+            setTimeout(function() { setCopied(false); }, 1800);
+          });
+        };
+        var handlePrev = function(e: React.MouseEvent) {
+          e.stopPropagation();
+          setCaptionIdx(function(i) { return (i - 1 + total) % total; });
+        };
+        var handleNext = function(e: React.MouseEvent) {
+          e.stopPropagation();
+          setCaptionIdx(function(i) { return (i + 1) % total; });
+        };
+        return (
+          <div
+            onClick={function() { if (onCaptionClick) onCaptionClick(dump.id); }}
+            style={{
+              marginBottom: "28px", borderLeft: "3px solid #c8a96e",
+              paddingLeft: "16px", cursor: onCaptionClick ? "pointer" : "default",
+            }}
+          >
+            {/* Vibe + index label */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+              <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.12em", color: "#c8a96e", textTransform: "uppercase" as const }}>
+                {dump.vibe ? dump.vibe + " · " : ""}{captionIdx + 1}/{total} captions
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                {/* Copy button */}
+                <button onClick={handleCopy}
+                  style={{ background: "transparent", border: "none", cursor: "pointer", color: copied ? "#22c55e" : "#555", padding: "4px", display: "flex", alignItems: "center", transition: "color 0.15s" }}
+                  title="Copy caption"
+                >
+                  {copied ? <Check size={13} /> : <Copy size={13} />}
+                </button>
+                {/* Prev / Next */}
+                {total > 1 && (
+                  <>
+                    <button onClick={handlePrev}
+                      style={{ background: "transparent", border: "none", cursor: "pointer", color: "#555", padding: "4px", display: "flex", alignItems: "center", transition: "color 0.15s" }}
+                      onMouseEnter={function(e) { e.currentTarget.style.color = "#c8a96e"; }}
+                      onMouseLeave={function(e) { e.currentTarget.style.color = "#555"; }}
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <button onClick={handleNext}
+                      style={{ background: "transparent", border: "none", cursor: "pointer", color: "#555", padding: "4px", display: "flex", alignItems: "center", transition: "color 0.15s" }}
+                      onMouseEnter={function(e) { e.currentTarget.style.color = "#c8a96e"; }}
+                      onMouseLeave={function(e) { e.currentTarget.style.color = "#555"; }}
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            {/* Caption text */}
+            <div style={{ fontSize: "14px", color: "#b0b0b0", lineHeight: 1.6, fontStyle: "italic", maxWidth: "680px" }}>
+              {current}
+            </div>
+            {onCaptionClick && (
+              <div style={{ marginTop: "8px", fontSize: "10px", color: "#444", letterSpacing: "0.06em" }}>
+                tap to edit
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Slide Strip */}
       <div ref={stripRef} style={{

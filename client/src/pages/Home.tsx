@@ -415,6 +415,7 @@ function HomeContent() {
               onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
               onRenameDump={renameDump} onPlusClick={handlePlusClick}
               onMenuClick={function(dumpId) { setActionSheetDumpId(dumpId); }}
+              onCaptionClick={function(dumpId) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); }}
               isCustom={!originalDumpIds.includes(dump.id)}
             />
           </div>
