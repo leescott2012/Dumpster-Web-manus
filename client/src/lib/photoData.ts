@@ -18,14 +18,41 @@ export interface Dump {
   favorited?: boolean;
 }
 
+// ── Owner detection ────────────────────────────────────────────────────────
+// Visit with ?owner=1 to set the flag, then your photos load forever.
+// Everyone else gets stock demo photos.
+
+var OWNER_KEY = "dumpster_owner";
+
+function checkOwner(): boolean {
+  // URL param sets the flag
+  if (typeof window !== "undefined") {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get("owner") === "1") {
+      localStorage.setItem(OWNER_KEY, "1");
+      // Clean the URL so the param isn't shared
+      var url = new URL(window.location.href);
+      url.searchParams.delete("owner");
+      window.history.replaceState({}, "", url.pathname + url.search);
+      return true;
+    }
+    return localStorage.getItem(OWNER_KEY) === "1";
+  }
+  return false;
+}
+
+var IS_OWNER = checkOwner();
+
+// ── Owner photos (your CloudFront images) ──────────────────────────────────
+
 var C = "https://d2xsxph8kpxj0f.cloudfront.net/310519663373215716/mQthSgftBhhpNNbz94sY8A";
 function u(f: string): string { return C + "/" + f; }
 
 function p(id: string, file: string, alt: string, _huji: boolean, cat: string): Photo {
-  return { id: id, url: u(file), alt: alt, isFavorite: false, category: cat };
+  return { id: id, url: u(file), alt: alt, isFavorite: _huji, category: cat };
 }
 
-export var INITIAL_DUMPS: Dump[] = [
+var OWNER_DUMPS: Dump[] = [
   {
     id: "dump-1", number: 1,
     title: "The Creative's Saturday",
@@ -64,7 +91,7 @@ export var INITIAL_DUMPS: Dump[] = [
   },
 ];
 
-export var INITIAL_POOL: Photo[] = [
+var OWNER_POOL: Photo[] = [
   p("AQAD5wtrG9B0KEZ-", "photo_AQAD5wtrG9B0KEZ-_3c1615ec.jpg", "Pool hand with cup and watch", true, "Lifestyle"),
   p("AQAD6AtrG9B0KEZ8", "photo_AQAD6AtrG9B0KEZ8_d898d9b6.jpg", "Buddhist monk at event", false, "Culture"),
   p("AQAD6QtrG9B0KEZ8", "photo_AQAD6QtrG9B0KEZ8_48fab9b1.jpg", "Dark hallway with bonsai", false, "Architecture"),
@@ -96,3 +123,75 @@ export var INITIAL_POOL: Photo[] = [
   p("v4_p14", "v4_p14_91fff452.jpg", "Close-up portrait, face mask and cap", true, "Portrait"),
   p("v4_p15", "v4_p15_746eb90c.jpg", "Masked portrait, gold chain, film grain", true, "Portrait"),
 ];
+
+// ── Stock demo photos (Unsplash) ───────────────────────────────────────────
+// Deterministic by photo ID so they always look the same.
+
+function stock(id: string, unsplashId: string, alt: string, fav: boolean, cat: string): Photo {
+  return { id: "stock-" + id, url: "https://images.unsplash.com/photo-" + unsplashId + "?w=400&h=500&fit=crop&q=80", alt: alt, isFavorite: fav, category: cat };
+}
+
+var STOCK_DUMPS: Dump[] = [
+  {
+    id: "demo-dump-1", number: 1,
+    title: "Golden Hour",
+    subtitle: "Downtown / Portraits / Architecture",
+    photos: [
+      stock("01", "1534528741775-53994a69daeb", "Woman at golden hour, city backdrop", false, "Portrait"),
+      stock("02", "1477959858617-67f85cf4f1df", "City skyline at sunset", false, "Architecture"),
+      stock("03", "1524758631624-e2822e304c36", "Minimalist interior design", false, "Architecture"),
+      stock("04", "1506794778202-cad84cf45f1d", "Portrait, warm natural light", false, "Portrait"),
+      stock("05", "1519681393784-d120267933ba", "Mountain range, golden light", false, "Travel"),
+    ],
+  },
+  {
+    id: "demo-dump-2", number: 2,
+    title: "Weekend Vibes",
+    subtitle: "Food / Coffee / Street / Night",
+    photos: [
+      stock("06", "1495474472287-4d71bcdd2085", "Latte art, cafe table", false, "Lifestyle"),
+      stock("07", "1414235077428-338989a2e8c0", "Aerial city streets at night", false, "Nightlife"),
+      stock("08", "1504674900247-0877df9cc836", "Plated fine dining dish", false, "Food"),
+      stock("09", "1470071459604-3b5ec3a7fe05", "Ocean waves, aerial shot", false, "Travel"),
+      stock("10", "1517248135467-4c7edcad34c4", "Neon signs, city at night", false, "Nightlife"),
+    ],
+  },
+  {
+    id: "demo-dump-3", number: 3,
+    title: "Studio Session",
+    subtitle: "Music / Creative / Dark Tones",
+    photos: [
+      stock("11", "1598488035139-bdbb2231cb64", "Vinyl record player closeup", false, "Studio"),
+      stock("12", "1511671782779-c97d3d27a1d4", "Concert crowd, stage lights", false, "Nightlife"),
+      stock("13", "1558618666-fcd25c85f82e", "Headphones on mixing desk", false, "Studio"),
+      stock("14", "1493225457124-a3eb161ffa5f", "Abstract light painting, long exposure", false, "Abstract"),
+      stock("15", "1501612780327-45045538702b", "Gym weights, dark moody lighting", false, "Fitness"),
+    ],
+  },
+];
+
+var STOCK_POOL: Photo[] = [
+  stock("p01", "1507003211169-0a1dd7228f2d", "Man smiling, casual portrait", false, "Portrait"),
+  stock("p02", "1492684223066-81342ee5ff30", "Tropical beach, palm trees", true, "Travel"),
+  stock("p03", "1515886657613-9f3515b0c78f", "Sneakers on concrete, street style", false, "Fashion"),
+  stock("p04", "1533090161767-e6ffed986c88", "Minimalist apartment interior", false, "Architecture"),
+  stock("p05", "1551218808-94e220e084d2", "Coffee and laptop, flat lay", false, "Lifestyle"),
+  stock("p06", "1542751371-adc38448a05e", "Drone shot of winding road", true, "Travel"),
+  stock("p07", "1494790108377-be9c29b29330", "Woman portrait, natural light", false, "Portrait"),
+  stock("p08", "1545093149-618ce3bcf49d", "Neon Tokyo alley at night", false, "Nightlife"),
+  stock("p09", "1526256262350-7da7584cf5eb", "Vintage car, chrome detail", false, "Automotive"),
+  stock("p10", "1555939594-58d7cb561ad1", "Plated dessert, fine dining", false, "Food"),
+  stock("p11", "1519389950473-47ba0277781c", "Modern office, glass walls", false, "Architecture"),
+  stock("p12", "1534438327276-14e5300c3a48", "Gym equipment, moody light", false, "Fitness"),
+  stock("p13", "1511367461989-f85a21fda167", "Cocktail bar, amber lighting", false, "Nightlife"),
+  stock("p14", "1504805572947-34fad45aed93", "Abstract colorful paint swirls", true, "Abstract"),
+  stock("p15", "1493106819501-66d381c466f3", "Woman reading in cafe window", false, "Lifestyle"),
+  stock("p16", "1506905925346-21bda4d32df4", "Autumn leaves, park path", false, "Travel"),
+  stock("p17", "1596558450268-9c27524ba856", "Street art mural, vibrant colors", false, "Art"),
+  stock("p18", "1486413869548-a265e6714e80", "Cat portrait, studio lighting", true, "Portrait"),
+];
+
+// ── Exports — pick the right set ───────────────────────────────────────────
+
+export var INITIAL_DUMPS: Dump[] = IS_OWNER ? OWNER_DUMPS : STOCK_DUMPS;
+export var INITIAL_POOL: Photo[] = IS_OWNER ? OWNER_POOL : STOCK_POOL;
