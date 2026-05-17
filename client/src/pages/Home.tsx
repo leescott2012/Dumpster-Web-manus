@@ -23,6 +23,7 @@ import DumpActionSheet from "@/components/DumpActionSheet";
 import MainMenu, { initAccent } from "@/components/MainMenu";
 import IGScrubSheet from "@/components/IGScrubSheet";
 import DumpChatSheet from "@/components/DumpChatSheet";
+import RecycleSheet from "@/components/RecycleSheet";
 import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
 import { loadCaptions } from "@/lib/captionPool";
@@ -35,7 +36,7 @@ function HomeContent() {
     removePhotoFromPool, createNewDump, deleteDump,
     toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
-    reorderDumpPhotos, setDumpVibe, rateDump,
+    reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto,
   } = useCarouselState();
 
   var { dragState, updateDragPosition, endDrag } = useDrag();
@@ -58,6 +59,8 @@ function HomeContent() {
   var [actionSheetDumpId, setActionSheetDumpId] = useState<string | null>(null);
   var [chatDumpId, setChatDumpId] = useState<string | null>(null);
   var [chatInitialMsg, setChatInitialMsg] = useState<string | null>(null);
+  var [recyclePhotoId, setRecyclePhotoId] = useState<string | null>(null);
+  var [recycleDumpId, setRecycleDumpId] = useState<string | null>(null);
   var [selectionMode, setSelectionMode] = useState(false);
   var [selectionTargetDumpId, setSelectionTargetDumpId] = useState<string | null>(null);
   var [selectedPoolPhotoIds, setSelectedPoolPhotoIds] = useState<string[]>([]);
@@ -343,7 +346,7 @@ function HomeContent() {
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 20px",
       }}>
-        <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.3em", color: "#c8a96e", textTransform: "uppercase" as const }}>
+        <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.3em", color: "var(--accent)", textTransform: "uppercase" as const }}>
           DUMPSTER
         </span>
         <button
@@ -354,7 +357,7 @@ function HomeContent() {
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", color: "#e8e8e8", transition: "all 0.15s",
           }}
-          onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(200,169,110,0.12)"; e.currentTarget.style.borderColor = "rgba(200,169,110,0.3)"; }}
+          onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.12)"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.3)"; }}
           onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
         >
           <Menu size={17} />
@@ -376,11 +379,11 @@ function HomeContent() {
         opacity: selectionMode ? 0.3 : 1, transition: "opacity 0.3s",
         pointerEvents: selectionMode ? "none" : "auto",
       }}>
-        <div style={{ fontSize: "11px", letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "#c8a96e", marginBottom: "16px", fontWeight: 500 }}>
+        <div style={{ fontSize: "11px", letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "var(--accent)", marginBottom: "16px", fontWeight: 500 }}>
           Dumpster
         </div>
         <h1 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.1, color: "#fff", marginBottom: "16px" }}>
-          Build Your <span style={{ color: "#c8a96e" }}>Dumps</span>
+          Build Your <span style={{ color: "var(--accent)" }}>Dumps</span>
         </h1>
         <p style={{ fontSize: "15px", color: "#666", maxWidth: "640px", lineHeight: 1.7 }}>
           Rearrange photos, build new dumps, and experiment with different flows.
@@ -440,22 +443,22 @@ function HomeContent() {
           onClick={function() { setAiSheetOpen(true); }}
           style={{
             display: "flex", alignItems: "center", gap: "8px",
-            background: "rgba(200,169,110,0.1)", border: "1px solid rgba(200,169,110,0.3)", borderRadius: "10px",
-            padding: "12px 20px", color: "#c8a96e", fontSize: "13px", fontWeight: 700,
+            background: "rgba(var(--accent-rgb),0.1)", border: "1px solid rgba(var(--accent-rgb),0.3)", borderRadius: "10px",
+            padding: "12px 20px", color: "var(--accent)", fontSize: "13px", fontWeight: 700,
             cursor: "pointer", transition: "all 0.2s", fontFamily: "inherit", letterSpacing: "0.04em",
           }}
-          onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(200,169,110,0.18)"; e.currentTarget.style.borderColor = "#c8a96e"; }}
-          onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(200,169,110,0.1)"; e.currentTarget.style.borderColor = "rgba(200,169,110,0.3)"; }}
+          onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.18)"; e.currentTarget.style.borderColor = "var(--accent)"; }}
+          onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.1)"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.3)"; }}
         >
           <Sparkles size={15} /> AI Suggest
         </button>
         <button onClick={handleCreateDump} style={{
           display: "flex", alignItems: "center", gap: "8px",
           background: "#151515", border: "1px solid #2a2a2a", borderRadius: "10px",
-          padding: "12px 20px", color: "#c8a96e", fontSize: "13px", fontWeight: 600,
+          padding: "12px 20px", color: "var(--accent)", fontSize: "13px", fontWeight: 600,
           cursor: "pointer", transition: "all 0.2s", fontFamily: "inherit", letterSpacing: "0.04em",
         }}
-          onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#c8a96e"; e.currentTarget.style.background = "rgba(200,169,110,0.08)"; }}
+          onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "rgba(var(--accent-rgb),0.08)"; }}
           onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.background = "#151515"; }}
         >
           <Plus size={16} /> New Dump
@@ -505,7 +508,7 @@ function HomeContent() {
 
         {/* Sub-section header — left aligned below pill */}
         <div style={{ maxWidth: 1100, margin: "8px auto 18px", padding: "0 32px" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "#c8a96e", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "var(--accent)", marginBottom: 6 }}>
             {poolTab === "photos" ? "PHOTO POOL" : "CAPTION POOL"}
           </div>
           <h2 style={{ fontSize: "clamp(20px, 2.5vw, 28px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: 4 }}>
@@ -614,9 +617,20 @@ function HomeContent() {
       <PhotoContextMenu
         photo={contextMenu ? contextMenu.photo : null}
         position={contextMenu ? contextMenu.position : null}
+        dumpId={contextMenu ? contextMenu.dumpId : undefined}
         onClose={function() { setContextMenu(null); setSelectedPhotoId(null); }}
         onRemove={handleRemove}
         onToggleFavorite={toggleFavorite}
+        onRecycle={function(photoId, dumpId) { setRecyclePhotoId(photoId); setRecycleDumpId(dumpId); setContextMenu(null); setSelectedPhotoId(null); }}
+      />
+      <RecycleSheet
+        open={recyclePhotoId !== null}
+        photoId={recyclePhotoId}
+        dumpId={recycleDumpId}
+        dumps={dumps}
+        pool={pool}
+        onClose={function() { setRecyclePhotoId(null); setRecycleDumpId(null); }}
+        onSwap={function(dumpId, oldPhotoId, newPhotoId) { swapPhoto(dumpId, oldPhotoId, newPhotoId); toast("Photo swapped"); }}
       />
     </div>
   );

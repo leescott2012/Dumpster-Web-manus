@@ -92,7 +92,7 @@ export default function CaptionPool() {
   // ── styles ────────────────────────────────────────────────────────────────
 
   const chipStyle = (active: boolean): React.CSSProperties => ({
-    background: active ? "var(--accent, #c8a96e)" : "transparent",
+    background: active ? "var(--accent)" : "transparent",
     color: active ? "#000" : "#888",
     border: active ? "none" : "1px solid #2a2a2a",
     borderRadius: 100, padding: "5px 14px",
@@ -123,7 +123,7 @@ export default function CaptionPool() {
           title={(activeStyle === "all" || activeStyle === "ai" || activeStyle === "custom") ? "Pick a style chip first" : "Add 3 random " + activeStyle + " captions"}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            background: (activeStyle === "all" || activeStyle === "ai" || activeStyle === "custom") ? "#1a1a1a" : "var(--accent, #c8a96e)",
+            background: (activeStyle === "all" || activeStyle === "ai" || activeStyle === "custom") ? "#1a1a1a" : "var(--accent)",
             color: (activeStyle === "all" || activeStyle === "ai" || activeStyle === "custom") ? "#444" : "#000",
             border: "none", borderRadius: 100,
             padding: "8px 14px", fontSize: 12, fontWeight: 700,
@@ -150,7 +150,7 @@ export default function CaptionPool() {
             disabled={!customText.trim()}
             style={{
               width: 32, height: 32, borderRadius: "50%",
-              background: customText.trim() ? "var(--accent, #c8a96e)" : "#1a1a1a",
+              background: customText.trim() ? "var(--accent)" : "#1a1a1a",
               color: customText.trim() ? "#000" : "#444",
               border: "none", cursor: customText.trim() ? "pointer" : "not-allowed",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -173,10 +173,10 @@ export default function CaptionPool() {
               padding: "6px 4px", fontSize: 11, fontWeight: 700,
               color: active ? "#fff" : "#555",
               letterSpacing: "0.1em", textTransform: "uppercase",
-              borderBottom: active ? "2px solid var(--accent, #c8a96e)" : "2px solid transparent",
+              borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
               transition: "all 0.15s", marginRight: 12,
             }}>
-              {tab} <span style={{ color: active ? "var(--accent, #c8a96e)" : "#444", fontWeight: 500 }}>{count}</span>
+              {tab} <span style={{ color: active ? "var(--accent)" : "#444", fontWeight: 500 }}>{count}</span>
             </button>
           );
         })}
@@ -197,7 +197,7 @@ export default function CaptionPool() {
           {filtered.map(c => (
             <div key={c.id} style={{
               background: c.banned ? "rgba(239,68,68,0.04)" : "#141414",
-              border: c.favorited ? "1px solid rgba(200,169,110,0.4)" : c.banned ? "1px solid rgba(239,68,68,0.2)" : "1px solid #1e1e1e",
+              border: c.favorited ? "1px solid rgba(var(--accent-rgb),0.4)" : c.banned ? "1px solid rgba(239,68,68,0.2)" : "1px solid #1e1e1e",
               borderRadius: 12, padding: "12px 14px",
               display: "flex", alignItems: "center", gap: 10,
               transition: "all 0.15s",
@@ -229,8 +229,8 @@ export default function CaptionPool() {
                 <button onClick={() => handleCopy(c.text, c.id)} title="Copy" style={iconBtnStyle(copiedId === c.id ? "#22c55e" : "#666")}>
                   {copiedId === c.id ? <Check size={14} /> : <Copy size={14} />}
                 </button>
-                <button onClick={() => handleFavorite(c.id)} title={c.favorited ? "Unfavorite" : "Favorite"} style={iconBtnStyle(c.favorited ? "#c8a96e" : "#666")}>
-                  <Heart size={14} fill={c.favorited ? "#c8a96e" : "none"} />
+                <button onClick={() => handleFavorite(c.id)} title={c.favorited ? "Unfavorite" : "Favorite"} style={iconBtnStyle(c.favorited ? "var(--accent)" : "#666")}>
+                  <Heart size={14} fill={c.favorited ? "var(--accent)" : "none"} />
                 </button>
                 <button onClick={() => handleBan(c.id)} title={c.banned ? "Unban" : "Ban"} style={iconBtnStyle(c.banned ? "#ef4444" : "#666")}>
                   <Ban size={14} />

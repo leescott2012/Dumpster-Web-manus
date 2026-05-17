@@ -187,8 +187,8 @@ export default function CaptionSheet({
                       onClick={() => setSelectedDumpId(d.id)}
                       style={{
                         textAlign: "left", cursor: "pointer",
-                        background: active ? "rgba(200,169,110,0.08)" : "#141414",
-                        border: active ? "1px solid rgba(200,169,110,0.35)" : "1px solid #1e1e1e",
+                        background: active ? "rgba(var(--accent-rgb),0.08)" : "#141414",
+                        border: active ? "1px solid rgba(var(--accent-rgb),0.35)" : "1px solid #1e1e1e",
                         borderRadius: 12, padding: "12px 14px",
                         display: "flex", alignItems: "center", gap: 12,
                         fontFamily: "inherit", transition: "all 0.15s",
@@ -203,7 +203,7 @@ export default function CaptionSheet({
                         ))}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: active ? "#c8a96e" : "#e8e8e8", letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: active ? "var(--accent)" : "#e8e8e8", letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {d.title}
                         </div>
                         <div style={{ fontSize: 11, color: "#555", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -211,7 +211,7 @@ export default function CaptionSheet({
                         </div>
                       </div>
                       {active && (
-                        <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#c8a96e", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <div style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           <Check size={10} color="#000" strokeWidth={3} />
                         </div>
                       )}
@@ -270,7 +270,7 @@ export default function CaptionSheet({
                 disabled={!selectedDump}
                 style={{
                   width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: selectedDump ? "#c8a96e" : "#1a1a1a",
+                  background: selectedDump ? "var(--accent)" : "#1a1a1a",
                   border: "none", borderRadius: 10,
                   padding: "13px 28px",
                   color: selectedDump ? "#000" : "#444",
@@ -285,7 +285,7 @@ export default function CaptionSheet({
 
           {phase === "loading" && (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
-              <Loader2 size={38} color="#c8a96e" style={{ animation: "spin 1s linear infinite", margin: "0 auto 16px", display: "block" }} />
+              <Loader2 size={38} color="var(--accent)" style={{ animation: "spin 1s linear infinite", margin: "0 auto 16px", display: "block" }} />
               <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 6 }}>
                 Writing captions...
               </div>
@@ -309,7 +309,7 @@ export default function CaptionSheet({
               <button onClick={generate} style={{
                 display: "inline-flex", alignItems: "center", gap: 8,
                 background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10,
-                padding: "12px 20px", color: "#c8a96e",
+                padding: "12px 20px", color: "var(--accent)",
                 fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
               }}>
                 <RefreshCcw size={14} /> Try Again
@@ -383,8 +383,8 @@ export default function CaptionSheet({
                   onClick={generate}
                   style={{
                     flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                    background: "rgba(200,169,110,0.1)", border: "1px solid rgba(200,169,110,0.3)", borderRadius: 10,
-                    padding: "12px 16px", color: "#c8a96e",
+                    background: "rgba(var(--accent-rgb),0.1)", border: "1px solid rgba(var(--accent-rgb),0.3)", borderRadius: 10,
+                    padding: "12px 16px", color: "var(--accent)",
                     fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                   }}
                 >

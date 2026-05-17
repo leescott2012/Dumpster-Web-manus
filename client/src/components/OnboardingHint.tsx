@@ -57,12 +57,12 @@ export default function OnboardingHint() {
       >
         <X size={14} />
       </button>
-      <div style={{ fontSize: "11px", fontWeight: 700, color: "#c8a96e", letterSpacing: "0.15em", marginBottom: "10px", textTransform: "uppercase" as const }}>
+      <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent)", letterSpacing: "0.15em", marginBottom: "10px", textTransform: "uppercase" as const }}>
         How to Use
       </div>
       <div style={{ fontSize: "12px", color: "#999", lineHeight: 1.7 }}>
         <div style={{ marginBottom: "6px" }}>
-          <strong style={{ color: "#e8e8e8" }}>Tap</strong> a photo to select it, then tap the <strong style={{ color: "#c8a96e" }}>...</strong> dots for options
+          <strong style={{ color: "#e8e8e8" }}>Tap</strong> a photo to select it, then tap the <strong style={{ color: "var(--accent)" }}>...</strong> dots for options
         </div>
         <div style={{ marginBottom: "6px" }}>
           <strong style={{ color: "#e8e8e8" }}>Double tap</strong> to view a photo larger
@@ -71,7 +71,7 @@ export default function OnboardingHint() {
           <strong style={{ color: "#e8e8e8" }}>Hold + drag</strong> to rearrange photos between dumps
         </div>
         <div>
-          Tap the <strong style={{ color: "#c8a96e" }}>+</strong> card at the end of a dump to add photos from the pool
+          Tap the <strong style={{ color: "var(--accent)" }}>+</strong> card at the end of a dump to add photos from the pool
         </div>
       </div>
       <div

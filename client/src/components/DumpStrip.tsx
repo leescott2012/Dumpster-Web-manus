@@ -98,7 +98,7 @@ export default function DumpStrip({
       {/* Dump Header */}
       <div style={{ marginBottom: "32px", paddingBottom: "24px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "#c8a96e", marginBottom: "8px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "var(--accent)", marginBottom: "8px" }}>
             {"DUMP " + dumpNumStr}
           </div>
           {isEditing ? (
@@ -107,7 +107,7 @@ export default function DumpStrip({
               onBlur={handleTitleSubmit}
               onKeyDown={function(e) { if (e.key === "Enter") handleTitleSubmit(); if (e.key === "Escape") { setEditTitle(dump.title); setIsEditing(false); } }}
               autoFocus
-              style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", background: "transparent", border: "none", borderBottom: "2px solid #c8a96e", borderRadius: "0", padding: "2px 0", outline: "none", width: "100%", maxWidth: "500px", fontFamily: "inherit" }}
+              style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", background: "transparent", border: "none", borderBottom: "2px solid var(--accent)", borderRadius: "0", padding: "2px 0", outline: "none", width: "100%", maxWidth: "500px", fontFamily: "inherit" }}
             />
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={function() { setIsEditing(true); }}>
@@ -115,7 +115,7 @@ export default function DumpStrip({
                 {dump.title}
               </h2>
               <Pencil size={14} color="#555" style={{ flexShrink: 0, marginTop: "4px", transition: "color 0.15s" }}
-                onMouseEnter={function(e) { (e.currentTarget as SVGElement).style.color = "#c8a96e"; }}
+                onMouseEnter={function(e) { (e.currentTarget as SVGElement).style.color = "var(--accent)"; }}
                 onMouseLeave={function(e) { (e.currentTarget as SVGElement).style.color = "#555"; }}
               />
             </div>
@@ -144,7 +144,7 @@ export default function DumpStrip({
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: "pointer", color: "#666", transition: "all 0.15s",
               }}
-              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#c8a96e"; e.currentTarget.style.color = "#c8a96e"; e.currentTarget.style.background = "rgba(200,169,110,0.06)"; }}
+              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "rgba(var(--accent-rgb),0.06)"; }}
               onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; e.currentTarget.style.background = "transparent"; }}
             >
               <MoreHorizontal size={15} />
@@ -177,13 +177,13 @@ export default function DumpStrip({
           <div
             onClick={function() { if (onCaptionClick) onCaptionClick(dump.id); }}
             style={{
-              marginBottom: "28px", borderLeft: "3px solid #c8a96e",
+              marginBottom: "28px", borderLeft: "3px solid var(--accent)",
               paddingLeft: "16px", cursor: onCaptionClick ? "pointer" : "default",
             }}
           >
             {/* Vibe + index label */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-              <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.12em", color: "#c8a96e", textTransform: "uppercase" as const }}>
+              <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.12em", color: "var(--accent)", textTransform: "uppercase" as const }}>
                 {dump.vibe ? dump.vibe + " · " : ""}{captionIdx + 1}/{total} captions
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -199,14 +199,14 @@ export default function DumpStrip({
                   <>
                     <button onClick={handlePrev}
                       style={{ background: "transparent", border: "none", cursor: "pointer", color: "#555", padding: "4px", display: "flex", alignItems: "center", transition: "color 0.15s" }}
-                      onMouseEnter={function(e) { e.currentTarget.style.color = "#c8a96e"; }}
+                      onMouseEnter={function(e) { e.currentTarget.style.color = "var(--accent)"; }}
                       onMouseLeave={function(e) { e.currentTarget.style.color = "#555"; }}
                     >
                       <ChevronLeft size={14} />
                     </button>
                     <button onClick={handleNext}
                       style={{ background: "transparent", border: "none", cursor: "pointer", color: "#555", padding: "4px", display: "flex", alignItems: "center", transition: "color 0.15s" }}
-                      onMouseEnter={function(e) { e.currentTarget.style.color = "#c8a96e"; }}
+                      onMouseEnter={function(e) { e.currentTarget.style.color = "var(--accent)"; }}
                       onMouseLeave={function(e) { e.currentTarget.style.color = "#555"; }}
                     >
                       <ChevronRight size={14} />
@@ -237,16 +237,16 @@ export default function DumpStrip({
         WebkitOverflowScrolling: "touch", minHeight: "264px", alignItems: "center",
         position: "relative",
         borderRadius: showDropIndicator ? "12px" : undefined,
-        outline: showDropIndicator ? "2px dashed rgba(200,169,110,0.4)" : "none",
+        outline: showDropIndicator ? "2px dashed rgba(var(--accent-rgb),0.4)" : "none",
         outlineOffset: "4px", transition: "outline 0.2s",
       }}>
         {/* Empty dump during drag */}
         {dump.photos.length === 0 && dragState.isDragging && (
           <div className="dump-drop-pulse" style={{
-            width: "200px", height: "260px", borderRadius: "10px", border: "2px dashed #c8a96e",
+            width: "200px", height: "260px", borderRadius: "10px", border: "2px dashed var(--accent)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#c8a96e", fontSize: "13px", textAlign: "center", padding: "20px", flexShrink: 0,
-            background: "rgba(200,169,110,0.05)",
+            color: "var(--accent)", fontSize: "13px", textAlign: "center", padding: "20px", flexShrink: 0,
+            background: "rgba(var(--accent-rgb),0.05)",
           }}>
             Drop here
           </div>
@@ -258,8 +258,8 @@ export default function DumpStrip({
             <div key={photo.id} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
               {showDropIndicator && dropIndex === i && (
                 <div className="drop-line-pulse" style={{
-                  width: "3px", height: "240px", background: "#c8a96e", borderRadius: "2px",
-                  marginRight: "6px", boxShadow: "0 0 8px rgba(200,169,110,0.5)", flexShrink: 0,
+                  width: "3px", height: "240px", background: "var(--accent)", borderRadius: "2px",
+                  marginRight: "6px", boxShadow: "0 0 8px rgba(var(--accent-rgb),0.5)", flexShrink: 0,
                 }} />
               )}
               <PhotoCard
@@ -275,8 +275,8 @@ export default function DumpStrip({
         {/* Drop indicator at end */}
         {showDropIndicator && dropIndex === dump.photos.length && (
           <div className="drop-line-pulse" style={{
-            width: "3px", height: "240px", background: "#c8a96e", borderRadius: "2px",
-            marginLeft: "6px", boxShadow: "0 0 8px rgba(200,169,110,0.5)", flexShrink: 0,
+            width: "3px", height: "240px", background: "var(--accent)", borderRadius: "2px",
+            marginLeft: "6px", boxShadow: "0 0 8px rgba(var(--accent-rgb),0.5)", flexShrink: 0,
           }} />
         )}
 
@@ -289,7 +289,7 @@ export default function DumpStrip({
               color: "#666", fontSize: "13px", textAlign: "center", flexShrink: 0, cursor: "pointer",
               transition: "all 0.2s", background: "rgba(255,255,255,0.02)",
             }}
-            onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#c8a96e"; e.currentTarget.style.color = "#c8a96e"; e.currentTarget.style.background = "rgba(200,169,110,0.05)"; }}
+            onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "rgba(var(--accent-rgb),0.05)"; }}
             onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; e.currentTarget.style.background = "rgba(255,255,255,0.02)"; }}
           >
             <Plus size={32} strokeWidth={1.5} />

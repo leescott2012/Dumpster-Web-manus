@@ -81,7 +81,7 @@ export default function PhotoLightbox({ photo, onClose }: PhotoLightboxProps) {
           <div
             style={{
               fontSize: "11px",
-              color: "#c8a96e",
+              color: "var(--accent)",
               letterSpacing: "0.08em",
               textTransform: "uppercase" as const,
               fontWeight: 600,

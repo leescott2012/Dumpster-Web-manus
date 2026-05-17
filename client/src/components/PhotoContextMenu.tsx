@@ -1,20 +1,21 @@
 /*
  * PhotoContextMenu — triggered by "..." dots button
- * Shows: Favorite/Unfavorite (normal), Remove (red)
- * Works for both dump and pool photos.
+ * Shows: Favorite/Unfavorite, Recycle (dump photos only), Remove
  */
 import type { Photo } from "@/lib/photoData";
 
 interface PhotoContextMenuProps {
   photo: Photo | null;
   position: { x: number; y: number } | null;
+  dumpId?: string;
   onClose: () => void;
   onRemove: (photoId: string) => void;
   onToggleFavorite: (photoId: string) => void;
+  onRecycle?: (photoId: string, dumpId: string) => void;
 }
 
 export default function PhotoContextMenu({
-  photo, position, onClose, onRemove, onToggleFavorite,
+  photo, position, dumpId, onClose, onRemove, onToggleFavorite, onRecycle,
 }: PhotoContextMenuProps) {
   if (!photo || !position) return null;
 
@@ -36,6 +37,7 @@ export default function PhotoContextMenu({
   };
 
   var favLabel = photo.isFavorite ? "Unfavorite" : "Favorite";
+  var showRecycle = Boolean(dumpId && onRecycle);
 
   return (
     <>
@@ -48,6 +50,22 @@ export default function PhotoContextMenu({
         >
           {photo.isFavorite ? "★ " : "☆ "}{favLabel}
         </button>
+
+        {showRecycle && (
+          <button style={{
+            display: "block", width: "100%", padding: "10px 14px",
+            background: "transparent", border: "none", color: "#4ade80",
+            fontSize: "13px", fontWeight: 600, textAlign: "left", cursor: "pointer",
+            borderRadius: "6px", transition: "background 0.15s", fontFamily: "inherit",
+          }}
+            onClick={function() { onRecycle!(photo.id, dumpId!); onClose(); }}
+            onMouseEnter={function(e) { e.currentTarget.style.background = "#1a1a1a"; }}
+            onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
+          >
+            {"♻️ Recycle"}
+          </button>
+        )}
+
         <button
           style={{
             display: "block", width: "100%", padding: "10px 14px",

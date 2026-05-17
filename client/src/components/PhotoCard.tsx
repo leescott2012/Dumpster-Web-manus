@@ -173,9 +173,9 @@ export default function PhotoCard({
   if (selectionMode && isSelected) {
     borderColor = "#22c55e";
   } else if (isSelected) {
-    borderColor = "#c8a96e";
+    borderColor = "var(--accent)";
   } else if (isDragOver) {
-    borderColor = "#c8a96e";
+    borderColor = "var(--accent)";
   } else {
     borderColor = "#1e1e1e";
   }
@@ -250,7 +250,7 @@ export default function PhotoCard({
           display: "flex", alignItems: "center", justifyContent: "center",
           pointerEvents: "none",
         }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="#c8a96e" stroke="none">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="var(--accent)" stroke="none">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
           </svg>
         </div>
@@ -271,9 +271,9 @@ export default function PhotoCard({
           }}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <circle cx="4" cy="8" r="1.5" fill="#c8a96e" />
-            <circle cx="8" cy="8" r="1.5" fill="#c8a96e" />
-            <circle cx="12" cy="8" r="1.5" fill="#c8a96e" />
+            <circle cx="4" cy="8" r="1.5" fill="var(--accent)" />
+            <circle cx="8" cy="8" r="1.5" fill="var(--accent)" />
+            <circle cx="12" cy="8" r="1.5" fill="var(--accent)" />
           </svg>
         </div>
       )}

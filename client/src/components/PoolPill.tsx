@@ -90,11 +90,11 @@ export default function PoolPill({ active, onChange, photoCount, captionCount }:
               top: 4, left: 4,
               width: halfW - 4,
               height: 40,
-              background: "var(--accent, #c8a96e)",
+              background: "var(--accent)",
               borderRadius: 10,
               transform: "translateX(" + pillOffset + "px)",
               transition: isDragging ? "none" : "transform 0.32s cubic-bezier(0.32, 0.72, 0, 1)",
-              boxShadow: "0 2px 8px rgba(200,169,110,0.25)",
+              boxShadow: "0 2px 8px rgba(var(--accent-rgb),0.25)",
               cursor: isDragging ? "grabbing" : "grab",
             }}
           />

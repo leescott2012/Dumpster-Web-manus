@@ -173,10 +173,10 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
             <>
               {/* Tips */}
               <div style={{
-                background: "rgba(200,169,110,0.06)", border: "1px solid rgba(200,169,110,0.15)",
+                background: "rgba(var(--accent-rgb),0.06)", border: "1px solid rgba(var(--accent-rgb),0.15)",
                 borderRadius: 10, padding: "12px 14px", marginBottom: 18,
               }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#c8a96e", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 6 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 6 }}>
                   Powered by Apify
                 </div>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.7 }}>
@@ -199,7 +199,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
                   fontFamily: "inherit", lineHeight: 1.6, outline: "none",
                   boxSizing: "border-box" as const,
                 }}
-                onFocus={function(e) { e.currentTarget.style.borderColor = "rgba(200,169,110,0.4)"; }}
+                onFocus={function(e) { e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.4)"; }}
                 onBlur={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; }}
                 autoFocus
               />
@@ -220,11 +220,11 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
                 disabled={loading || urlText.trim().length === 0}
                 style={{
                   marginTop: 16, width: "100%",
-                  background: loading || !urlText.trim() ? "#1a1a1a" : "rgba(200,169,110,0.12)",
-                  border: "1px solid " + (loading || !urlText.trim() ? "#2a2a2a" : "rgba(200,169,110,0.35)"),
+                  background: loading || !urlText.trim() ? "#1a1a1a" : "rgba(var(--accent-rgb),0.12)",
+                  border: "1px solid " + (loading || !urlText.trim() ? "#2a2a2a" : "rgba(var(--accent-rgb),0.35)"),
                   borderRadius: 12, padding: "14px",
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  color: loading || !urlText.trim() ? "#444" : "#c8a96e",
+                  color: loading || !urlText.trim() ? "#444" : "var(--accent)",
                   fontSize: 14, fontWeight: 700, cursor: loading || !urlText.trim() ? "not-allowed" : "pointer",
                   fontFamily: "inherit", letterSpacing: "0.04em", transition: "all 0.2s",
                 }}
@@ -289,7 +289,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
                       onClick={function() { handleToggle(i); }}
                       style={{
                         position: "relative", cursor: "pointer", borderRadius: 10, overflow: "hidden",
-                        border: "2px solid " + (isSelected ? "#c8a96e" : "#2a2a2a"),
+                        border: "2px solid " + (isSelected ? "var(--accent)" : "#2a2a2a"),
                         transition: "border-color 0.15s",
                         aspectRatio: "3/4",
                       }}
@@ -311,7 +311,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
                         <div style={{
                           position: "absolute", top: 6, right: 6,
                           width: 22, height: 22, borderRadius: "50%",
-                          background: "#c8a96e", display: "flex",
+                          background: "var(--accent)", display: "flex",
                           alignItems: "center", justifyContent: "center",
                         }}>
                           <Check size={13} color="#000" strokeWidth={3} />
@@ -331,12 +331,12 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
             <button
               onClick={handleAddToPool}
               style={{
-                width: "100%", background: "#c8a96e", color: "#000",
+                width: "100%", background: "var(--accent)", color: "#000",
                 border: "none", borderRadius: 12, padding: "14px",
                 fontSize: 15, fontWeight: 700, cursor: "pointer",
                 fontFamily: "inherit", letterSpacing: "0.04em",
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                boxShadow: "0 8px 24px rgba(200,169,110,0.25)",
+                boxShadow: "0 8px 24px rgba(var(--accent-rgb),0.25)",
               }}
             >
               <Plus size={16} strokeWidth={2.5} />

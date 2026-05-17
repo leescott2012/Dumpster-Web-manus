@@ -49,7 +49,7 @@ export default function DumpActionSheet({
       icon: <MessageCircle size={18} />,
       label: "Chat with AI",
       sublabel: "Reorder, swap, set the vibe",
-      color: "#c8a96e",
+      color: "var(--accent)",
       onClick: function() { onChat(dump.id); onClose(); },
     },
     {
@@ -64,7 +64,7 @@ export default function DumpActionSheet({
       icon: <Share2 size={18} />,
       label: "Export / Share",
       sublabel: "Download photos · copy caption",
-      color: "#c8a96e",
+      color: "var(--accent)",
       disabled: dump.photos.length === 0,
       onClick: function() { onExport(dump.id); onClose(); },
     },
@@ -110,7 +110,7 @@ export default function DumpActionSheet({
           <div style={{ minWidth: 0 }}>
             <div style={{
               fontSize: 11, fontWeight: 700, letterSpacing: "0.2em",
-              color: "#c8a96e", textTransform: "uppercase" as const, marginBottom: 3,
+              color: "var(--accent)", textTransform: "uppercase" as const, marginBottom: 3,
             }}>
               {"DUMP " + String(dump.number).padStart(2, "0")}
               {isHearted && (

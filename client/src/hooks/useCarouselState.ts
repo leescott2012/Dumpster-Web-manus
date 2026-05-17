@@ -346,6 +346,54 @@ export function useCarouselState() {
     });
   }, []);
 
+  // Swap one dump photo for a pool photo (recycle) — keeps the same position
+  var swapPhoto = useCallback(function(dumpId: string, oldPhotoId: string, newPhotoId: string) {
+    setPool(function(prevPool) {
+      var newPhoto: Photo | null = null;
+      for (var i = 0; i < prevPool.length; i++) {
+        if (prevPool[i].id === newPhotoId) { newPhoto = prevPool[i]; break; }
+      }
+      if (!newPhoto) return prevPool;
+      var capturedNewPhoto = newPhoto;
+      setDumps(function(prevDumps) {
+        return prevDumps.map(function(d) {
+          if (d.id !== dumpId) return d;
+          var oldPhoto: Photo | null = null;
+          var idx = -1;
+          for (var j = 0; j < d.photos.length; j++) {
+            if (d.photos[j].id === oldPhotoId) { oldPhoto = d.photos[j]; idx = j; break; }
+          }
+          if (!oldPhoto || idx < 0) return d;
+          // Put old photo back to pool (via outer setPool return)
+          var photos = d.photos.slice();
+          photos[idx] = capturedNewPhoto;
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
+        });
+      });
+      // Find the old photo to put back in pool
+      var oldPhotoObj: Photo | null = null;
+      // We need to find it from the current dumps state — but we're inside setPool so we use the dumps from closure
+      // Actually we need to search the dumps. Let's look it up.
+      // Since setDumps was just called (queued), we read from dumpsRef
+      var currentDumps = dumpsRef.current;
+      for (var di = 0; di < currentDumps.length; di++) {
+        if (currentDumps[di].id === dumpId) {
+          for (var pi = 0; pi < currentDumps[di].photos.length; pi++) {
+            if (currentDumps[di].photos[pi].id === oldPhotoId) {
+              oldPhotoObj = currentDumps[di].photos[pi];
+              break;
+            }
+          }
+          break;
+        }
+      }
+      if (oldPhotoObj) {
+        return prevPool.filter(function(p) { return p.id !== newPhotoId; }).concat([oldPhotoObj]);
+      }
+      return prevPool.filter(function(p) { return p.id !== newPhotoId; });
+    });
+  }, []);
+
   // Rate a dump thumbs up/down (or clear)
   var rateDump = useCallback(function(dumpId: string, rating: "up" | "down" | null) {
     setDumps(function(prev) {
@@ -362,6 +410,6 @@ export function useCarouselState() {
     removePhotoFromPool, createNewDump, deleteDump,
     toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
-    reorderDumpPhotos, setDumpVibe, rateDump,
+    reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto,
   };
 }

@@ -57,7 +57,7 @@ function saveChatHistory(dumpId: string, messages: ChatMessage[]) {
 
 // Action type icons and labels
 var ACTION_META: Record<string, { icon: typeof ArrowUpDown; label: string; color: string }> = {
-  reorder:      { icon: ArrowUpDown,       label: "Reordered",     color: "#c8a96e" },
+  reorder:      { icon: ArrowUpDown,       label: "Reordered",     color: "var(--accent)" },
   swap_in:      { icon: ArrowDownToLine,   label: "Added from pool", color: "#4ade80" },
   swap_out:     { icon: ArrowUpFromLine,   label: "Sent to pool",  color: "#f97316" },
   update_vibe:  { icon: Palette,           label: "Vibe updated",  color: "#a78bfa" },
@@ -232,11 +232,11 @@ export default function DumpChatSheet({
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
               width: 34, height: 34, borderRadius: 10,
-              background: "rgba(200,169,110,0.1)", border: "1px solid rgba(200,169,110,0.25)",
+              background: "rgba(var(--accent-rgb),0.1)", border: "1px solid rgba(var(--accent-rgb),0.25)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 15,
             }}>
-              <span style={{ color: "#c8a96e" }}>{"✨"}</span>
+              <span style={{ color: "var(--accent)" }}>{"✨"}</span>
             </div>
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
@@ -321,12 +321,12 @@ export default function DumpChatSheet({
                       key={prompt}
                       onClick={function() { setInput(prompt); }}
                       style={{
-                        background: "rgba(200,169,110,0.06)", border: "1px solid rgba(200,169,110,0.15)",
+                        background: "rgba(var(--accent-rgb),0.06)", border: "1px solid rgba(var(--accent-rgb),0.15)",
                         borderRadius: 100, padding: "6px 12px", fontSize: 11, color: "#999",
                         cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
                       }}
-                      onMouseEnter={function(e) { e.currentTarget.style.borderColor = "rgba(200,169,110,0.4)"; e.currentTarget.style.color = "#c8a96e"; }}
-                      onMouseLeave={function(e) { e.currentTarget.style.borderColor = "rgba(200,169,110,0.15)"; e.currentTarget.style.color = "#999"; }}
+                      onMouseEnter={function(e) { e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.4)"; e.currentTarget.style.color = "var(--accent)"; }}
+                      onMouseLeave={function(e) { e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.15)"; e.currentTarget.style.color = "#999"; }}
                     >
                       {prompt}
                     </button>
@@ -347,8 +347,8 @@ export default function DumpChatSheet({
                   maxWidth: "85%",
                   padding: "10px 14px",
                   borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                  background: isUser ? "rgba(200,169,110,0.15)" : "#1a1a1a",
-                  border: isUser ? "1px solid rgba(200,169,110,0.25)" : "1px solid #2a2a2a",
+                  background: isUser ? "rgba(var(--accent-rgb),0.15)" : "#1a1a1a",
+                  border: isUser ? "1px solid rgba(var(--accent-rgb),0.25)" : "1px solid #2a2a2a",
                 }}>
                   <div style={{
                     fontSize: 13, lineHeight: 1.6,
@@ -396,7 +396,7 @@ export default function DumpChatSheet({
                 background: "#1a1a1a", border: "1px solid #2a2a2a",
                 display: "flex", alignItems: "center", gap: 8,
               }}>
-                <Loader size={13} style={{ animation: "spin 0.8s linear infinite" }} color="#c8a96e" />
+                <Loader size={13} style={{ animation: "spin 0.8s linear infinite" }} color="var(--accent)" />
                 <span style={{ fontSize: 12, color: "#666" }}>thinking...</span>
               </div>
             </div>
@@ -422,7 +422,7 @@ export default function DumpChatSheet({
               maxHeight: 120, minHeight: 44,
               boxSizing: "border-box" as const,
             }}
-            onFocus={function(e) { e.currentTarget.style.borderColor = "rgba(200,169,110,0.4)"; }}
+            onFocus={function(e) { e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.4)"; }}
             onBlur={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; }}
             onInput={function(e) {
               var el = e.currentTarget;
@@ -435,8 +435,8 @@ export default function DumpChatSheet({
             disabled={loading || !input.trim()}
             style={{
               width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-              background: loading || !input.trim() ? "#1a1a1a" : "#c8a96e",
-              border: "1px solid " + (loading || !input.trim() ? "#2a2a2a" : "#c8a96e"),
+              background: loading || !input.trim() ? "#1a1a1a" : "var(--accent)",
+              border: "1px solid " + (loading || !input.trim() ? "#2a2a2a" : "var(--accent)"),
               display: "flex", alignItems: "center", justifyContent: "center",
               cursor: loading || !input.trim() ? "not-allowed" : "pointer",
               color: loading || !input.trim() ? "#444" : "#000",

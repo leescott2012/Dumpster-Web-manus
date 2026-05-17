@@ -113,10 +113,10 @@ export default function PhotoPool({
 
   var filterBtnStyle = function(active: boolean): React.CSSProperties {
     return {
-      background: active ? "rgba(200,169,110,0.15)" : "transparent",
-      border: active ? "1px solid #c8a96e" : "1px solid #2a2a2a",
+      background: active ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+      border: active ? "1px solid var(--accent)" : "1px solid #2a2a2a",
       borderRadius: "100px", padding: "5px 14px", fontSize: "11px",
-      color: active ? "#c8a96e" : "#666", cursor: "pointer",
+      color: active ? "var(--accent)" : "#666", cursor: "pointer",
       fontFamily: "inherit", letterSpacing: "0.04em", fontWeight: active ? 600 : 400,
       transition: "all 0.2s", display: "inline-flex", alignItems: "center",
     };
@@ -151,7 +151,7 @@ export default function PhotoPool({
           <button onClick={function() { setFilter("starred"); }} style={filterBtnStyle(filter === "starred")}>
             <span style={{ marginRight: "4px" }}>{"★"}</span>Starred
             {starredCount > 0 && (
-              <span style={{ marginLeft: "5px", background: "rgba(200,169,110,0.2)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
+              <span style={{ marginLeft: "5px", background: "rgba(var(--accent-rgb),0.2)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
                 {starredCount}
               </span>
             )}
@@ -159,7 +159,7 @@ export default function PhotoPool({
           <button onClick={function() { setFilter("used"); }} style={filterBtnStyle(filter === "used")}>
             <span style={{ marginRight: "4px" }}>{"✓"}</span>Used
             {usedCount > 0 && (
-              <span style={{ marginLeft: "5px", background: filter === "used" ? "rgba(200,169,110,0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
+              <span style={{ marginLeft: "5px", background: filter === "used" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
                 {usedCount}
               </span>
             )}
@@ -167,7 +167,7 @@ export default function PhotoPool({
           {videoCount > 0 && (
             <button onClick={function() { setFilter("videos"); }} style={filterBtnStyle(filter === "videos")}>
               <Play size={10} style={{ marginRight: "4px" }} />Videos
-              <span style={{ marginLeft: "5px", background: filter === "videos" ? "rgba(200,169,110,0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
+              <span style={{ marginLeft: "5px", background: filter === "videos" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
                 {videoCount}
               </span>
             </button>
@@ -189,7 +189,7 @@ export default function PhotoPool({
                 />
                 <div style={{
                   position: "absolute", top: "6px", left: "6px",
-                  background: "rgba(200,169,110,0.9)", borderRadius: "4px",
+                  background: "rgba(var(--accent-rgb),0.9)", borderRadius: "4px",
                   padding: "2px 6px", fontSize: "8px", fontWeight: 700,
                   letterSpacing: "0.08em", color: "#0a0a0a", pointerEvents: "none",
                 }}>
@@ -210,9 +210,9 @@ export default function PhotoPool({
       {filter !== "used" && (
         <div style={{
           display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "12px",
-          outline: isOver ? "2px dashed rgba(200,169,110,0.5)" : "none", outlineOffset: "8px",
+          outline: isOver ? "2px dashed rgba(var(--accent-rgb),0.5)" : "none", outlineOffset: "8px",
           borderRadius: "12px", transition: "all 0.2s",
-          padding: isOver ? "8px" : "0", background: isOver ? "rgba(200,169,110,0.03)" : "transparent",
+          padding: isOver ? "8px" : "0", background: isOver ? "rgba(var(--accent-rgb),0.03)" : "transparent",
         }}>
           {displayPhotos.map(function(photo, i) {
             var selIdx = selectedIds.indexOf(photo.id);
@@ -241,7 +241,7 @@ export default function PhotoPool({
                 transition: "all 0.2s", background: "rgba(255,255,255,0.02)",
                 boxSizing: "border-box" as const,
               }}
-              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#c8a96e"; e.currentTarget.style.color = "#c8a96e"; }}
+              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
               onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
             >
               <Plus size={28} strokeWidth={1.5} />

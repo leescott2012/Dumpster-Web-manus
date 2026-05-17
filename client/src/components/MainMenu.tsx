@@ -47,14 +47,23 @@ function loadAccent(): string {
   return localStorage.getItem("dumpster_accent") || "#C8A96E";
 }
 
+function hexToRgb(hex: string): string {
+  var r = parseInt(hex.slice(1, 3), 16);
+  var g = parseInt(hex.slice(3, 5), 16);
+  var b = parseInt(hex.slice(5, 7), 16);
+  return r + "," + g + "," + b;
+}
+
 function saveAccent(hex: string) {
   localStorage.setItem("dumpster_accent", hex);
   document.documentElement.style.setProperty("--accent", hex);
+  document.documentElement.style.setProperty("--accent-rgb", hexToRgb(hex));
 }
 
 export function initAccent() {
-  const stored = loadAccent();
+  var stored = loadAccent();
   document.documentElement.style.setProperty("--accent", stored);
+  document.documentElement.style.setProperty("--accent-rgb", hexToRgb(stored));
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -113,7 +122,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
 
   const folders: Folder[] = [
     {
-      id: "ai", title: "AI TOOLS", tabColor: "#C8A96E",
+      id: "ai", title: "AI TOOLS", tabColor: "var(--accent)",
       subtitle: "Auto-arrange · Captions · IG Scrub",
       icon: <Sparkles size={18} strokeWidth={1.5} />,
     },
@@ -267,7 +276,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
             padding: "0 24px 40px",
             display: "flex", alignItems: "center", gap: 6,
           }}>
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.25em", color: "rgba(200,169,110,0.25)", textTransform: "uppercase" as const }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.25em", color: "rgba(var(--accent-rgb),0.25)", textTransform: "uppercase" as const }}>
               DUMPSTER
             </span>
             <span style={{ fontSize: 9, color: "rgba(255,255,255,0.12)", letterSpacing: "0.1em" }}>v1.0</span>
@@ -362,7 +371,7 @@ function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount
       id: "suggest",
       title: "Auto-arrange Dump",
       desc: "Claude Vision analyzes your pool and builds one cohesive carousel of 2–20 photos.",
-      tone: "#C8A96E",
+      tone: "var(--accent)",
       icon: <Wand2 size={20} strokeWidth={1.5} />,
       meta: poolCount + " photos in pool",
       enabled: poolCount >= 2,
@@ -448,10 +457,10 @@ function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount
 
       <div style={{
         marginTop: 16, padding: "12px 14px",
-        background: "rgba(200,169,110,0.04)", border: "1px solid rgba(200,169,110,0.12)",
+        background: "rgba(var(--accent-rgb),0.04)", border: "1px solid rgba(var(--accent-rgb),0.12)",
         borderRadius: 10,
       }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "#c8a96e", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 4 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 4 }}>
           Coming soon
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.55 }}>
@@ -484,7 +493,7 @@ function TasteProfileSection() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
       {/* AI Taste Profile */}
-      <div style={{ background: "#141414", border: "1px solid rgba(200,169,110,0.18)", borderRadius: 12, padding: "14px 14px 12px" }}>
+      <div style={{ background: "#141414", border: "1px solid rgba(var(--accent-rgb),0.18)", borderRadius: 12, padding: "14px 14px 12px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
             AI Taste Profile
@@ -510,10 +519,10 @@ function TasteProfileSection() {
         />
         <button onClick={handleSaveProfile} style={{
           marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5,
-          background: profileSaved ? "rgba(34,197,94,0.1)" : "rgba(200,169,110,0.1)",
-          border: profileSaved ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(200,169,110,0.3)",
+          background: profileSaved ? "rgba(34,197,94,0.1)" : "rgba(var(--accent-rgb),0.1)",
+          border: profileSaved ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(var(--accent-rgb),0.3)",
           borderRadius: 8, padding: "6px 12px",
-          color: profileSaved ? "#22c55e" : "#c8a96e",
+          color: profileSaved ? "#22c55e" : "var(--accent)",
           fontSize: 11, fontWeight: 700, cursor: "pointer",
           fontFamily: "inherit", letterSpacing: "0.04em",
           transition: "all 0.15s",

@@ -129,10 +129,10 @@ export default function DumpShareSheet({ dump, open, onClose }: DumpShareSheetPr
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
               width: 32, height: 32, borderRadius: 8,
-              background: "rgba(200,169,110,0.12)", border: "1px solid rgba(200,169,110,0.3)",
+              background: "rgba(var(--accent-rgb),0.12)", border: "1px solid rgba(var(--accent-rgb),0.3)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <Share2 size={16} color="#c8a96e" />
+              <Share2 size={16} color="var(--accent)" />
             </div>
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
@@ -226,12 +226,12 @@ export default function DumpShareSheet({ dump, open, onClose }: DumpShareSheetPr
               width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               background: downloading ? "#111" : "#1a1a1a",
               border: "1px solid #2a2a2a", borderRadius: 10,
-              padding: "13px 20px", color: downloading ? "#555" : "#c8a96e",
+              padding: "13px 20px", color: downloading ? "#555" : "var(--accent)",
               fontSize: 13, fontWeight: 700, cursor: downloading ? "not-allowed" : "pointer",
               fontFamily: "inherit", letterSpacing: "0.04em",
               marginBottom: 20, transition: "all 0.15s",
             }}
-            onMouseEnter={e => { if (!downloading) { e.currentTarget.style.borderColor = "#c8a96e"; e.currentTarget.style.background = "rgba(200,169,110,0.06)"; } }}
+            onMouseEnter={e => { if (!downloading) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "rgba(var(--accent-rgb),0.06)"; } }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.background = downloading ? "#111" : "#1a1a1a"; }}
           >
             {downloading
@@ -309,7 +309,7 @@ export default function DumpShareSheet({ dump, open, onClose }: DumpShareSheetPr
                 onClick={handleWebShare}
                 style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-                  background: "#c8a96e", border: "none", borderRadius: 10,
+                  background: "var(--accent)", border: "none", borderRadius: 10,
                   padding: "13px 20px", color: "#000",
                   fontSize: 13, fontWeight: 700, cursor: "pointer",
                   fontFamily: "inherit", letterSpacing: "0.04em",

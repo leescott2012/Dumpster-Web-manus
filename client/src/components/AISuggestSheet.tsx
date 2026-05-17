@@ -168,10 +168,10 @@ export default function AISuggestSheet({
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
               width: 32, height: 32, borderRadius: 8,
-              background: "rgba(200,169,110,0.12)", border: "1px solid rgba(200,169,110,0.3)",
+              background: "rgba(var(--accent-rgb),0.12)", border: "1px solid rgba(var(--accent-rgb),0.3)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <Sparkles size={16} color="#c8a96e" />
+              <Sparkles size={16} color="var(--accent)" />
             </div>
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
@@ -200,11 +200,11 @@ export default function AISuggestSheet({
             <div style={{ textAlign: "center", padding: "16px 0 8px" }}>
               <div style={{
                 width: 56, height: 56, borderRadius: 14,
-                background: "rgba(200,169,110,0.08)", border: "1px solid rgba(200,169,110,0.2)",
+                background: "rgba(var(--accent-rgb),0.08)", border: "1px solid rgba(var(--accent-rgb),0.2)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 margin: "0 auto 16px",
               }}>
-                <Sparkles size={24} color="#c8a96e" />
+                <Sparkles size={24} color="var(--accent)" />
               </div>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 6 }}>
                 Auto-arrange one dump
@@ -252,7 +252,7 @@ export default function AISuggestSheet({
                       <button
                         onClick={() => setTargetCount(null)}
                         style={{
-                          background: targetCount === null ? "#c8a96e" : "transparent",
+                          background: targetCount === null ? "var(--accent)" : "transparent",
                           border: targetCount === null ? "none" : "1px solid #2a2a2a",
                           borderRadius: 18, padding: "6px 12px",
                           color: targetCount === null ? "#000" : "#888",
@@ -280,7 +280,7 @@ export default function AISuggestSheet({
                           style={{
                             width: 24, height: 24, borderRadius: "50%",
                             background: "transparent", border: "none",
-                            color: targetCount !== null && targetCount <= stepperMin ? "#333" : "#c8a96e",
+                            color: targetCount !== null && targetCount <= stepperMin ? "#333" : "var(--accent)",
                             cursor: targetCount !== null && targetCount <= stepperMin ? "default" : "pointer",
                             display: "flex", alignItems: "center", justifyContent: "center",
                             padding: 0,
@@ -305,7 +305,7 @@ export default function AISuggestSheet({
                           style={{
                             width: 24, height: 24, borderRadius: "50%",
                             background: "transparent", border: "none",
-                            color: targetCount !== null && targetCount >= stepperMax ? "#333" : "#c8a96e",
+                            color: targetCount !== null && targetCount >= stepperMax ? "#333" : "var(--accent)",
                             cursor: targetCount !== null && targetCount >= stepperMax ? "default" : "pointer",
                             display: "flex", alignItems: "center", justifyContent: "center",
                             padding: 0,
@@ -321,11 +321,11 @@ export default function AISuggestSheet({
                   {tasteActive && (
                     <div style={{
                       display: "inline-flex", alignItems: "center", gap: 5,
-                      background: "rgba(200,169,110,0.08)", border: "1px solid rgba(200,169,110,0.25)",
+                      background: "rgba(var(--accent-rgb),0.08)", border: "1px solid rgba(var(--accent-rgb),0.25)",
                       borderRadius: 100, padding: "5px 12px", marginBottom: 14,
                     }}>
-                      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#c8a96e", flexShrink: 0 }} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#c8a96e", letterSpacing: "0.1em" }}>
+                      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.1em" }}>
                         TASTE PROFILE ACTIVE
                       </span>
                     </div>
@@ -333,7 +333,7 @@ export default function AISuggestSheet({
 
                   <button onClick={handleAnalyze} style={{
                     display: "inline-flex", alignItems: "center", gap: 8,
-                    background: "#c8a96e", border: "none", borderRadius: 10,
+                    background: "var(--accent)", border: "none", borderRadius: 10,
                     padding: "13px 28px", color: "#000",
                     fontSize: 14, fontWeight: 700, cursor: "pointer",
                     letterSpacing: "0.02em", fontFamily: "inherit",
@@ -349,7 +349,7 @@ export default function AISuggestSheet({
           {phase === "loading" && (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
               <Loader2
-                size={38} color="#c8a96e"
+                size={38} color="var(--accent)"
                 style={{ animation: "spin 1s linear infinite", margin: "0 auto 16px", display: "block" }}
               />
               <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 6 }}>
@@ -376,7 +376,7 @@ export default function AISuggestSheet({
               <button onClick={handleAnalyze} style={{
                 display: "inline-flex", alignItems: "center", gap: 8,
                 background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10,
-                padding: "12px 20px", color: "#c8a96e",
+                padding: "12px 20px", color: "var(--accent)",
                 fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
               }}>
                 <RefreshCcw size={14} /> Try Again
@@ -389,18 +389,18 @@ export default function AISuggestSheet({
             <div>
               {/* Dump preview card */}
               <div style={{
-                background: "rgba(200,169,110,0.05)", border: "1px solid rgba(200,169,110,0.2)",
+                background: "rgba(var(--accent-rgb),0.05)", border: "1px solid rgba(var(--accent-rgb),0.2)",
                 borderRadius: 14, padding: "18px 18px 14px", marginBottom: 20,
               }}>
                 {/* Name + count */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#c8a96e", letterSpacing: "-0.01em", lineHeight: 1.2 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "var(--accent)", letterSpacing: "-0.01em", lineHeight: 1.2 }}>
                     {cluster.name}
                   </div>
                   <div style={{
-                    background: "rgba(200,169,110,0.15)", borderRadius: 20,
+                    background: "rgba(var(--accent-rgb),0.15)", borderRadius: 20,
                     padding: "3px 10px", fontSize: 11, fontWeight: 700,
-                    color: "#c8a96e", letterSpacing: "0.04em", flexShrink: 0, marginLeft: 12,
+                    color: "var(--accent)", letterSpacing: "0.04em", flexShrink: 0, marginLeft: 12,
                   }}>
                     {clusterPhotos.length} photos
                   </div>
@@ -446,7 +446,7 @@ export default function AISuggestSheet({
                 </button>
                 <button onClick={handleCreate} style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: "#c8a96e", border: "none", borderRadius: 10,
+                  background: "var(--accent)", border: "none", borderRadius: 10,
                   padding: "12px 20px", color: "#000",
                   fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                   letterSpacing: "0.02em",
