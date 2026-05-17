@@ -168,65 +168,77 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
   if (!current) return null;
   var Icon = current.icon;
 
-  // Tooltip positioning
+  // Tooltip positioning — always clamped to viewport
   var tooltip = { top: "50%", left: "50%", transform: "translate(-50%, -50%)" } as Record<string, string>;
   var arrowStyle = {} as Record<string, string>;
+  var showArrow = false;
 
   if (targetRect) {
     var pad = 16;
     var tooltipW = 320;
-    var tooltipH = 200;
+    var tooltipH = 220;
+    var vh = window.innerHeight;
+    var vw = window.innerWidth;
 
-    if (current.position === "bottom") {
+    // Center x of the target element
+    var cx = targetRect.left + targetRect.width / 2;
+    var cy = targetRect.top + targetRect.height / 2;
+    var leftX = Math.max(pad, Math.min(vw - tooltipW - pad, cx - tooltipW / 2));
+
+    // Try preferred position, fall back if it would go off-screen
+    var pos = current.position;
+    if (pos === "bottom" && targetRect.bottom + pad + tooltipH > vh) pos = "top";
+    if (pos === "top" && targetRect.top - pad - tooltipH < 0) pos = "bottom";
+
+    // For very tall elements, anchor tooltip to the visible center of the screen
+    var elementTooTall = targetRect.height > vh * 0.6;
+
+    if (elementTooTall) {
+      // Float tooltip in the visible center-right area
       tooltip = {
-        top: (targetRect.bottom + pad) + "px",
-        left: Math.max(pad, Math.min(window.innerWidth - tooltipW - pad, targetRect.left + targetRect.width / 2 - tooltipW / 2)) + "px",
+        top: Math.max(pad, Math.min(vh - tooltipH - pad, vh / 2 - tooltipH / 2)) + "px",
+        left: Math.max(pad, Math.min(vw - tooltipW - pad, vw / 2 - tooltipW / 2)) + "px",
         transform: "none",
       };
+      showArrow = false;
+    } else if (pos === "bottom") {
+      var topVal = Math.min(vh - tooltipH - pad, targetRect.bottom + pad);
+      tooltip = { top: topVal + "px", left: leftX + "px", transform: "none" };
+      showArrow = true;
       arrowStyle = {
         position: "absolute", top: "-6px",
-        left: Math.min(tooltipW - 24, Math.max(12, targetRect.left + targetRect.width / 2 - parseFloat(tooltip.left))) + "px",
-        width: "12px", height: "6px",
-        background: "#141414",
+        left: Math.min(tooltipW - 24, Math.max(12, cx - leftX)) + "px",
+        width: "12px", height: "6px", background: "#141414",
         clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)",
       };
-    } else if (current.position === "top") {
-      tooltip = {
-        top: (targetRect.top - tooltipH - pad) + "px",
-        left: Math.max(pad, Math.min(window.innerWidth - tooltipW - pad, targetRect.left + targetRect.width / 2 - tooltipW / 2)) + "px",
-        transform: "none",
-      };
+    } else if (pos === "top") {
+      var topVal2 = Math.max(pad, targetRect.top - tooltipH - pad);
+      tooltip = { top: topVal2 + "px", left: leftX + "px", transform: "none" };
+      showArrow = true;
       arrowStyle = {
         position: "absolute", bottom: "-6px",
-        left: Math.min(tooltipW - 24, Math.max(12, targetRect.left + targetRect.width / 2 - parseFloat(tooltip.left))) + "px",
-        width: "12px", height: "6px",
-        background: "#141414",
+        left: Math.min(tooltipW - 24, Math.max(12, cx - leftX)) + "px",
+        width: "12px", height: "6px", background: "#141414",
         clipPath: "polygon(0% 0%, 100% 0%, 50% 100%)",
       };
-    } else if (current.position === "left") {
-      tooltip = {
-        top: Math.max(pad, targetRect.top + targetRect.height / 2 - tooltipH / 2) + "px",
-        left: Math.max(pad, targetRect.left - tooltipW - pad) + "px",
-        transform: "none",
-      };
+    } else if (pos === "left") {
+      var topVal3 = Math.max(pad, Math.min(vh - tooltipH - pad, cy - tooltipH / 2));
+      tooltip = { top: topVal3 + "px", left: Math.max(pad, targetRect.left - tooltipW - pad) + "px", transform: "none" };
+      showArrow = true;
       arrowStyle = {
         position: "absolute", right: "-6px",
-        top: Math.min(tooltipH - 24, Math.max(12, targetRect.top + targetRect.height / 2 - parseFloat(tooltip.top))) + "px",
-        width: "6px", height: "12px",
-        background: "#141414",
+        top: Math.min(tooltipH - 24, Math.max(12, cy - topVal3)) + "px",
+        width: "6px", height: "12px", background: "#141414",
         clipPath: "polygon(0% 0%, 100% 50%, 0% 100%)",
       };
     } else {
-      tooltip = {
-        top: Math.max(pad, targetRect.top + targetRect.height / 2 - tooltipH / 2) + "px",
-        left: (targetRect.right + pad) + "px",
-        transform: "none",
-      };
+      var topVal4 = Math.max(pad, Math.min(vh - tooltipH - pad, cy - tooltipH / 2));
+      tooltip = { top: topVal4 + "px", left: Math.min(vw - tooltipW - pad, targetRect.right + pad) + "px", transform: "none" };
+      showArrow = true;
       arrowStyle = {
         position: "absolute", left: "-6px",
-        top: Math.min(tooltipH - 24, Math.max(12, targetRect.top + targetRect.height / 2 - parseFloat(tooltip.top))) + "px",
-        width: "6px", height: "12px",
-        background: "#141414",
+        top: Math.min(tooltipH - 24, Math.max(12, cy - topVal4)) + "px",
+        width: "6px", height: "12px", background: "#141414",
         clipPath: "polygon(100% 0%, 0% 50%, 100% 100%)",
       };
     }
@@ -293,7 +305,7 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
         boxShadow: "0 12px 48px rgba(0,0,0,0.6)",
       }}>
         {/* Arrow */}
-        {targetRect && <div style={arrowStyle} />}
+        {targetRect && showArrow && <div style={arrowStyle} />}
 
         {/* Step counter */}
         <div style={{
