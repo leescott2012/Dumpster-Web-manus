@@ -26,6 +26,10 @@ import DumpChatSheet from "@/components/DumpChatSheet";
 import RecycleSheet from "@/components/RecycleSheet";
 import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
+import AuthSheet from "@/components/AuthSheet";
+import CreditsSheet from "@/components/CreditsSheet";
+import CreditsBadge from "@/components/CreditsBadge";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { loadCaptions } from "@/lib/captionPool";
 
 function HomeContent() {
@@ -61,6 +65,8 @@ function HomeContent() {
   var [chatInitialMsg, setChatInitialMsg] = useState<string | null>(null);
   var [recyclePhotoId, setRecyclePhotoId] = useState<string | null>(null);
   var [recycleDumpId, setRecycleDumpId] = useState<string | null>(null);
+  var [authSheetOpen, setAuthSheetOpen] = useState(false);
+  var [creditsSheetOpen, setCreditsSheetOpen] = useState(false);
   var [selectionMode, setSelectionMode] = useState(false);
   var [selectionTargetDumpId, setSelectionTargetDumpId] = useState<string | null>(null);
   var [selectedPoolPhotoIds, setSelectedPoolPhotoIds] = useState<string[]>([]);
@@ -349,19 +355,25 @@ function HomeContent() {
         <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.3em", color: "var(--accent)", textTransform: "uppercase" as const }}>
           DUMPSTER
         </span>
-        <button
-          onClick={function(e) { e.stopPropagation(); setMenuOpen(true); }}
-          style={{
-            width: 36, height: 36, borderRadius: 9,
-            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", color: "#e8e8e8", transition: "all 0.15s",
-          }}
-          onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.12)"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.3)"; }}
-          onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
-        >
-          <Menu size={17} />
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <CreditsBadge
+            onCreditsClick={function() { setCreditsSheetOpen(true); }}
+            onAuthClick={function() { setAuthSheetOpen(true); }}
+          />
+          <button
+            onClick={function(e) { e.stopPropagation(); setMenuOpen(true); }}
+            style={{
+              width: 36, height: 36, borderRadius: 9,
+              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", color: "#e8e8e8", transition: "all 0.15s",
+            }}
+            onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.12)"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.3)"; }}
+            onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
+          >
+            <Menu size={17} />
+          </button>
+        </div>
       </nav>
       {/* Dimming overlay when in selection mode */}
       {selectionMode && (
@@ -632,14 +644,22 @@ function HomeContent() {
         onClose={function() { setRecyclePhotoId(null); setRecycleDumpId(null); }}
         onSwap={function(dumpId, oldPhotoId, newPhotoId) { swapPhoto(dumpId, oldPhotoId, newPhotoId); toast("Photo swapped"); }}
       />
+      <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} />
+      <CreditsSheet
+        open={creditsSheetOpen}
+        onClose={function() { setCreditsSheetOpen(false); }}
+        onNeedAuth={function() { setCreditsSheetOpen(false); setAuthSheetOpen(true); }}
+      />
     </div>
   );
 }
 
 export default function Home() {
   return (
-    <DragProvider>
-      <HomeContent />
-    </DragProvider>
+    <AuthProvider>
+      <DragProvider>
+        <HomeContent />
+      </DragProvider>
+    </AuthProvider>
   );
 }
