@@ -1,0 +1,209 @@
+/**
+ * WelcomeOverlay — first-time guest onboarding.
+ * Full-screen welcome screen that explains what Dumpster does,
+ * shows key features, and lets the user start with demo photos
+ * or upload their own.
+ * Shows once per device (localStorage flag).
+ */
+import { useState, useEffect } from "react";
+import { Sparkles, ArrowUpDown, Type, Upload, X, ChevronRight } from "lucide-react";
+import { IS_OWNER } from "@/lib/photoData";
+
+var SEEN_KEY = "dumpster_welcome_seen_v1";
+
+interface WelcomeOverlayProps {
+  onUploadClick: () => void;
+}
+
+export default function WelcomeOverlay({ onUploadClick }: WelcomeOverlayProps) {
+  var [visible, setVisible] = useState(false);
+  var [leaving, setLeaving] = useState(false);
+
+  useEffect(function() {
+    // Never show for owner
+    if (IS_OWNER) return;
+    try {
+      var seen = localStorage.getItem(SEEN_KEY);
+      if (!seen) setVisible(true);
+    } catch (_) {
+      setVisible(true);
+    }
+  }, []);
+
+  var dismiss = function() {
+    setLeaving(true);
+    try { localStorage.setItem(SEEN_KEY, "1"); } catch (_) { /* noop */ }
+    setTimeout(function() { setVisible(false); }, 350);
+  };
+
+  var handleUpload = function() {
+    dismiss();
+    // Small delay so overlay fades before scroll
+    setTimeout(function() { onUploadClick(); }, 400);
+  };
+
+  if (!visible) return null;
+
+  var features = [
+    {
+      icon: ArrowUpDown,
+      title: "Drag & Reorder",
+      desc: "Arrange your carousel sequence with drag and drop",
+      color: "var(--accent)",
+      bg: "rgba(var(--accent-rgb),0.1)",
+      border: "rgba(var(--accent-rgb),0.25)",
+    },
+    {
+      icon: Sparkles,
+      title: "AI Suggestions",
+      desc: "Let AI group your photos into the best carousels",
+      color: "#a78bfa",
+      bg: "rgba(167,139,250,0.1)",
+      border: "rgba(167,139,250,0.25)",
+    },
+    {
+      icon: Type,
+      title: "Smart Captions",
+      desc: "Generate captions that match your vibe and voice",
+      color: "#4ade80",
+      bg: "rgba(74,222,128,0.1)",
+      border: "rgba(74,222,128,0.25)",
+    },
+  ];
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 10000,
+      background: "rgba(0,0,0,0.88)",
+      backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "24px",
+      opacity: leaving ? 0 : 1,
+      transition: "opacity 0.35s ease",
+    }}>
+      {/* Close button */}
+      <button
+        onClick={dismiss}
+        style={{
+          position: "absolute", top: 16, right: 16, zIndex: 2,
+          width: 36, height: 36, borderRadius: "50%",
+          background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer", color: "#666", transition: "all 0.15s",
+        }}
+      >
+        <X size={16} />
+      </button>
+
+      {/* Card */}
+      <div style={{
+        maxWidth: 420, width: "100%",
+        background: "#0e0e0e", border: "1px solid #1e1e1e",
+        borderRadius: 20, overflow: "hidden",
+        transform: leaving ? "scale(0.96)" : "scale(1)",
+        transition: "transform 0.35s ease",
+      }}>
+        {/* Top accent bar */}
+        <div style={{
+          height: 3,
+          background: "linear-gradient(90deg, var(--accent), #a78bfa, #4ade80)",
+        }} />
+
+        {/* Content */}
+        <div style={{ padding: "36px 28px 28px" }}>
+          {/* Badge */}
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            background: "rgba(var(--accent-rgb),0.1)",
+            border: "1px solid rgba(var(--accent-rgb),0.25)",
+            borderRadius: 100, padding: "4px 12px 4px 8px",
+            marginBottom: 20,
+          }}>
+            <Sparkles size={12} color="var(--accent)" />
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", color: "var(--accent)", textTransform: "uppercase" as const }}>
+              DEMO MODE
+            </span>
+          </div>
+
+          {/* Title */}
+          <h2 style={{
+            fontSize: "clamp(24px, 4vw, 32px)", fontWeight: 800,
+            letterSpacing: "-0.03em", lineHeight: 1.15,
+            color: "#fff", marginBottom: 10,
+          }}>
+            {"Build your perfect "}
+            <span style={{ color: "var(--accent)" }}>Instagram carousel</span>
+          </h2>
+
+          <p style={{
+            fontSize: 14, color: "#777", lineHeight: 1.7, marginBottom: 28,
+          }}>
+            Dumpster helps you sequence photos, generate captions, and craft carousels that tell a story. Explore with demo photos below.
+          </p>
+
+          {/* Features */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
+            {features.map(function(f) {
+              return (
+                <div key={f.title} style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  background: "#141414", border: "1px solid #1e1e1e",
+                  borderRadius: 12, padding: "12px 14px",
+                }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 9, flexShrink: 0,
+                    background: f.bg, border: "1px solid " + f.border,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <f.icon size={16} color={f.color} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#e8e8e8", letterSpacing: "-0.01em" }}>
+                      {f.title}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#666", marginTop: 1 }}>
+                      {f.desc}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* CTAs */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <button
+              onClick={dismiss}
+              style={{
+                width: "100%", padding: "14px 20px",
+                background: "var(--accent)", color: "#000",
+                border: "none", borderRadius: 12,
+                fontSize: 14, fontWeight: 800, fontFamily: "inherit",
+                cursor: "pointer", transition: "all 0.15s",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                letterSpacing: "0.02em",
+              }}
+            >
+              Explore Demo Photos
+              <ChevronRight size={16} strokeWidth={3} />
+            </button>
+            <button
+              onClick={handleUpload}
+              style={{
+                width: "100%", padding: "13px 20px",
+                background: "transparent", color: "#999",
+                border: "1px solid #2a2a2a", borderRadius: 12,
+                fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                cursor: "pointer", transition: "all 0.15s",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              }}
+            >
+              <Upload size={14} />
+              Upload My Photos
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

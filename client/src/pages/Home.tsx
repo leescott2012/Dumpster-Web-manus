@@ -29,6 +29,8 @@ import CaptionPool from "@/components/CaptionPool";
 import AuthSheet from "@/components/AuthSheet";
 import CreditsSheet from "@/components/CreditsSheet";
 import CreditsBadge from "@/components/CreditsBadge";
+import WelcomeOverlay from "@/components/WelcomeOverlay";
+import DemoBanner from "@/components/DemoBanner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { loadCaptions } from "@/lib/captionPool";
 
@@ -55,6 +57,16 @@ function HomeContent() {
   var [captionCount, setCaptionCount] = useState<number>(function() { return loadCaptions().length; });
   // Refresh caption count when the tab changes (in case caps were added)
   useEffect(function() { setCaptionCount(loadCaptions().length); }, [poolTab]);
+  // Detect if user has uploaded any of their own photos (not stock)
+  var hasUserPhotos = pool.some(function(p) { return p.id.startsWith("upload-"); })
+    || dumps.some(function(d) { return d.photos.some(function(p) { return p.id.startsWith("upload-"); }); });
+
+  // Scroll to pool and focus the upload area
+  var scrollToPoolUpload = useCallback(function() {
+    var poolEl = document.getElementById("photo-pool");
+    if (poolEl) poolEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
   var [aiSheetOpen, setAiSheetOpen] = useState(false);
   var [igScrubOpen, setIGScrubOpen] = useState(false);
   var [captionSheetOpen, setCaptionSheetOpen] = useState(false);
@@ -644,6 +656,8 @@ function HomeContent() {
         onClose={function() { setRecyclePhotoId(null); setRecycleDumpId(null); }}
         onSwap={function(dumpId, oldPhotoId, newPhotoId) { swapPhoto(dumpId, oldPhotoId, newPhotoId); toast("Photo swapped"); }}
       />
+      <WelcomeOverlay onUploadClick={scrollToPoolUpload} />
+      <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} />
       <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} />
       <CreditsSheet
         open={creditsSheetOpen}
