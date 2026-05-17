@@ -123,7 +123,7 @@ export default function PhotoPool({
   };
 
   return (
-    <section ref={poolRef} style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 32px 120px", position: "relative" }}>
+    <section ref={poolRef} data-tour="pool-section" style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 32px 120px", position: "relative" }}>
       {/* Selection-mode banner */}
       {selectionMode && (
         <div style={{ marginBottom: "20px" }}>
@@ -232,7 +232,7 @@ export default function PhotoPool({
 
           {/* Upload "+" card at end of pool */}
           {!selectionMode && (
-            <div onClick={handleUploadClick}
+            <div data-tour="upload-card" onClick={handleUploadClick}
               style={{
                 width: "140px", height: "184px", flexShrink: 0,
                 borderRadius: "10px", border: "2px dashed #2a2a2a",

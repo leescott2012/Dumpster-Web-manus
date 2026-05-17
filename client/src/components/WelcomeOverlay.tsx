@@ -13,9 +13,10 @@ var SEEN_KEY = "dumpster_welcome_seen_v1";
 
 interface WelcomeOverlayProps {
   onUploadClick: () => void;
+  onTourClick: () => void;
 }
 
-export default function WelcomeOverlay({ onUploadClick }: WelcomeOverlayProps) {
+export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOverlayProps) {
   var [visible, setVisible] = useState(false);
   var [leaving, setLeaving] = useState(false);
 
@@ -173,7 +174,7 @@ export default function WelcomeOverlay({ onUploadClick }: WelcomeOverlayProps) {
           {/* CTAs */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <button
-              onClick={dismiss}
+              onClick={function() { dismiss(); setTimeout(onTourClick, 450); }}
               style={{
                 width: "100%", padding: "14px 20px",
                 background: "var(--accent)", color: "#000",
@@ -184,11 +185,11 @@ export default function WelcomeOverlay({ onUploadClick }: WelcomeOverlayProps) {
                 letterSpacing: "0.02em",
               }}
             >
-              Explore Demo Photos
+              Take a Quick Tour
               <ChevronRight size={16} strokeWidth={3} />
             </button>
             <button
-              onClick={handleUpload}
+              onClick={dismiss}
               style={{
                 width: "100%", padding: "13px 20px",
                 background: "transparent", color: "#999",
@@ -198,8 +199,7 @@ export default function WelcomeOverlay({ onUploadClick }: WelcomeOverlayProps) {
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               }}
             >
-              <Upload size={14} />
-              Upload My Photos
+              Explore on My Own
             </button>
           </div>
         </div>

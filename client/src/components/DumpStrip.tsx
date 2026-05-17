@@ -94,7 +94,7 @@ export default function DumpStrip({
   var dumpNumStr = dump.number < 10 ? "0" + dump.number : "" + dump.number;
 
   return (
-    <section data-dump-id={dump.id} style={{ maxWidth: "1100px", margin: "56px auto", padding: "0 32px" }}>
+    <section data-dump-id={dump.id} data-tour={"dump-" + dump.number} style={{ maxWidth: "1100px", margin: "56px auto", padding: "0 32px" }}>
       {/* Dump Header */}
       <div style={{ marginBottom: "32px", paddingBottom: "24px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
@@ -137,6 +137,7 @@ export default function DumpStrip({
           {/* "..." menu button */}
           {onMenuClick && (
             <button
+              data-tour="dump-menu"
               onClick={function() { onMenuClick(dump.id); }}
               style={{
                 width: 32, height: 32, borderRadius: 8,
@@ -282,7 +283,7 @@ export default function DumpStrip({
 
         {/* "+" card at end of strip */}
         {!dragState.isDragging && !isOverCapacity && (
-          <div onClick={function() { onPlusClick(dump.id); }}
+          <div data-tour="plus-card" onClick={function() { onPlusClick(dump.id); }}
             style={{
               width: "200px", height: "260px", borderRadius: "10px", border: "2px dashed #2a2a2a",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",

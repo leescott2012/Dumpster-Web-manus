@@ -31,6 +31,7 @@ import CreditsSheet from "@/components/CreditsSheet";
 import CreditsBadge from "@/components/CreditsBadge";
 import WelcomeOverlay from "@/components/WelcomeOverlay";
 import DemoBanner from "@/components/DemoBanner";
+import GuidedTour, { isTourCompleted } from "@/components/GuidedTour";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { loadCaptions } from "@/lib/captionPool";
 
@@ -66,6 +67,11 @@ function HomeContent() {
     var poolEl = document.getElementById("photo-pool");
     if (poolEl) poolEl.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
+
+  // Guided tour
+  var [tourActive, setTourActive] = useState(false);
+  var startTour = useCallback(function() { setTourActive(true); }, []);
+  var endTour = useCallback(function() { setTourActive(false); }, []);
 
   var [aiSheetOpen, setAiSheetOpen] = useState(false);
   var [igScrubOpen, setIGScrubOpen] = useState(false);
@@ -464,6 +470,7 @@ function HomeContent() {
         pointerEvents: selectionMode ? "none" : "auto",
       }}>
         <button
+          data-tour="ai-suggest"
           onClick={function() { setAiSheetOpen(true); }}
           style={{
             display: "flex", alignItems: "center", gap: "8px",
@@ -476,7 +483,7 @@ function HomeContent() {
         >
           <Sparkles size={15} /> AI Suggest
         </button>
-        <button onClick={handleCreateDump} style={{
+        <button data-tour="new-dump" onClick={handleCreateDump} style={{
           display: "flex", alignItems: "center", gap: "8px",
           background: "#151515", border: "1px solid #2a2a2a", borderRadius: "10px",
           padding: "12px 20px", color: "var(--accent)", fontSize: "13px", fontWeight: 600,
@@ -584,6 +591,7 @@ function HomeContent() {
         onCaptions={function() { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); }}
         onIGScrub={function() { setIGScrubOpen(true); }}
         onReset={handleReset}
+        onTour={startTour}
         dumpCount={dumps.length}
         poolCount={pool.length}
       />
@@ -656,8 +664,9 @@ function HomeContent() {
         onClose={function() { setRecyclePhotoId(null); setRecycleDumpId(null); }}
         onSwap={function(dumpId, oldPhotoId, newPhotoId) { swapPhoto(dumpId, oldPhotoId, newPhotoId); toast("Photo swapped"); }}
       />
-      <WelcomeOverlay onUploadClick={scrollToPoolUpload} />
+      <WelcomeOverlay onUploadClick={scrollToPoolUpload} onTourClick={startTour} />
       <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} />
+      <GuidedTour active={tourActive} onEnd={endTour} />
       <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} />
       <CreditsSheet
         open={creditsSheetOpen}

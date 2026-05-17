@@ -28,6 +28,7 @@ interface MainMenuProps {
   onCaptions: () => void;
   onIGScrub: () => void;
   onReset?: () => void;
+  onTour?: () => void;
   dumpCount: number;
   poolCount: number;
 }
@@ -68,7 +69,7 @@ export function initAccent() {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, onReset, dumpCount, poolCount }: MainMenuProps) {
+export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, onReset, onTour, dumpCount, poolCount }: MainMenuProps) {
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const [visible, setVisible] = useState(false);
   const [accent, setAccent] = useState(loadAccent);
@@ -265,7 +266,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
               {activeTab === "appearance" && (
                 <AppearancePanel accent={accent} onAccentChange={handleAccentChange} />
               )}
-              {activeTab === "about" && <AboutPanel onReset={onReset} />}
+              {activeTab === "about" && <AboutPanel onReset={onReset} onTour={onTour ? function() { onClose(); setTimeout(function() { if (onTour) onTour(); }, 400); } : undefined} />}
             </div>
           )}
         </div>
@@ -619,7 +620,7 @@ function AppearancePanel({ accent, onAccentChange }: {
 
 // ── About Panel ──────────────────────────────────────────────────────────────
 
-function AboutPanel({ onReset }: { onReset?: () => void }) {
+function AboutPanel({ onReset, onTour }: { onReset?: () => void; onTour?: () => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {[
@@ -634,6 +635,23 @@ function AboutPanel({ onReset }: { onReset?: () => void }) {
           <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>{row.value}</span>
         </div>
       ))}
+
+      {onTour && (
+        <div>
+          <button
+            onClick={onTour}
+            style={{
+              width: "100%", padding: "12px", borderRadius: 10,
+              background: "rgba(var(--accent-rgb),0.1)", border: "1px solid rgba(var(--accent-rgb),0.25)",
+              color: "var(--accent)", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              fontFamily: "inherit", letterSpacing: "0.04em",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            }}
+          >
+            TAKE A TOUR
+          </button>
+        </div>
+      )}
 
       {onReset && (
         <div style={{ marginTop: 10 }}>

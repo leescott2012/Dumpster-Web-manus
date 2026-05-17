@@ -20,6 +20,7 @@ export default function CreditsBadge({ onCreditsClick, onAuthClick }: CreditsBad
   if (!user) {
     return (
       <button
+        data-tour="sign-in"
         onClick={onAuthClick}
         style={{
           display: "flex", alignItems: "center", gap: 6,
