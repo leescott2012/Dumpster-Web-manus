@@ -54,8 +54,8 @@ export async function checkCredits(
   if (!result.ok) {
     res.writeHead(402, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
-      error: "insufficient_credits",
-      message: result.error,
+      error: "Not enough credits — need " + cost + ", have " + (result.remaining || 0) + ". Buy more in the credits menu.",
+      code: "insufficient_credits",
       remaining: result.remaining,
       cost: cost,
     }));

@@ -3,6 +3,7 @@
  * Suggests ONE dump at a time (2–20 photos). Accept or get a new suggestion.
  */
 import { useState, useCallback, useRef, useEffect } from "react";
+import { getAuthHeaders } from "@/lib/supabase";
 import { Sparkles, X, RefreshCcw, Plus, Loader2, Minus } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
 import { buildTasteBlock } from "@/lib/captionPool";
@@ -59,9 +60,10 @@ export default function AISuggestSheet({
     setErrorMsg("");
 
     try {
+      var authH = await getAuthHeaders();
       const res = await fetch("/api/ai-suggest", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: Object.assign({ "Content-Type": "application/json" }, authH),
         body: JSON.stringify({
           photos: photosToAnalyze.map((p) => ({
             id: p.id,

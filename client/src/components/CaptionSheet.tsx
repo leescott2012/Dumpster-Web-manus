@@ -3,6 +3,7 @@
  * Mirrors iOS CaptionService / LLMService.generateCaption flow.
  */
 import { useState, useCallback, useEffect } from "react";
+import { getAuthHeaders } from "@/lib/supabase";
 import { Type, X, Copy, RefreshCcw, Loader2, Check, Sparkles } from "lucide-react";
 import type { Dump } from "@/lib/photoData";
 import { buildTasteBlock } from "@/lib/captionPool";
@@ -56,9 +57,10 @@ export default function CaptionSheet({
     setErrorMsg("");
 
     try {
+      var authH = await getAuthHeaders();
       const res = await fetch("/api/ai-caption", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: Object.assign({ "Content-Type": "application/json" }, authH),
         body: JSON.stringify({
           dumpTitle: selectedDump.title,
           subtitle: selectedDump.subtitle,

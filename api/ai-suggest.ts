@@ -4,6 +4,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import { handleAISuggest } from "../server/aiSuggest.js";
+import { checkCredits } from "../server/creditGate.js";
 
 export const config = {
   runtime: "nodejs",
@@ -11,5 +12,7 @@ export const config = {
 };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  var gate = await checkCredits(req, res, "ai_suggest");
+  if (!gate.proceed) return;
   return handleAISuggest(req, res);
 }

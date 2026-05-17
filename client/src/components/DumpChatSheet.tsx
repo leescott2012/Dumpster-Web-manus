@@ -3,6 +3,7 @@
  * AI can reorder, swap photos in/out, update vibe, and learn taste preferences.
  */
 import { useState, useCallback, useEffect, useRef } from "react";
+import { getAuthHeaders } from "@/lib/supabase";
 import { X, Send, Loader, ArrowUpDown, ArrowDownToLine, ArrowUpFromLine, Palette, Brain } from "lucide-react";
 import type { Dump, Photo } from "@/lib/photoData";
 import { loadTasteProfile, saveTasteProfile } from "@/lib/captionPool";
@@ -129,9 +130,10 @@ export default function DumpChatSheet({
     });
 
     try {
+      var authH = await getAuthHeaders();
       var res = await fetch("/api/ai-chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: Object.assign({ "Content-Type": "application/json" }, authH),
         body: JSON.stringify({
           dumpId: dump.id,
           dumpTitle: dump.title,
