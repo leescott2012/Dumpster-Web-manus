@@ -32,7 +32,8 @@ import CreditsBadge from "@/components/CreditsBadge";
 import WelcomeOverlay from "@/components/WelcomeOverlay";
 import DemoBanner from "@/components/DemoBanner";
 import GuidedTour, { isTourCompleted } from "@/components/GuidedTour";
-import { AuthProvider } from "@/contexts/AuthContext";
+import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions } from "@/lib/captionPool";
 
 function HomeContent() {
@@ -85,6 +86,18 @@ function HomeContent() {
   var [recycleDumpId, setRecycleDumpId] = useState<string | null>(null);
   var [authSheetOpen, setAuthSheetOpen] = useState(false);
   var [creditsSheetOpen, setCreditsSheetOpen] = useState(false);
+  var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
+  var { canAfford } = useAuth();
+
+  /**
+   * Credit gate — checks if user can afford an AI action.
+   * Returns true if OK to proceed, false if blocked (shows overlay).
+   */
+  var creditGate = useCallback(function(action: string): boolean {
+    if (canAfford(action)) return true;
+    setOutOfCreditsAction(action);
+    return false;
+  }, [canAfford]);
   var [selectionMode, setSelectionMode] = useState(false);
   var [selectionTargetDumpId, setSelectionTargetDumpId] = useState<string | null>(null);
   var [selectedPoolPhotoIds, setSelectedPoolPhotoIds] = useState<string[]>([]);
@@ -454,7 +467,7 @@ function HomeContent() {
               onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
               onRenameDump={renameDump} onPlusClick={handlePlusClick}
               onMenuClick={function(dumpId) { setActionSheetDumpId(dumpId); }}
-              onCaptionClick={function(dumpId) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); }}
+              onCaptionClick={function(dumpId) { if (creditGate("ai_caption_casual")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
               isCustom={!originalDumpIds.includes(dump.id)}
             />
           </div>
@@ -471,7 +484,7 @@ function HomeContent() {
       }}>
         <button
           data-tour="ai-suggest"
-          onClick={function() { setAiSheetOpen(true); }}
+          onClick={function() { if (creditGate("ai_suggest")) setAiSheetOpen(true); }}
           style={{
             display: "flex", alignItems: "center", gap: "8px",
             background: "rgba(var(--accent-rgb),0.1)", border: "1px solid rgba(var(--accent-rgb),0.3)", borderRadius: "10px",
@@ -587,8 +600,8 @@ function HomeContent() {
       <MainMenu
         open={menuOpen}
         onClose={function() { setMenuOpen(false); }}
-        onAISuggest={function() { setAiSheetOpen(true); }}
-        onCaptions={function() { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); }}
+        onAISuggest={function() { if (creditGate("ai_suggest")) setAiSheetOpen(true); }}
+        onCaptions={function() { if (creditGate("ai_caption_casual")) { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); } }}
         onIGScrub={function() { setIGScrubOpen(true); }}
         onReset={handleReset}
         onTour={startTour}
@@ -618,13 +631,14 @@ function HomeContent() {
         dump={actionSheetDumpId ? (dumps.find(function(d) { return d.id === actionSheetDumpId; }) || null) : null}
         onClose={function() { setActionSheetDumpId(null); }}
         onHeart={function(dumpId) { toggleDumpFavorite(dumpId); }}
-        onChat={function(dumpId) { setChatInitialMsg(null); setChatDumpId(dumpId); }}
+        onChat={function(dumpId) { if (creditGate("ai_chat")) { setChatInitialMsg(null); setChatDumpId(dumpId); } }}
         onRate={function(dumpId, rating) { rateDump(dumpId, rating); }}
         onThumbsDown={function(dumpId) {
+          if (!creditGate("ai_chat")) return;
           setChatInitialMsg("I rated this dump thumbs down. What could be better about it? Ask me what I don't like.");
           setChatDumpId(dumpId);
         }}
-        onCaptions={function(dumpId) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); }}
+        onCaptions={function(dumpId) { if (creditGate("ai_caption_casual")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
         onExport={function(dumpId) { setShareSheetDumpId(dumpId); }}
         onDelete={function(dumpId) { handleDeleteDump(dumpId); }}
       />
@@ -672,6 +686,13 @@ function HomeContent() {
         open={creditsSheetOpen}
         onClose={function() { setCreditsSheetOpen(false); }}
         onNeedAuth={function() { setCreditsSheetOpen(false); setAuthSheetOpen(true); }}
+      />
+      <OutOfCreditsOverlay
+        open={outOfCreditsAction !== null}
+        action={outOfCreditsAction || ""}
+        onClose={function() { setOutOfCreditsAction(null); }}
+        onAuthClick={function() { setOutOfCreditsAction(null); setAuthSheetOpen(true); }}
+        onProClick={function() { setOutOfCreditsAction(null); setCreditsSheetOpen(true); }}
       />
     </div>
   );
