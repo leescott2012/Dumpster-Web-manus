@@ -125,8 +125,19 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
     // Delay measurement to let scroll finish
     setTimeout(function() {
       var el2 = document.querySelector(s.target) as HTMLElement | null;
-      if (el2) setTargetRect(el2.getBoundingClientRect());
-    }, 400);
+      if (!el2) return;
+      var rect = el2.getBoundingClientRect();
+      // If element is still off-viewport (scroll not finished), do instant scroll + re-measure
+      if (rect.top > window.innerHeight || rect.bottom < 0) {
+        el2.scrollIntoView({ behavior: "instant", block: "center" });
+        setTimeout(function() {
+          var el3 = document.querySelector(s.target) as HTMLElement | null;
+          if (el3) setTargetRect(el3.getBoundingClientRect());
+        }, 100);
+      } else {
+        setTargetRect(rect);
+      }
+    }, 600);
   }, [active, step]);
 
   useEffect(function() { measureTarget(); }, [measureTarget]);
@@ -241,6 +252,18 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
         width: "6px", height: "12px", background: "#141414",
         clipPath: "polygon(100% 0%, 0% 50%, 100% 100%)",
       };
+    }
+
+    // Final viewport clamp — ensure tooltip never goes off-screen
+    var parsedTop = parseFloat(tooltip.top);
+    if (!isNaN(parsedTop)) {
+      if (parsedTop < pad) tooltip.top = pad + "px";
+      if (parsedTop > vh - tooltipH - pad) tooltip.top = (vh - tooltipH - pad) + "px";
+    }
+    var parsedLeft = parseFloat(tooltip.left);
+    if (!isNaN(parsedLeft)) {
+      if (parsedLeft < pad) tooltip.left = pad + "px";
+      if (parsedLeft > vw - tooltipW - pad) tooltip.left = (vw - tooltipW - pad) + "px";
     }
   }
 
