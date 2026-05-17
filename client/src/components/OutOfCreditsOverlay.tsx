@@ -2,8 +2,8 @@
  * OutOfCreditsOverlay — focused prompt when a user tries an AI action
  * without enough credits. Shows deficit, quick-buy packs, Go Pro, or sign-in.
  */
-import { useState, useCallback } from "react";
-import { Zap, X, Crown, Loader, User, Sparkles } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Zap, X, Crown, Loader, User, Flame } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { CREDIT_PACKS, CREDIT_COSTS, CREDIT_LABELS } from "@/lib/credits";
 
@@ -18,6 +18,16 @@ interface OutOfCreditsOverlayProps {
 export default function OutOfCreditsOverlay({ open, action, onClose, onAuthClick, onProClick }: OutOfCreditsOverlayProps) {
   var { user, totalCredits } = useAuth();
   var [loading, setLoading] = useState<string | null>(null);
+  var [lifetimeSlots, setLifetimeSlots] = useState<number | null>(null);
+
+  // Fetch remaining lifetime slots when overlay opens
+  useEffect(function() {
+    if (!open || !user) return;
+    fetch("/api/lifetime-slots")
+      .then(function(r) { return r.json(); })
+      .then(function(d) { if (typeof d.remaining === "number") setLifetimeSlots(d.remaining); })
+      .catch(function() { /* noop */ });
+  }, [open, user]);
 
   var cost = CREDIT_COSTS[action] || 0;
   var label = CREDIT_LABELS[action] || action;
@@ -225,6 +235,34 @@ export default function OutOfCreditsOverlay({ open, action, onClose, onAuthClick
           >
             <Crown size={15} /> Go Pro — 200 credits/day
           </button>
+
+          {/* Lifetime early-bird counter */}
+          {lifetimeSlots !== null && lifetimeSlots > 0 && (
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              marginTop: 8, padding: "8px 12px", borderRadius: 10,
+              background: lifetimeSlots <= 100
+                ? "rgba(248,113,113,0.06)"
+                : lifetimeSlots <= 300
+                  ? "rgba(251,146,60,0.06)"
+                  : "rgba(167,139,250,0.04)",
+              border: lifetimeSlots <= 100
+                ? "1px solid rgba(248,113,113,0.15)"
+                : lifetimeSlots <= 300
+                  ? "1px solid rgba(251,146,60,0.15)"
+                  : "1px solid rgba(167,139,250,0.12)",
+            }}>
+              <Flame size={12} color={
+                lifetimeSlots <= 100 ? "#f87171" : lifetimeSlots <= 300 ? "#fb923c" : "#a78bfa"
+              } />
+              <span style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.01em",
+                color: lifetimeSlots <= 100 ? "#f87171" : lifetimeSlots <= 300 ? "#fb923c" : "#a78bfa",
+              }}>
+                {lifetimeSlots + " of 1,000 lifetime slots left — $19.99 forever"}
+              </span>
+            </div>
+          )}
 
           {/* Dismiss */}
           <button onClick={onClose} style={{
