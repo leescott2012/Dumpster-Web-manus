@@ -33,6 +33,10 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   /** Sign in with Google OAuth */
   signInWithGoogle: () => Promise<{ error: string | null }>;
+  /** Sign in with Apple OAuth */
+  signInWithApple: () => Promise<{ error: string | null }>;
+  /** Sign in with Facebook OAuth */
+  signInWithFacebook: () => Promise<{ error: string | null }>;
   /** Sign out */
   signOut: () => Promise<void>;
   /** Refresh profile + credits from DB */
@@ -135,6 +139,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error ? error.message : null };
   }, []);
 
+  var signInWithApple = useCallback(async function() {
+    var { error } = await supabase.auth.signInWithOAuth({
+      provider: "apple",
+      options: { redirectTo: window.location.origin },
+    });
+    return { error: error ? error.message : null };
+  }, []);
+
+  var signInWithFacebook = useCallback(async function() {
+    var { error } = await supabase.auth.signInWithOAuth({
+      provider: "facebook",
+      options: { redirectTo: window.location.origin },
+    });
+    return { error: error ? error.message : null };
+  }, []);
+
   var signOut = useCallback(async function() {
     await supabase.auth.signOut();
     setProfile(null);
@@ -200,6 +220,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp: signUp,
     signIn: signIn,
     signInWithGoogle: signInWithGoogle,
+    signInWithApple: signInWithApple,
+    signInWithFacebook: signInWithFacebook,
     signOut: signOut,
     refreshProfile: refreshProfile,
     canAfford: canAfford,

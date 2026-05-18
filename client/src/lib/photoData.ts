@@ -162,9 +162,9 @@ var STOCK_DUMPS: Dump[] = [
     title: "Studio Session",
     subtitle: "Music / Creative / Dark Tones",
     photos: [
-      stock("11", "1598488035139-bdbb2231cb64", "Vinyl record player closeup", false, "Studio"),
+      stock("11", "1485579149621-3123dd979885", "Vinyl record player closeup", false, "Studio"),
       stock("12", "1511671782779-c97d3d27a1d4", "Concert crowd, stage lights", false, "Nightlife"),
-      stock("13", "1558618666-fcd25c85f82e", "Headphones on mixing desk", false, "Studio"),
+      stock("13", "1511379938547-c1f69419868d", "Headphones on mixing desk", false, "Studio"),
       stock("14", "1493225457124-a3eb161ffa5f", "Abstract light painting, long exposure", false, "Abstract"),
       stock("15", "1501612780327-45045538702b", "Gym weights, dark moody lighting", false, "Fitness"),
     ],
@@ -186,10 +186,10 @@ var STOCK_POOL: Photo[] = [
   stock("p12", "1534438327276-14e5300c3a48", "Gym equipment, moody light", false, "Fitness"),
   stock("p13", "1511367461989-f85a21fda167", "Cocktail bar, amber lighting", false, "Nightlife"),
   stock("p14", "1504805572947-34fad45aed93", "Abstract colorful paint swirls", true, "Abstract"),
-  stock("p15", "1493106819501-66d381c466f3", "Woman reading in cafe window", false, "Lifestyle"),
+  stock("p15", "1544005313-94ddf0286df2", "Woman in cozy cafe", false, "Lifestyle"),
   stock("p16", "1506905925346-21bda4d32df4", "Autumn leaves, park path", false, "Travel"),
   stock("p17", "1596558450268-9c27524ba856", "Street art mural, vibrant colors", false, "Art"),
-  stock("p18", "1486413869548-a265e6714e80", "Cat portrait, studio lighting", true, "Portrait"),
+  stock("p18", "1526336024174-e58f5cdd8e13", "Cat portrait, studio lighting", true, "Portrait"),
 ];
 
 // ── Exports — pick the right set ───────────────────────────────────────────

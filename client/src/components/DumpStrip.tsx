@@ -94,9 +94,9 @@ export default function DumpStrip({
   var dumpNumStr = dump.number < 10 ? "0" + dump.number : "" + dump.number;
 
   return (
-    <section data-dump-id={dump.id} data-tour={"dump-" + dump.number} style={{ maxWidth: "1100px", margin: "56px auto", padding: "0 32px" }}>
+    <section data-dump-id={dump.id} data-tour={"dump-" + dump.number} style={{ maxWidth: "1100px", margin: "40px auto", padding: "0 32px" }}>
       {/* Dump Header */}
-      <div style={{ marginBottom: "32px", paddingBottom: "24px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ marginBottom: "20px", paddingBottom: "16px", borderBottom: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "var(--accent)", marginBottom: "8px" }}>
             {"DUMP " + dumpNumStr}

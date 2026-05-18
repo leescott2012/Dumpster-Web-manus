@@ -6,12 +6,14 @@
 import { useState, useEffect } from "react";
 import {
   X, Sparkles, Archive, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Save, Instagram,
+  LogOut, User, Share2,
 } from "lucide-react";
 import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules } from "@/lib/captionPool";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-type Tab = "ai" | "dumps" | "pool" | "appearance" | "about";
+type Tab = "ai" | "dumps" | "pool" | "appearance" | "about" | "social";
 
 interface Folder {
   id: Tab;
@@ -29,6 +31,7 @@ interface MainMenuProps {
   onIGScrub: () => void;
   onReset?: () => void;
   onTour?: () => void;
+  onSignIn?: () => void;
   dumpCount: number;
   poolCount: number;
 }
@@ -69,10 +72,11 @@ export function initAccent() {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, onReset, onTour, dumpCount, poolCount }: MainMenuProps) {
+export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, onReset, onTour, onSignIn, dumpCount, poolCount }: MainMenuProps) {
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const [visible, setVisible] = useState(false);
   const [accent, setAccent] = useState(loadAccent);
+  const { user, profile, signOut } = useAuth();
 
   useEffect(() => {
     if (open) {
@@ -143,6 +147,11 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
       icon: <Paintbrush size={18} strokeWidth={1.5} />,
     },
     {
+      id: "social", title: "SOCIAL MEDIA", tabColor: "#C8B0A0",
+      subtitle: "Connect & export",
+      icon: <Share2 size={18} strokeWidth={1.5} />,
+    },
+    {
       id: "about", title: "ABOUT / HELP", tabColor: "#C8B8A0",
       subtitle: "Dumpster · Version 1.0",
       icon: <Info size={18} strokeWidth={1.5} />,
@@ -159,6 +168,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
       {/* Backdrop */}
       <div
         onClick={() => activeTab ? setActiveTab(null) : onClose()}
+        onTouchMove={function(e) { e.preventDefault(); }}
         style={{
           position: "absolute", inset: 0,
           background: "rgba(0,0,0,0.85)",
@@ -166,6 +176,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
           WebkitBackdropFilter: "blur(6px)",
           opacity: visible ? 1 : 0,
           transition: "opacity 0.3s ease",
+          touchAction: "none",
         }}
       />
 
@@ -180,6 +191,8 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
         transition: "transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)",
         overflowY: "auto",
         overflowX: "hidden",
+        overscrollBehavior: "contain",
+        WebkitOverflowScrolling: "touch",
       }}>
         {/* Header */}
         <div style={{
@@ -227,7 +240,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, padding: "16px 20px 40px", position: "relative", overflow: "hidden" }}>
+        <div style={{ flex: 1, padding: "16px 20px 40px", position: "relative", overflowX: "hidden", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
           {/* Folder list */}
           <div style={{
             display: "flex", flexDirection: "column", gap: 0,
@@ -236,6 +249,78 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
             position: activeTab ? "absolute" : "relative",
             width: "calc(100% - 40px)",
           }}>
+            {/* User profile card */}
+            {user ? (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "14px 16px", marginBottom: 8,
+                background: "#141414", border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 12,
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: "50%",
+                  background: "var(--accent)", display: "flex",
+                  alignItems: "center", justifyContent: "center",
+                  fontSize: 14, fontWeight: 800, color: "#000",
+                  flexShrink: 0, textTransform: "uppercase" as const,
+                }}>
+                  {(profile?.display_name || user.email || "U").charAt(0)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                    {profile?.display_name || user.email || "User"}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.06em", textTransform: "uppercase" as const, marginTop: 1 }}>
+                    {(profile?.subscription_tier === "pro" ? "PRO" : "FREE") + " · " + (profile ? (profile.credits + profile.daily_credits_remaining) : 0) + " credits"}
+                  </div>
+                </div>
+                <button
+                  onClick={function() { signOut(); onClose(); }}
+                  style={{
+                    background: "none", border: "none", color: "#555",
+                    cursor: "pointer", padding: 6, display: "flex",
+                    alignItems: "center", flexShrink: 0,
+                  }}
+                  title="Sign out"
+                >
+                  <LogOut size={15} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={function() { onClose(); if (onSignIn) setTimeout(onSignIn, 350); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  width: "100%", padding: "14px 16px", marginBottom: 8,
+                  background: "rgba(var(--accent-rgb),0.08)",
+                  border: "1px solid rgba(var(--accent-rgb),0.2)",
+                  borderRadius: 12, cursor: "pointer",
+                  fontFamily: "inherit", textAlign: "left",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={function(e) { e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.4)"; }}
+                onMouseLeave={function(e) { e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.2)"; }}
+              >
+                <div style={{
+                  width: 36, height: 36, borderRadius: "50%",
+                  background: "rgba(var(--accent-rgb),0.15)", display: "flex",
+                  alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}>
+                  <User size={16} color="var(--accent)" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)" }}>
+                    Sign In
+                  </div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 1 }}>
+                    Save dumps · Get 15 free AI credits
+                  </div>
+                </div>
+                <ChevronRight size={14} color="rgba(var(--accent-rgb),0.4)" style={{ flexShrink: 0 }} />
+              </button>
+            )}
+
             {folders.map((folder, i) => (
               <FolderRow
                 key={folder.id}
@@ -267,6 +352,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
                 <AppearancePanel accent={accent} onAccentChange={handleAccentChange} />
               )}
               {activeTab === "about" && <AboutPanel onReset={onReset} onTour={onTour ? function() { onClose(); setTimeout(function() { if (onTour) onTour(); }, 400); } : undefined} />}
+              {activeTab === "social" && <SocialMediaPanel />}
             </div>
           )}
         </div>
@@ -613,6 +699,90 @@ function AppearancePanel({ accent, onAccentChange }: {
 
       <div style={{ marginTop: 36, fontSize: 11, color: "rgba(255,255,255,0.15)", fontStyle: "italic" }}>
         More appearance options coming soon — dark/light mode, card size.
+      </div>
+    </div>
+  );
+}
+
+// ── Social Media Panel ──────────────────────────────────────────────────────
+
+function SocialMediaPanel() {
+  var platforms = [
+    {
+      name: "Instagram",
+      icon: <Instagram size={20} strokeWidth={1.5} />,
+      color: "#E1306C",
+      desc: "Export carousels directly to Instagram",
+    },
+    {
+      name: "TikTok",
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.78a8.28 8.28 0 003.76.91V6.24a4.85 4.85 0 01-1-.14v.59z"/></svg>,
+      color: "#fff",
+      desc: "Share photo dumps as TikTok slideshows",
+    },
+    {
+      name: "Twitter / X",
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>,
+      color: "#999",
+      desc: "Post carousel threads to X",
+    },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>
+        Connect your accounts
+      </div>
+
+      {platforms.map(function(p) {
+        return (
+          <div
+            key={p.name}
+            style={{
+              display: "flex", alignItems: "center", gap: 14,
+              background: "#141414", border: "1px solid rgba(255,255,255,0.06)",
+              borderRadius: 14, padding: "16px 18px",
+            }}
+          >
+            <div style={{
+              width: 38, height: 38, borderRadius: 10,
+              background: p.color + "1a", border: "1px solid " + p.color + "40",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: p.color, flexShrink: 0,
+            }}>
+              {p.icon}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>
+                {p.name}
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
+                {p.desc}
+              </div>
+            </div>
+            <div style={{
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
+              color: "#555", textTransform: "uppercase",
+              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 6, padding: "4px 8px",
+            }}>
+              SOON
+            </div>
+          </div>
+        );
+      })}
+
+      <div style={{
+        marginTop: 16, padding: "14px 16px",
+        background: "rgba(var(--accent-rgb),0.04)", border: "1px solid rgba(var(--accent-rgb),0.12)",
+        borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>
+          Coming in v1.1
+        </div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.6 }}>
+          Connect your social accounts to export carousels directly. Schedule posts, manage captions, and track engagement.
+        </div>
       </div>
     </div>
   );

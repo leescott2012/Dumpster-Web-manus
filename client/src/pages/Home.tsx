@@ -59,6 +59,23 @@ function HomeContent() {
   var [captionCount, setCaptionCount] = useState<number>(function() { return loadCaptions().length; });
   // Refresh caption count when the tab changes (in case caps were added)
   useEffect(function() { setCaptionCount(loadCaptions().length); }, [poolTab]);
+
+  // Lock body scroll when any full-screen overlay is open (fixes mobile menu bug)
+  useEffect(function() {
+    if (menuOpen) {
+      document.body.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+      document.body.style.width = "100%";
+      document.body.style.top = "-" + window.scrollY + "px";
+    } else {
+      var scrollY = document.body.style.top;
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.width = "";
+      document.body.style.top = "";
+      window.scrollTo(0, parseInt(scrollY || "0") * -1);
+    }
+  }, [menuOpen]);
   // Detect if user has uploaded any of their own photos (not stock)
   var hasUserPhotos = pool.some(function(p) { return p.id.startsWith("upload-"); })
     || dumps.some(function(d) { return d.photos.some(function(p) { return p.id.startsWith("upload-"); }); });
@@ -414,9 +431,13 @@ function HomeContent() {
         }} />
       )}
 
+      {/* ── Two-column layout wrapper ── */}
+      <div className="dumpster-layout">
+      <div className="dumpster-dumps">
+
       {/* Header */}
       <header style={{
-        maxWidth: "1100px", margin: "0 auto", padding: "60px 32px 40px",
+        maxWidth: "1100px", margin: "0 auto", padding: "32px 32px 24px",
         borderBottom: "1px solid #1e1e1e", position: "relative",
         zIndex: selectionMode ? 50 : "auto",
         opacity: selectionMode ? 0.3 : 1, transition: "opacity 0.3s",
@@ -520,15 +541,13 @@ function HomeContent() {
         </button>
       </div>
 
-      {/* Divider */}
-      <div style={{ maxWidth: "1100px", margin: "40px auto 0", padding: "0 32px", opacity: selectionMode ? 0.3 : 1, transition: "opacity 0.3s" }}>
-        <hr style={{ border: "none", borderTop: "1px solid #1e1e1e" }} />
-      </div>
+      </div>{/* end .dumpster-dumps */}
 
-      {/* Pool Section — pill toggle + Photos or Captions tab */}
-      <div id="photo-pool" style={{ position: "relative", zIndex: selectionMode ? 200 : "auto", paddingTop: 40 }}>
-        {/* Centered POOL divider — matches iOS native */}
-        <div style={{
+      {/* ── Right column: Pool ── */}
+      <aside className="dumpster-pool">
+      <div id="photo-pool" style={{ position: "relative", zIndex: selectionMode ? 200 : "auto", paddingTop: 16 }}>
+        {/* Centered POOL divider — visible only on mobile (hidden on desktop via CSS) */}
+        <div className="pool-divider-mobile" style={{
           maxWidth: 1100, margin: "0 auto 18px", padding: "0 32px",
           display: "flex", alignItems: "center", gap: 16,
         }}>
@@ -587,6 +606,8 @@ function HomeContent() {
           <CaptionPool />
         )}
       </div>
+      </aside>{/* end .dumpster-pool */}
+      </div>{/* end .dumpster-layout */}
 
       {/* Footer */}
       <footer style={{
@@ -605,6 +626,7 @@ function HomeContent() {
         onIGScrub={function() { setIGScrubOpen(true); }}
         onReset={handleReset}
         onTour={startTour}
+        onSignIn={function() { setAuthSheetOpen(true); }}
         dumpCount={dumps.length}
         poolCount={pool.length}
       />

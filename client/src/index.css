@@ -158,6 +158,65 @@ body {
   overflow: hidden !important;
 }
 
+/* ── Two-column desktop layout ────────────────────────────────────────────── */
+.dumpster-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 52px);
+}
+
+.dumpster-dumps {
+  flex: 1;
+  min-width: 0;
+}
+
+.dumpster-pool {
+  width: 100%;
+}
+
+@media (min-width: 1080px) {
+  .dumpster-layout {
+    flex-direction: row;
+    align-items: flex-start;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+
+  .dumpster-dumps {
+    flex: 1;
+    min-width: 0;
+    padding-bottom: 80px;
+  }
+
+  .dumpster-pool {
+    width: 400px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 52px;
+    height: calc(100vh - 52px);
+    overflow-y: auto;
+    border-left: 1px solid #1e1e1e;
+  }
+
+  /* Inside the pool column, remove max-width so it fills the sidebar */
+  .dumpster-pool section {
+    max-width: none !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+
+  /* Tighten dump spacing in two-col mode */
+  .dumpster-dumps section[data-dump-id] {
+    margin-top: 24px !important;
+    margin-bottom: 24px !important;
+  }
+
+  /* Hide POOL divider on desktop — sidebar border-left is enough */
+  .pool-divider-mobile {
+    display: none !important;
+  }
+}
+
 @layer components {
   .container {
     width: 100%;
