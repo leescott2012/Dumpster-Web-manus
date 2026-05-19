@@ -6,7 +6,7 @@
  * Shows once per device (localStorage flag).
  */
 import { useState, useEffect } from "react";
-import { Sparkles, ArrowUpDown, Type, Upload, X, ChevronRight } from "lucide-react";
+import { Sparkles, ArrowUpDown, Type, Upload, X, ChevronRight, Share } from "lucide-react";
 import { IS_OWNER } from "@/lib/photoData";
 
 var SEEN_KEY = "dumpster_welcome_seen_v1";
@@ -71,6 +71,9 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
       border: "rgba(74,222,128,0.25)",
     },
   ];
+
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  var isStandalone = window.matchMedia("(display-mode: standalone)").matches;
 
   return (
     <div style={{
@@ -173,6 +176,23 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
 
           {/* CTAs */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {isIOS && !isStandalone && (
+              <div style={{
+                background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.1)",
+                borderRadius: 12, padding: "12px", marginBottom: 8,
+                display: "flex", alignItems: "center", gap: 12,
+              }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8, background: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }}>
+                  <Share size={16} color="#007aff" />
+                </div>
+                <div style={{ fontSize: 11, color: "#aaa", lineHeight: 1.4 }}>
+                  Tap <span style={{ color: "#fff", fontWeight: 600 }}>Share</span> then <span style={{ color: "#fff", fontWeight: 600 }}>"Add to Home Screen"</span> for the full native experience.
+                </div>
+              </div>
+            )}
             <button
               onClick={function() { dismiss(); setTimeout(onTourClick, 450); }}
               style={{
