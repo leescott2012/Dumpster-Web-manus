@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { INITIAL_DUMPS, INITIAL_POOL, type Dump, type Photo } from "@/lib/photoData";
+import { INITIAL_DUMPS, INITIAL_POOL, CLEAN_SLATE_DUMPS, type Dump, type Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
 import type { SuggestedCluster } from "@/components/AISuggestSheet";
 
@@ -48,15 +48,47 @@ function deepClonePool(pool: Photo[]): Photo[] {
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
+import { useAuth } from "@/contexts/AuthContext";
+
 export function useCarouselState() {
+  var { user } = useAuth();
+  
   var [dumps, rawSetDumps] = useState<Dump[]>(function() {
     var saved = loadSaved<Dump[]>(SK_DUMPS);
-    return saved !== null ? saved : deepCloneDumps(INITIAL_DUMPS);
+    if (saved !== null) return saved;
+    // If logged in and not owner, start with clean slate
+    if (user && !IS_OWNER) return deepCloneDumps(CLEAN_SLATE_DUMPS);
+    return deepCloneDumps(INITIAL_DUMPS);
   });
   var [pool, rawSetPool] = useState<Photo[]>(function() {
     var saved = loadSaved<Photo[]>(SK_POOL);
-    return saved !== null ? saved : deepClonePool(INITIAL_POOL);
+    if (saved !== null) return saved;
+    // If logged in and not owner, start with empty pool
+    if (user && !IS_OWNER) return [];
+    return deepClonePool(INITIAL_POOL);
   });
+
+  // Handle login/logout state changes for defaults
+  useEffect(function() {
+    var savedDumps = loadSaved<Dump[]>(SK_DUMPS);
+    var savedPool = loadSaved<Photo[]>(SK_POOL);
+    
+    if (savedDumps === null) {
+      if (user && !IS_OWNER) {
+        rawSetDumps(deepCloneDumps(CLEAN_SLATE_DUMPS));
+      } else {
+        rawSetDumps(deepCloneDumps(INITIAL_DUMPS));
+      }
+    }
+    
+    if (savedPool === null) {
+      if (user && !IS_OWNER) {
+        rawSetPool([]);
+      } else {
+        rawSetPool(deepClonePool(INITIAL_POOL));
+      }
+    }
+  }, [user]);
 
   // Refs that always track latest state (for beforeunload backup)
   var dumpsRef = useRef(dumps);

@@ -196,3 +196,14 @@ var STOCK_POOL: Photo[] = [
 
 export var INITIAL_DUMPS: Dump[] = IS_OWNER ? OWNER_DUMPS : STOCK_DUMPS;
 export var INITIAL_POOL: Photo[] = IS_OWNER ? OWNER_POOL : STOCK_POOL;
+
+export var CLEAN_SLATE_DUMPS: Dump[] = [
+  {
+    id: "dump-initial",
+    number: 1,
+    title: "My First Dump",
+    subtitle: "Tap + to add photos",
+    photos: [],
+  }
+];
+
