@@ -23,16 +23,16 @@ interface TourStep {
 
 var STEPS: TourStep[] = [
   {
-    target: "[data-tour='dump-1']",
+    target: "[data-tour^='dump-']",
     title: "Your Dumps",
-    body: "Each dump is an Instagram carousel. Photos play left to right. You have 3 demo dumps to start with.",
+    body: "Each dump is an Instagram carousel. Photos play left to right. Start by adding photos to your first dump.",
     icon: ArrowUpDown,
     iconColor: "var(--accent)",
     position: "bottom",
     scrollTo: true,
   },
   {
-    target: "[data-photo-id='stock-01']",
+    target: ".photo-card",
     title: "Tap to Select",
     body: "Tap any photo to highlight it. Then tap the ... dots in the corner for options like favorite, remove, or recycle.",
     icon: Sparkles,
