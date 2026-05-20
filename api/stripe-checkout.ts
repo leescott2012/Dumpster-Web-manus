@@ -1,9 +1,14 @@
 /**
  * POST /api/stripe-checkout — creates a Stripe Checkout Session
- * Body: { type: "credits" | "subscription", packId?: string, planId?: string, userId: string }
+ * Body: { type: "credits" | "subscription", packId?: string, planId?: string }
+ *
+ * userId is taken from the Supabase JWT (Authorization: Bearer ...), NEVER from the body.
+ * This prevents an attacker from crediting a different account they don't own.
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import Stripe from "stripe";
+import { getUserFromRequest } from "../server/creditGate.js";
+import { enforceRateLimit } from "../server/rateLimit.js";
 
 export const config = { runtime: "nodejs", maxDuration: 10, memory: 256 };
 
@@ -38,11 +43,22 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   try {
+    // 1) Auth — pull userId from JWT, never trust the request body
+    var userId = await getUserFromRequest(req);
+    if (!userId) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Sign in to start checkout.", code: "auth_required" }));
+      return;
+    }
+
+    // 2) Rate limit checkout creation (anti-spam)
+    var rlOk = await enforceRateLimit(req, res, "stripe_checkout", userId);
+    if (!rlOk) return;
+
     var body = await parseBody(req) as {
       type: "credits" | "subscription";
       packId?: string;
       planId?: string;
-      userId: string;
     };
 
     var itemId = body.type === "credits" ? body.packId : body.planId;
@@ -69,7 +85,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       success_url: origin + "?payment=success&session_id={CHECKOUT_SESSION_ID}",
       cancel_url: origin + "?payment=cancelled",
       metadata: {
-        userId: body.userId,
+        userId: userId,
         type: body.type,
         itemId: itemId,
       },
@@ -79,7 +95,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     // For subscriptions, add subscription metadata too
     if (isSubscription) {
       sessionParams.subscription_data = {
-        metadata: { userId: body.userId },
+        metadata: { userId: userId },
       };
     }
 

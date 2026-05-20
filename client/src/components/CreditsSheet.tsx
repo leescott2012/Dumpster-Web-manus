@@ -4,8 +4,10 @@
  */
 import { useState, useCallback, useEffect } from "react";
 import { X, Zap, Crown, Clock, Loader, Check, Gift, Flame } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { CREDIT_PACKS, SUBSCRIPTION_PLANS, CREDIT_COSTS, CREDIT_LABELS } from "@/lib/credits";
+import { getAuthHeaders } from "@/lib/supabase";
 
 interface CreditsSheetProps {
   open: boolean;
@@ -32,17 +34,21 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
     if (!user) { onNeedAuth(); return; }
     setLoading(packId);
     try {
+      var authH = await getAuthHeaders();
       var res = await fetch("/api/stripe-checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "credits", packId: packId, userId: user.id }),
+        headers: Object.assign({ "Content-Type": "application/json" }, authH),
+        body: JSON.stringify({ type: "credits", packId: packId }),
       });
       var data = await res.json() as { url?: string; error?: string };
       if (data.url) {
         window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
       }
-    } catch {
-      // noop
+    } catch (e) {
+      toast.error("Checkout failed. Please try again.");
+      console.error("[CreditsSheet] handleBuyCredits failed:", e);
     }
     setLoading(null);
   }, [user, onNeedAuth]);
@@ -51,17 +57,21 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
     if (!user) { onNeedAuth(); return; }
     setLoading(planId);
     try {
+      var authH = await getAuthHeaders();
       var res = await fetch("/api/stripe-checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "subscription", planId: planId, userId: user.id }),
+        headers: Object.assign({ "Content-Type": "application/json" }, authH),
+        body: JSON.stringify({ type: "subscription", planId: planId }),
       });
       var data = await res.json() as { url?: string; error?: string };
       if (data.url) {
         window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
       }
-    } catch {
-      // noop
+    } catch (e) {
+      toast.error("Checkout failed. Please try again.");
+      console.error("[CreditsSheet] handleSubscribe failed:", e);
     }
     setLoading(null);
   }, [user, onNeedAuth]);

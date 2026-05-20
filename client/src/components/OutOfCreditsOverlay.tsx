@@ -4,8 +4,10 @@
  */
 import { useState, useCallback, useEffect } from "react";
 import { Zap, X, Crown, Loader, User, Flame } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { CREDIT_PACKS, CREDIT_COSTS, CREDIT_LABELS } from "@/lib/credits";
+import { getAuthHeaders } from "@/lib/supabase";
 
 interface OutOfCreditsOverlayProps {
   open: boolean;
@@ -37,17 +39,21 @@ export default function OutOfCreditsOverlay({ open, action, onClose, onAuthClick
     if (!user) { onAuthClick(); return; }
     setLoading(packId);
     try {
+      var authH = await getAuthHeaders();
       var res = await fetch("/api/stripe-checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "credits", packId: packId, userId: user.id }),
+        headers: Object.assign({ "Content-Type": "application/json" }, authH),
+        body: JSON.stringify({ type: "credits", packId: packId }),
       });
       var data = await res.json() as { url?: string; error?: string };
       if (data.url) {
         window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
       }
-    } catch {
-      // noop
+    } catch (e) {
+      toast.error("Checkout failed. Please try again.");
+      console.error("[OutOfCreditsOverlay] handleBuy failed:", e);
     }
     setLoading(null);
   }, [user, onAuthClick]);

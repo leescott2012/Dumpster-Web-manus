@@ -1,5 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 import path from "node:path";
 import { defineConfig, loadEnv } from "vite";
 import type { Plugin } from "vite";
@@ -25,8 +26,30 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, path.resolve(import.meta.dirname), "");
   Object.assign(process.env, env);
 
+  // Only enable Sentry source-map upload when the auth token is present.
+  // Lets local builds and PR previews work without Sentry credentials.
+  var sentryEnabled = Boolean(
+    process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
+  );
+
   return {
-    plugins: [react(), tailwindcss(), aiSuggestPlugin()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      aiSuggestPlugin(),
+      ...(sentryEnabled
+        ? [
+            sentryVitePlugin({
+              org: process.env.SENTRY_ORG,
+              project: process.env.SENTRY_PROJECT,
+              authToken: process.env.SENTRY_AUTH_TOKEN,
+              // Tag the release with the commit SHA when Vercel provides it
+              release: { name: process.env.VERCEL_GIT_COMMIT_SHA },
+              telemetry: false,
+            }),
+          ]
+        : []),
+    ],
     resolve: {
       alias: {
         "@": path.resolve(import.meta.dirname, "client", "src"),
@@ -39,6 +62,9 @@ export default defineConfig(({ mode }) => {
       outDir: path.resolve(import.meta.dirname, "dist/public"),
       emptyOutDir: true,
       target: ["es2015", "safari13"],
+      // "hidden" = generate .map files for Sentry but don't link them from
+      // the JS bundle, so they aren't shipped to end-users.
+      sourcemap: sentryEnabled ? "hidden" : false,
     },
     server: {
       port: 3000,
