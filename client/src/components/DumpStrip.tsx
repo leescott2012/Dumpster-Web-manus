@@ -21,13 +21,17 @@ interface DumpStripProps {
   onPlusClick: (dumpId: string) => void;
   onMenuClick?: (dumpId: string) => void;
   onCaptionClick?: (dumpId: string) => void;
+  /** Upload files from device — wired to the "Add More" card on empty dumps */
+  onUploadFromDevice?: (files: FileList) => void;
   isCustom?: boolean;
 }
 
 export default function DumpStrip({
   dump, selectedPhotoId, onSelectPhoto, onDotsClick, onDoubleTapPhoto,
-  onDropPhoto, onDeleteDump, onRenameDump, onPlusClick, onMenuClick, onCaptionClick, isCustom = false,
+  onDropPhoto, onDeleteDump, onRenameDump, onPlusClick, onMenuClick, onCaptionClick,
+  onUploadFromDevice, isCustom = false,
 }: DumpStripProps) {
+  var fileInputRef = useRef<HTMLInputElement>(null);
   var stripRef = useRef<HTMLDivElement>(null);
   var { dragState } = useDrag();
   var [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -308,8 +312,8 @@ export default function DumpStrip({
               </div>
             </div>
 
-            {/* Add More — secondary CTA, dashed border */}
-            <div onClick={function() { onPlusClick(dump.id); }}
+            {/* Add More — secondary CTA, opens device file picker */}
+            <div onClick={function() { fileInputRef.current?.click(); }}
               style={{
                 width: "200px", height: "260px", borderRadius: "10px",
                 border: "1.5px dashed #2a2a2a", background: "rgba(255,255,255,0.02)",
@@ -326,10 +330,21 @@ export default function DumpStrip({
                   Add More
                 </div>
                 <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.5, fontWeight: 400, letterSpacing: 0 }}>
-                  Pick more photos from your pool
+                  Upload from your device
                 </div>
               </div>
             </div>
+
+            {/* Hidden file input — triggered by Add More card */}
+            <input ref={fileInputRef} type="file" multiple accept="image/*,video/*"
+              style={{ display: "none" }}
+              onChange={function(e) {
+                if (e.target.files && e.target.files.length > 0 && onUploadFromDevice) {
+                  onUploadFromDevice(e.target.files);
+                  e.target.value = "";
+                }
+              }}
+            />
           </>
         )}
 

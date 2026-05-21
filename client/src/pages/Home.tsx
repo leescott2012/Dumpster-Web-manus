@@ -611,6 +611,7 @@ function HomeContent() {
               onRenameDump={renameDump} onPlusClick={handlePlusClick}
               onMenuClick={function(dumpId) { setActionSheetDumpId(dumpId); }}
               onCaptionClick={function(dumpId) { if (creditGate("ai_caption_casual")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
+              onUploadFromDevice={handleUploadPhotos}
               isCustom={!originalDumpIds.includes(dump.id)}
             />
           </div>
