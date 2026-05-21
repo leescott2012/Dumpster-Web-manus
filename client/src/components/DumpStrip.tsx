@@ -7,7 +7,7 @@ import { useRef, useState, useEffect } from "react";
 import PhotoCard from "./PhotoCard";
 import { useDrag } from "@/contexts/DragContext";
 import type { Dump, Photo } from "@/lib/photoData";
-import { Plus, Pencil, MoreHorizontal, Heart, ChevronLeft, ChevronRight, Copy, Check } from "lucide-react";
+import { Plus, Pencil, MoreHorizontal, Heart, ChevronLeft, ChevronRight, Copy, Check, Layers, CopyPlus } from "lucide-react";
 
 interface DumpStripProps {
   dump: Dump;
@@ -281,8 +281,60 @@ export default function DumpStrip({
           }} />
         )}
 
-        {/* "+" card at end of strip */}
-        {!dragState.isDragging && !isOverCapacity && (
+        {/* Empty dump → twin "From Pool" / "Add More" cards (matches iOS) */}
+        {!dragState.isDragging && !isOverCapacity && dump.photos.length === 0 && (
+          <>
+            {/* From Pool — primary CTA, solid accent border */}
+            <div data-tour="plus-card" onClick={function() { onPlusClick(dump.id); }}
+              style={{
+                width: "200px", height: "260px", borderRadius: "10px",
+                border: "1.5px solid rgba(var(--accent-rgb),0.45)",
+                background: "rgba(var(--accent-rgb),0.06)",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px",
+                color: "var(--accent)", fontSize: "13px", textAlign: "center", flexShrink: 0, cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.12)"; e.currentTarget.style.borderColor = "var(--accent)"; }}
+              onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.06)"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.45)"; }}
+            >
+              <Layers size={28} strokeWidth={1.6} />
+              <div style={{ textAlign: "center", padding: "0 12px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase" as const, marginBottom: "4px" }}>
+                  From Pool
+                </div>
+                <div style={{ fontSize: "10px", color: "#999", lineHeight: 1.5, fontWeight: 400, letterSpacing: 0 }}>
+                  Pick photos already imported
+                </div>
+              </div>
+            </div>
+
+            {/* Add More — secondary CTA, dashed border */}
+            <div onClick={function() { onPlusClick(dump.id); }}
+              style={{
+                width: "200px", height: "260px", borderRadius: "10px",
+                border: "1.5px dashed #2a2a2a", background: "rgba(255,255,255,0.02)",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px",
+                color: "#999", fontSize: "13px", textAlign: "center", flexShrink: 0, cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#999"; }}
+            >
+              <CopyPlus size={28} strokeWidth={1.6} />
+              <div style={{ textAlign: "center", padding: "0 12px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase" as const, marginBottom: "4px" }}>
+                  Add More
+                </div>
+                <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.5, fontWeight: 400, letterSpacing: 0 }}>
+                  Pick more photos from your pool
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Compact "+" card — shown when dump has 1-19 photos */}
+        {!dragState.isDragging && !isOverCapacity && dump.photos.length > 0 && (
           <div data-tour="plus-card" onClick={function() { onPlusClick(dump.id); }}
             style={{
               width: "200px", height: "260px", borderRadius: "10px", border: "2px dashed #2a2a2a",
