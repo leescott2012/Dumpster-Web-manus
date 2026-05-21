@@ -156,9 +156,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   var signOut = useCallback(async function() {
+    // Clear the per-user "already cleared demo" flag so next sign-in starts fresh
+    if (user) {
+      try { localStorage.removeItem("dumpster_cleared_" + user.id); } catch {}
+    }
     await supabase.auth.signOut();
     setProfile(null);
-  }, []);
+  }, [user]);
 
   var refreshProfile = useCallback(async function() {
     if (user) await fetchProfile(user.id);

@@ -35,10 +35,11 @@ import GuidedTour, { isTourCompleted } from "@/components/GuidedTour";
 import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions } from "@/lib/captionPool";
+import { uploadPhotoToCloud, saveCloudState, loadCloudState } from "@/lib/cloudSync";
 
 function HomeContent() {
   var {
-    dumps, pool, resetAll,
+    dumps, pool, resetAll, clearDemoContent, replaceState,
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, createNewDump, deleteDump,
@@ -104,7 +105,68 @@ function HomeContent() {
   var [authSheetOpen, setAuthSheetOpen] = useState(false);
   var [creditsSheetOpen, setCreditsSheetOpen] = useState(false);
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
-  var { canAfford } = useAuth();
+  var { user, canAfford } = useAuth();
+
+  // ── Cloud sync: load on sign-in, debounced save on changes ────────────────
+  var [cloudReady, setCloudReady] = useState(false);
+  var cloudSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  var lastSavedHash = useRef("");
+
+  // On sign-in: load cloud state, or give a clean slate if no saved data
+  useEffect(function() {
+    if (!user) {
+      setCloudReady(false);
+      lastSavedHash.current = "";
+      return;
+    }
+
+    var cancelled = false;
+    loadCloudState(user.id).then(function(cloud) {
+      if (cancelled) return;
+
+      if (cloud && (cloud.dumps.length > 0 || cloud.pool.length > 0)) {
+        // User has saved cloud state — restore it
+        replaceState(cloud.dumps, cloud.pool);
+        lastSavedHash.current = JSON.stringify({ d: cloud.dumps, p: cloud.pool });
+      } else {
+        // No cloud state — first sign-in, clear demo content
+        var hasUploads = pool.some(function(p) { return p.id.startsWith("upload-"); })
+          || dumps.some(function(d) { return d.photos.some(function(p) { return p.id.startsWith("upload-"); }); });
+        if (!hasUploads) {
+          clearDemoContent();
+        }
+      }
+      setCloudReady(true);
+    });
+
+    return function() { cancelled = true; };
+  }, [user]);
+
+  // Debounced save — only runs after cloud load completes to avoid saving stale state
+  useEffect(function() {
+    if (!user || !cloudReady) return;
+
+    // Skip if nothing changed since last save
+    var hash = JSON.stringify({ d: dumps, p: pool });
+    if (hash === lastSavedHash.current) return;
+
+    // Skip saving if state is only demo/stock content (no point saving that)
+    var hasUserContent = pool.some(function(p) { return p.id.startsWith("upload-"); })
+      || dumps.some(function(d) { return d.photos.some(function(p) { return p.id.startsWith("upload-"); }); })
+      || dumps.some(function(d) { return d.id.startsWith("dump-"); });
+
+    if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
+    var uid = user.id;
+    cloudSaveTimer.current = setTimeout(function() {
+      saveCloudState(uid, dumps, pool).then(function(ok) {
+        if (ok) lastSavedHash.current = hash;
+      });
+    }, 2000);
+
+    return function() {
+      if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
+    };
+  }, [user, cloudReady, dumps, pool]);
 
   /**
    * Credit gate — checks if user can afford an AI action.
@@ -296,14 +358,74 @@ function HomeContent() {
 
   // Upload photos/videos from device
   var handleUploadPhotos = useCallback(function(files: FileList) {
+    var total = files.length;
+
+    // ── Signed-in: upload to Supabase Storage for persistent URLs ──
+    if (user) {
+      var uploadPromises: Promise<Photo | null>[] = [];
+      for (var i = 0; i < total; i++) {
+        (function(file: File) {
+          var photoId = "upload-" + nanoid(8);
+          var isVideo = file.type.startsWith("video/");
+
+          uploadPromises.push(
+            uploadPhotoToCloud(file, user.id, photoId).then(function(cloudUrl) {
+              if (cloudUrl) {
+                return {
+                  id: photoId,
+                  url: cloudUrl,
+                  alt: file.name,
+                  isFavorite: false,
+                  category: isVideo ? "Video" : "Uploaded",
+                } as Photo;
+              }
+              // Fallback: use data URL if cloud upload fails
+              return new Promise<Photo>(function(resolve) {
+                if (isVideo) {
+                  resolve({
+                    id: photoId,
+                    url: URL.createObjectURL(file),
+                    alt: file.name,
+                    isFavorite: false,
+                    category: "Video",
+                  });
+                } else {
+                  var reader = new FileReader();
+                  reader.onload = function(e) {
+                    resolve({
+                      id: photoId,
+                      url: (e.target && e.target.result ? e.target.result : "") as string,
+                      alt: file.name,
+                      isFavorite: false,
+                      category: "Uploaded",
+                    });
+                  };
+                  reader.readAsDataURL(file);
+                }
+              });
+            })
+          );
+        })(files[i]);
+      }
+
+      toast("Uploading " + total + (total === 1 ? " photo" : " photos") + "...");
+      Promise.all(uploadPromises).then(function(results) {
+        var photos = results.filter(function(p): p is Photo { return p !== null; });
+        if (photos.length > 0) {
+          addUploadedPhotos(photos);
+          toast("Added " + photos.length + (photos.length === 1 ? " item" : " items") + " to pool");
+        }
+      });
+      return;
+    }
+
+    // ── Guest: use data URLs (localStorage only, no cloud) ──
     var newPhotos: Photo[] = [];
     var processed = 0;
-    var total = files.length;
-    for (var i = 0; i < total; i++) {
+    for (var j = 0; j < total; j++) {
       (function(file: File) {
         var isVideo = file.type.startsWith("video/");
         if (isVideo) {
-          // Videos: use createObjectURL for instant preview
           var url = URL.createObjectURL(file);
           newPhotos.push({
             id: "upload-" + nanoid(8),
@@ -337,9 +459,9 @@ function HomeContent() {
           };
           reader.readAsDataURL(file);
         }
-      })(files[i]);
+      })(files[j]);
     }
-  }, [addUploadedPhotos]);
+  }, [user, addUploadedPhotos]);
 
   var handleAICreateDumps = useCallback(function(clusters: SuggestedCluster[]) {
     createDumpsFromSuggestions(clusters);

@@ -1,12 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { INITIAL_DUMPS, INITIAL_POOL, CLEAN_SLATE_DUMPS, IS_OWNER, type Dump, type Photo } from "@/lib/photoData";
-import { fetchCloudWorkspace, saveCloudWorkspace } from "@/lib/cloudSync";
+import { INITIAL_DUMPS, INITIAL_POOL, IS_OWNER, type Dump, type Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
 import type { SuggestedCluster } from "@/components/AISuggestSheet";
 
 // ── localStorage persistence ───────────────────────────────────────────────
-
-import { IS_OWNER } from "@/lib/photoData";
 
 var SK_DUMPS = IS_OWNER ? "dumpster_state_dumps_owner" : "dumpster_state_dumps_guest";
 var SK_POOL  = IS_OWNER ? "dumpster_state_pool_owner" : "dumpster_state_pool_guest";
@@ -57,8 +54,9 @@ export function useCarouselState() {
   var [dumps, rawSetDumps] = useState<Dump[]>(function() {
     var saved = loadSaved<Dump[]>(SK_DUMPS);
     if (saved !== null) return saved;
-    // If logged in and not owner, start with clean slate
-    if (user && !IS_OWNER) return deepCloneDumps(CLEAN_SLATE_DUMPS);
+    // If logged in and not owner, start with empty array — Home.tsx will
+    // either load the cloud workspace or call clearDemoContent() on first sign-in.
+    if (user && !IS_OWNER) return [];
     return deepCloneDumps(INITIAL_DUMPS);
   });
   var [pool, rawSetPool] = useState<Photo[]>(function() {
@@ -69,56 +67,9 @@ export function useCarouselState() {
     return deepClonePool(INITIAL_POOL);
   });
 
-  // Handle login/logout state changes and Cloud Sync
-  useEffect(function() {
-    async function sync() {
-      if (user && !IS_OWNER) {
-        const cloudData = await fetchCloudWorkspace(user.id);
-        if (cloudData) {
-          rawSetDumps(cloudData.dumps);
-          rawSetPool(cloudData.pool);
-          return;
-        }
-      }
-
-      // Fallback to local or defaults
-      var savedDumps = loadSaved<Dump[]>(SK_DUMPS);
-      var savedPool = loadSaved<Photo[]>(SK_POOL);
-      
-      if (savedDumps === null) {
-        if (user && !IS_OWNER) {
-          rawSetDumps(deepCloneDumps(CLEAN_SLATE_DUMPS));
-        } else {
-          rawSetDumps(deepCloneDumps(INITIAL_DUMPS));
-        }
-      } else {
-        rawSetDumps(savedDumps);
-      }
-      
-      if (savedPool === null) {
-        if (user && !IS_OWNER) {
-          rawSetPool([]);
-        } else {
-          rawSetPool(deepClonePool(INITIAL_POOL));
-        }
-      } else {
-        rawSetPool(savedPool);
-      }
-    }
-    
-    sync();
-  }, [user]);
-
-  // Debounced Cloud Save
-  useEffect(function() {
-    if (!user || IS_OWNER) return;
-
-    const timer = setTimeout(() => {
-      saveCloudWorkspace(user.id, { dumps, pool });
-    }, 2000); // 2 second debounce
-
-    return () => clearTimeout(timer);
-  }, [user, dumps, pool]);
+  // Cloud sync (load + debounced save) is orchestrated by Home.tsx via
+  // replaceState() and clearDemoContent() so the page can coordinate it with
+  // file uploads to Supabase Storage. This hook stays focused on local state.
 
   // Refs that always track latest state (for beforeunload backup)
   var dumpsRef = useRef(dumps);
@@ -173,6 +124,43 @@ export function useCarouselState() {
       localStorage.removeItem(SK_DUMPS);
       localStorage.removeItem(SK_POOL);
     } catch {}
+  }, []);
+
+  // Replace entire state at once — used by cloud sync to load saved state.
+  var replaceState = useCallback(function(newDumps: Dump[], newPool: Photo[]) {
+    rawSetDumps(newDumps);
+    rawSetPool(newPool);
+    persist(SK_DUMPS, newDumps);
+    persist(SK_POOL, newPool);
+    dumpsRef.current = newDumps;
+    poolRef.current = newPool;
+  }, []);
+
+  // Clear demo/stock content — gives authenticated users a clean slate.
+  // Keeps any user-uploaded photos (id starts with "upload-"), removes stock ones.
+  var clearDemoContent = useCallback(function() {
+    rawSetDumps(function(prev) {
+      // Keep only dumps that have at least one user-uploaded photo
+      var kept = prev.filter(function(d) {
+        return d.photos.some(function(p) { return p.id.startsWith("upload-"); });
+      }).map(function(d) {
+        // Strip any stock photos from kept dumps
+        return {
+          id: d.id, number: d.number, title: d.title, subtitle: d.subtitle,
+          photos: d.photos.filter(function(p) { return p.id.startsWith("upload-"); }),
+          captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating,
+        };
+      });
+      persist(SK_DUMPS, kept);
+      dumpsRef.current = kept;
+      return kept;
+    });
+    rawSetPool(function(prev) {
+      var kept = prev.filter(function(p) { return p.id.startsWith("upload-"); });
+      persist(SK_POOL, kept);
+      poolRef.current = kept;
+      return kept;
+    });
   }, []);
 
   var movePhotoWithinDump = useCallback(function(dumpId: string, fromIndex: number, toIndex: number) {
@@ -466,7 +454,7 @@ export function useCarouselState() {
   }, []);
 
   return {
-    dumps, pool, resetAll,
+    dumps, pool, resetAll, clearDemoContent, replaceState,
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, createNewDump, deleteDump,

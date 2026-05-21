@@ -85,15 +85,15 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
       opacity: leaving ? 0 : 1,
       transition: "opacity 0.35s ease",
     }}>
-      {/* Close button */}
+      {/* Close button — pushed below notch/dynamic island */}
       <button
         onClick={dismiss}
         style={{
-          position: "absolute", top: 16, right: 16, zIndex: 2,
+          position: "absolute", top: "calc(env(safe-area-inset-top, 12px) + 12px)", right: 20, zIndex: 2,
           width: 36, height: 36, borderRadius: "50%",
-          background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+          background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          cursor: "pointer", color: "#666", transition: "all 0.15s",
+          cursor: "pointer", color: "#888", transition: "all 0.15s",
         }}
       >
         <X size={16} />
@@ -104,6 +104,8 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
         maxWidth: 420, width: "100%",
         background: "#0e0e0e", border: "1px solid #1e1e1e",
         borderRadius: 20, overflow: "hidden",
+        maxHeight: "calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 48px)",
+        overflowY: "auto",
         transform: leaving ? "scale(0.96)" : "scale(1)",
         transition: "transform 0.35s ease",
       }}>
