@@ -181,6 +181,7 @@ export default function PhotoCard({
   }
 
   var cardTransform = isPressed ? "scale(0.97)" : isDragOver ? "scale(1.03)" : "scale(1)";
+  var cardShadow = isPressed ? "0 4px 12px rgba(0,0,0,0.5)" : isDragOver ? "0 0 20px rgba(var(--accent-rgb), 0.4)" : "none";
   var widthPx = width + "px";
   var heightPx = height + "px";
   var borderVal = "2px solid " + borderColor;
@@ -196,8 +197,9 @@ export default function PhotoCard({
       className="relative flex-shrink-0 overflow-hidden select-none"
       style={{
         width: widthPx, borderRadius: "10px", border: borderVal,
-        transition: "border-color 0.2s, transform 0.15s, opacity 0.15s",
+        transition: "border-color 0.2s, transform 0.15s, opacity 0.15s, box-shadow 0.15s",
         transform: cardTransform, scrollSnapAlign: "start",
+        boxShadow: cardShadow,
         opacity: isBeingDragged ? 0.3 : 1,
         WebkitTouchCallout: "none",
         cursor: "pointer",
