@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { INITIAL_DUMPS, INITIAL_POOL, CLEAN_SLATE_DUMPS, type Dump, type Photo } from "@/lib/photoData";
+import { INITIAL_DUMPS, INITIAL_POOL, CLEAN_SLATE_DUMPS, IS_OWNER, type Dump, type Photo } from "@/lib/photoData";
+import { fetchCloudWorkspace, saveCloudWorkspace } from "@/lib/cloudSync";
 import { nanoid } from "nanoid";
 import type { SuggestedCluster } from "@/components/AISuggestSheet";
 
@@ -68,27 +69,56 @@ export function useCarouselState() {
     return deepClonePool(INITIAL_POOL);
   });
 
-  // Handle login/logout state changes for defaults
+  // Handle login/logout state changes and Cloud Sync
   useEffect(function() {
-    var savedDumps = loadSaved<Dump[]>(SK_DUMPS);
-    var savedPool = loadSaved<Photo[]>(SK_POOL);
-    
-    if (savedDumps === null) {
+    async function sync() {
       if (user && !IS_OWNER) {
-        rawSetDumps(deepCloneDumps(CLEAN_SLATE_DUMPS));
+        const cloudData = await fetchCloudWorkspace(user.id);
+        if (cloudData) {
+          rawSetDumps(cloudData.dumps);
+          rawSetPool(cloudData.pool);
+          return;
+        }
+      }
+
+      // Fallback to local or defaults
+      var savedDumps = loadSaved<Dump[]>(SK_DUMPS);
+      var savedPool = loadSaved<Photo[]>(SK_POOL);
+      
+      if (savedDumps === null) {
+        if (user && !IS_OWNER) {
+          rawSetDumps(deepCloneDumps(CLEAN_SLATE_DUMPS));
+        } else {
+          rawSetDumps(deepCloneDumps(INITIAL_DUMPS));
+        }
       } else {
-        rawSetDumps(deepCloneDumps(INITIAL_DUMPS));
+        rawSetDumps(savedDumps);
+      }
+      
+      if (savedPool === null) {
+        if (user && !IS_OWNER) {
+          rawSetPool([]);
+        } else {
+          rawSetPool(deepClonePool(INITIAL_POOL));
+        }
+      } else {
+        rawSetPool(savedPool);
       }
     }
     
-    if (savedPool === null) {
-      if (user && !IS_OWNER) {
-        rawSetPool([]);
-      } else {
-        rawSetPool(deepClonePool(INITIAL_POOL));
-      }
-    }
+    sync();
   }, [user]);
+
+  // Debounced Cloud Save
+  useEffect(function() {
+    if (!user || IS_OWNER) return;
+
+    const timer = setTimeout(() => {
+      saveCloudWorkspace(user.id, { dumps, pool });
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(timer);
+  }, [user, dumps, pool]);
 
   // Refs that always track latest state (for beforeunload backup)
   var dumpsRef = useRef(dumps);
