@@ -15,13 +15,21 @@ alter table public.user_workspaces enable row level security;
 -- Policies: Users can only see and edit their own workspace
 do $$ 
 begin
+  -- View policy
   if not exists (select 1 from pg_policies where policyname = 'Users can view own workspace') then
     create policy "Users can view own workspace" on public.user_workspaces
       for select using (auth.uid() = id);
   end if;
 
+  -- Insert policy
+  if not exists (select 1 from pg_policies where policyname = 'Users can insert own workspace') then
+    create policy "Users can insert own workspace" on public.user_workspaces
+      for insert with check (auth.uid() = id);
+  end if;
+
+  -- Update policy
   if not exists (select 1 from pg_policies where policyname = 'Users can update own workspace') then
     create policy "Users can update own workspace" on public.user_workspaces
-      for upsert with check (auth.uid() = id);
+      for update using (auth.uid() = id);
   end if;
 end $$;
