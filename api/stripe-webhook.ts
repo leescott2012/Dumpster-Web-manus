@@ -61,7 +61,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     await supabaseAdmin.from("stripe_events").insert({
       id: event.id,
       type: event.type,
-      data: event.data.object as Record<string, unknown>,
+      data: event.data.object as unknown as Record<string, unknown>,
     });
 
     // Handle checkout completed
@@ -125,12 +125,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     // Handle subscription update (e.g., renewal)
     if (event.type === "invoice.paid") {
       var invoice = event.data.object as Stripe.Invoice;
-      if (invoice.subscription) {
+      // Stripe v17+: subscription ID moved to invoice.parent.subscription_details.subscription
+      var invoiceSubId = invoice.parent?.subscription_details?.subscription as string | undefined;
+      if (invoiceSubId) {
         // Find user by subscription ID
         var { data: profile } = await supabaseAdmin
           .from("profiles")
           .select("id")
-          .eq("stripe_subscription_id", invoice.subscription as string)
+          .eq("stripe_subscription_id", invoiceSubId)
           .single();
         if (profile) {
           // Monthly credit drop on renewal
