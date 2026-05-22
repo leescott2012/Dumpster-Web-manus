@@ -249,16 +249,63 @@ export default function PhotoPool({
             </div>
           )}
 
-          {displayPhotos.length === 0 && !selectionMode && (
+          {displayPhotos.length === 0 && !selectionMode && filter !== "all" && (
             <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "#666", fontSize: "14px", border: "1px dashed #2a2a2a", borderRadius: "10px" }}>
-              {filter === "starred" ? "No starred photos yet" : filter === "videos" ? "No videos yet — upload one" : "No photos in pool"}
+              {filter === "starred" ? "No starred photos yet" : "No videos yet — upload one"}
+            </div>
+          )}
+
+          {/* Prominent empty-pool onboarding state — only when filter is 'all' and pool is empty */}
+          {displayPhotos.length === 0 && !selectionMode && filter === "all" && (
+            <div
+              onClick={handleUploadClick}
+              style={{
+                gridColumn: "1 / -1",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                padding: "56px 32px",
+                borderRadius: "14px",
+                border: "1.5px dashed rgba(var(--accent-rgb),0.35)",
+                background: "rgba(var(--accent-rgb),0.04)",
+                cursor: "pointer", transition: "all 0.2s",
+                textAlign: "center",
+              }}
+              onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.08)"; e.currentTarget.style.borderColor = "var(--accent)"; }}
+              onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.04)"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.35)"; }}
+            >
+              <div style={{
+                width: 56, height: 56, borderRadius: 14,
+                background: "rgba(var(--accent-rgb),0.12)",
+                border: "1px solid rgba(var(--accent-rgb),0.3)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                marginBottom: 18, color: "var(--accent)",
+              }}>
+                <Plus size={28} strokeWidth={1.8} />
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", textTransform: "uppercase" as const, color: "var(--accent)", marginBottom: 10 }}>
+                Get Started
+              </div>
+              <h3 style={{ fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1.2, marginBottom: 8 }}>
+                Build your photo pool
+              </h3>
+              <p style={{ fontSize: 13, color: "#888", lineHeight: 1.6, maxWidth: 380, marginBottom: 22 }}>
+                Upload photos and videos to start sequencing carousels. Tap any photo later to drop it into a dump.
+              </p>
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                background: "var(--accent)", color: "#000",
+                padding: "12px 24px", borderRadius: 10,
+                fontSize: 13, fontWeight: 800, letterSpacing: "0.04em",
+              }}>
+                <Plus size={16} strokeWidth={2.5} />
+                Upload Photos
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Hidden file input — accepts images and videos */}
-      <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple
+      {/* Hidden file input — accepts images and videos. id used by Home.tsx to trigger upload from anywhere on the page. */}
+      <input id="pool-upload-input" ref={fileInputRef} type="file" accept="image/*,video/*" multiple
         style={{ display: "none" }} onChange={handleFileChange}
       />
 

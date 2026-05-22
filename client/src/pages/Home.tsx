@@ -85,6 +85,11 @@ function HomeContent() {
   var scrollToPoolUpload = useCallback(function() {
     var poolEl = document.getElementById("photo-pool");
     if (poolEl) poolEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Open the device file picker after scroll settles
+    setTimeout(function() {
+      var input = document.getElementById("pool-upload-input") as HTMLInputElement | null;
+      if (input) input.click();
+    }, 380);
   }, []);
 
   // Guided tour

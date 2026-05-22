@@ -196,7 +196,7 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
               </div>
             )}
             <button
-              onClick={function() { dismiss(); setTimeout(onTourClick, 450); }}
+              onClick={handleUpload}
               style={{
                 width: "100%", padding: "14px 20px",
                 background: "var(--accent)", color: "#000",
@@ -207,18 +207,31 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
                 letterSpacing: "0.02em",
               }}
             >
+              <Upload size={16} strokeWidth={2.5} />
+              Upload Your Photos
+            </button>
+            <button
+              onClick={function() { dismiss(); setTimeout(onTourClick, 450); }}
+              style={{
+                width: "100%", padding: "13px 20px",
+                background: "transparent", color: "#e8e8e8",
+                border: "1px solid #2a2a2a", borderRadius: 12,
+                fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                cursor: "pointer", transition: "all 0.15s",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              }}
+            >
               Take a Quick Tour
               <ChevronRight size={16} strokeWidth={3} />
             </button>
             <button
               onClick={dismiss}
               style={{
-                width: "100%", padding: "13px 20px",
-                background: "transparent", color: "#999",
-                border: "1px solid #2a2a2a", borderRadius: 12,
-                fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                width: "100%", padding: "12px 20px",
+                background: "transparent", color: "#666",
+                border: "none", borderRadius: 12,
+                fontSize: 12, fontWeight: 500, fontFamily: "inherit",
                 cursor: "pointer", transition: "all 0.15s",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               }}
             >
               Explore on My Own
