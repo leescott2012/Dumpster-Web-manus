@@ -59,8 +59,8 @@ export function useAuth(): AuthState {
 
 // Credit costs (duplicated from credits.ts to avoid circular imports in server)
 var COSTS: Record<string, number> = {
-  ai_caption_casual: 3,
-  ai_caption_pro: 8,
+  ai_caption_casual: 1,
+  ai_caption_pro: 3,
   ai_suggest: 15,
   ai_recycle: 5,
   ai_chat: 2,

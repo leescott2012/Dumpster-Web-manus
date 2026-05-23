@@ -94,3 +94,40 @@ export async function downscaleImageToDataUrl(file: File): Promise<string> {
     return readAsDataURL(file);
   }
 }
+
+/**
+ * Compress an existing data URL down further for Vision API requests.
+ * Resizes to 1024px max longest side, JPEG quality 0.65 → ~80–150 KB per image.
+ * Why: Vercel caps serverless request bodies at 4.5 MB. With 20 photos this
+ * budget is gone fast at pool-quality sizing. Vision API doesn't need full res.
+ * Returns the original URL unchanged if it isn't a data URL or compression fails.
+ */
+export async function compressDataUrlForVision(url: string): Promise<string> {
+  if (!url.startsWith("data:image/")) return url; // cloud URLs, blob:, etc — leave alone
+  try {
+    var img = await loadImage(url);
+    var w = img.naturalWidth;
+    var h = img.naturalHeight;
+    if (!w || !h) return url;
+
+    var VISION_MAX = 1024;
+    var VISION_QUALITY = 0.65;
+    var longest = Math.max(w, h);
+    var scale = longest > VISION_MAX ? VISION_MAX / longest : 1;
+    var targetW = Math.round(w * scale);
+    var targetH = Math.round(h * scale);
+
+    var canvas = document.createElement("canvas");
+    canvas.width = targetW;
+    canvas.height = targetH;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return url;
+
+    ctx.drawImage(img, 0, 0, targetW, targetH);
+    var compressed = canvas.toDataURL("image/jpeg", VISION_QUALITY);
+    if (compressed.length >= url.length) return url;
+    return compressed;
+  } catch {
+    return url;
+  }
+}

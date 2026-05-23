@@ -38,7 +38,7 @@ export async function getUserFromRequest(req: IncomingMessage): Promise<string |
 /** Credit costs per AI action */
 var COSTS: Record<string, number> = {
   ai_suggest: 15,
-  ai_caption: 5,
+  ai_caption: 1,
   ai_chat: 2,
   ai_recycle: 5,
 };

@@ -7,6 +7,7 @@ import { getAuthHeaders } from "@/lib/supabase";
 import { Sparkles, X, RefreshCcw, Plus, Loader2, Minus } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
 import { buildTasteBlock } from "@/lib/captionPool";
+import { compressDataUrlForVision } from "@/lib/imageDownscale";
 
 export interface SuggestedCluster {
   name: string;
@@ -61,23 +62,43 @@ export default function AISuggestSheet({
 
     try {
       var authH = await getAuthHeaders();
+      // Compress data-URL photos down to ~1024px / 0.65 quality so the JSON
+      // request body fits under Vercel's 4.5 MB limit. Cloud-hosted URLs pass
+      // through untouched.
+      const compressedPhotos = await Promise.all(
+        photosToAnalyze.map(async (p) => ({
+          id: p.id,
+          url: await compressDataUrlForVision(p.url),
+          alt: p.alt,
+          category: p.category,
+        }))
+      );
       const res = await fetch("/api/ai-suggest", {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, authH),
         body: JSON.stringify({
-          photos: photosToAnalyze.map((p) => ({
-            id: p.id,
-            url: p.url,
-            alt: p.alt,
-            category: p.category,
-          })),
+          photos: compressedPhotos,
           variation,
           targetCount,
           tasteBlock: buildTasteBlock(),
         }),
       });
 
-      const data = await res.json();
+      // Read as text first — Vercel returns plain text for infrastructure
+      // errors (e.g. "Request Entity Too Large" with HTTP 413).
+      const rawText = await res.text();
+      let data: { clusters?: SuggestedCluster[]; error?: string };
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        if (res.status === 413 || /entity too large/i.test(rawText)) {
+          setErrorMsg("Your photos add up to too much data. Try fewer photos or smaller files.");
+        } else {
+          setErrorMsg(rawText.slice(0, 200) || `Server returned ${res.status}`);
+        }
+        setPhase("error");
+        return;
+      }
       if (!res.ok) {
         setErrorMsg(data.error || "Something went wrong");
         setPhase("error");

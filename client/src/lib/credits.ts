@@ -7,8 +7,8 @@
 
 export var CREDIT_COSTS: Record<string, number> = {
   // Captions
-  ai_caption_casual: 3,      // GPT-4o-mini — cheap
-  ai_caption_pro: 8,         // Claude Sonnet — premium
+  ai_caption_casual: 1,      // Claude Haiku — cheap
+  ai_caption_pro: 3,         // Claude Sonnet — premium
 
   // Dump building
   ai_suggest: 15,            // AI suggest dump (vision analysis)

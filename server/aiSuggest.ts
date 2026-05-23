@@ -27,11 +27,28 @@ export interface AISuggestResponse {
   clusters: Cluster[];
 }
 
-// Fetch an image URL and return { base64, mediaType }
+// Fetch an image URL and return { base64, mediaType }.
+// Handles three URL shapes: data: URLs (decode inline), HTTPS (fetch), and
+// anything else returns null.
 async function fetchImageAsBase64(url: string): Promise<{
   base64: string;
   mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 } | null> {
+  const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+  // data: URL — decode without a network round-trip
+  if (url.startsWith("data:")) {
+    const match = url.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return null;
+    const rawType = match[1].trim();
+    const mediaType = (validTypes.includes(rawType) ? rawType : "image/jpeg") as
+      | "image/jpeg"
+      | "image/png"
+      | "image/gif"
+      | "image/webp";
+    return { base64: match[2], mediaType };
+  }
+
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
@@ -41,7 +58,6 @@ async function fetchImageAsBase64(url: string): Promise<{
       | "image/png"
       | "image/gif"
       | "image/webp";
-    const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
     const mediaType = validTypes.includes(mt) ? mt : "image/jpeg";
     const buf = await res.arrayBuffer();
     const base64 = Buffer.from(buf).toString("base64");
