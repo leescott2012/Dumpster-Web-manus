@@ -560,39 +560,49 @@ function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount
 
 // ── Taste Profile + AI Rules — fed into Claude system prompts ───────────────
 
+type SaveStatus = "idle" | "saving" | "saved";
+
 function TasteProfileSection() {
   const [profile, setProfile] = useState<string>(() => loadTasteProfile());
   const [rules, setRules] = useState<string>(() => loadAIRules());
-  // Saved indicator: shows "Saved ✓" briefly after every auto-save fires
-  const [profileSavedTick, setProfileSavedTick] = useState(0);
-  const [rulesSavedTick, setRulesSavedTick] = useState(0);
+  const [profileStatus, setProfileStatus] = useState<SaveStatus>("idle");
+  const [rulesStatus, setRulesStatus] = useState<SaveStatus>("idle");
 
-  // Auto-save with 1.2s debounce — no Save button to forget. After each save,
-  // bump a tick so the UI can flash "Saved ✓".
+  // Auto-save with 1.2s debounce. Status flips:
+  //   idle → saving (immediately on keystroke) → saved (when debounce fires)
+  //   → idle (after 2.5s)
+  // Three states give the user full confidence the cloud sync is happening.
   const profileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const profileSavedHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rulesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rulesSavedHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profileInitialRef = useRef(profile);
   const rulesInitialRef = useRef(rules);
 
   useEffect(() => {
-    // Skip the first render's no-op save (initial value === stored value)
     if (profile === profileInitialRef.current) return;
+    setProfileStatus("saving");
+    if (profileSavedHideRef.current) clearTimeout(profileSavedHideRef.current);
     if (profileTimerRef.current) clearTimeout(profileTimerRef.current);
     profileTimerRef.current = setTimeout(() => {
       saveTasteProfile(profile);
       profileInitialRef.current = profile;
-      setProfileSavedTick((t) => t + 1);
+      setProfileStatus("saved");
+      profileSavedHideRef.current = setTimeout(() => setProfileStatus("idle"), 2500);
     }, 1200);
     return () => { if (profileTimerRef.current) clearTimeout(profileTimerRef.current); };
   }, [profile]);
 
   useEffect(() => {
     if (rules === rulesInitialRef.current) return;
+    setRulesStatus("saving");
+    if (rulesSavedHideRef.current) clearTimeout(rulesSavedHideRef.current);
     if (rulesTimerRef.current) clearTimeout(rulesTimerRef.current);
     rulesTimerRef.current = setTimeout(() => {
       saveAIRules(rules);
       rulesInitialRef.current = rules;
-      setRulesSavedTick((t) => t + 1);
+      setRulesStatus("saved");
+      rulesSavedHideRef.current = setTimeout(() => setRulesStatus("idle"), 2500);
     }, 1200);
     return () => { if (rulesTimerRef.current) clearTimeout(rulesTimerRef.current); };
   }, [rules]);
@@ -613,22 +623,6 @@ function TasteProfileSection() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Flash "Saved" for 1.4s after each successful save.
-  const [profileFlashing, setProfileFlashing] = useState(false);
-  const [rulesFlashing, setRulesFlashing] = useState(false);
-  useEffect(() => {
-    if (profileSavedTick === 0) return;
-    setProfileFlashing(true);
-    const id = setTimeout(() => setProfileFlashing(false), 1400);
-    return () => clearTimeout(id);
-  }, [profileSavedTick]);
-  useEffect(() => {
-    if (rulesSavedTick === 0) return;
-    setRulesFlashing(true);
-    const id = setTimeout(() => setRulesFlashing(false), 1400);
-    return () => clearTimeout(id);
-  }, [rulesSavedTick]);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
       {/* AI Taste Profile */}
@@ -638,16 +632,7 @@ function TasteProfileSection() {
             <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
               AI Taste Profile
             </div>
-            {profileFlashing && (
-              <span style={{
-                display: "inline-flex", alignItems: "center", gap: 3,
-                color: "#22c55e", fontSize: 10, fontWeight: 600,
-                opacity: 0.9,
-                transition: "opacity 0.2s",
-              }}>
-                <Check size={11} strokeWidth={2.5} /> Saved
-              </span>
-            )}
+            <SaveStatusPill status={profileStatus} />
           </div>
           <span style={{ fontSize: 10, color: "#555" }}>{profile.length}/750</span>
         </div>
@@ -676,16 +661,7 @@ function TasteProfileSection() {
             <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
               AI Rules
             </div>
-            {rulesFlashing && (
-              <span style={{
-                display: "inline-flex", alignItems: "center", gap: 3,
-                color: "#22c55e", fontSize: 10, fontWeight: 600,
-                opacity: 0.9,
-                transition: "opacity 0.2s",
-              }}>
-                <Check size={11} strokeWidth={2.5} /> Saved
-              </span>
-            )}
+            <SaveStatusPill status={rulesStatus} />
           </div>
           <span style={{ fontSize: 10, color: "#555" }}>{rules.length}/500</span>
         </div>
@@ -707,6 +683,59 @@ function TasteProfileSection() {
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Visible save-state indicator next to the field title.
+ *   - "saving" → animated dot + gray "Saving..." (debounce in flight)
+ *   - "saved"  → green pill "✓ Saved" (visible 2.5s)
+ *   - "idle"   → invisible (occupies no space)
+ *
+ * Sized big enough to read at arm's length on iPhone — beta testers were
+ * missing the previous tiny 10px indicator.
+ */
+function SaveStatusPill({ status }: { status: SaveStatus }) {
+  if (status === "idle") return null;
+
+  if (status === "saving") {
+    return (
+      <span style={{
+        display: "inline-flex", alignItems: "center", gap: 5,
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        borderRadius: 999,
+        padding: "3px 8px 3px 7px",
+        fontSize: 11, fontWeight: 600,
+        color: "#888",
+        letterSpacing: "0.01em",
+      }}>
+        <span style={{
+          display: "inline-block", width: 6, height: 6, borderRadius: "50%",
+          background: "#888",
+          animation: "pulse-saving 1s ease-in-out infinite",
+        }} />
+        Saving…
+        <style>{`@keyframes pulse-saving { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }`}</style>
+      </span>
+    );
+  }
+
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 4,
+      background: "rgba(34,197,94,0.14)",
+      border: "1px solid rgba(34,197,94,0.4)",
+      borderRadius: 999,
+      padding: "3px 9px 3px 7px",
+      fontSize: 11, fontWeight: 700,
+      color: "#4ade80",
+      letterSpacing: "0.02em",
+      animation: "pop-saved 0.25s ease-out",
+    }}>
+      <Check size={12} strokeWidth={3} /> Saved
+      <style>{`@keyframes pop-saved { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }`}</style>
+    </span>
   );
 }
 
