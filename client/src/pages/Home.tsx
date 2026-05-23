@@ -35,7 +35,6 @@ import GuidedTour, { isTourCompleted } from "@/components/GuidedTour";
 import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions } from "@/lib/captionPool";
-import { saveCloudState, loadCloudState } from "@/lib/cloudSync";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 
 function HomeContent() {
