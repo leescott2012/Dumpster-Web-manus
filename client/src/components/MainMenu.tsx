@@ -3,10 +3,10 @@
  * Full-screen dark overlay with staggered tab folders.
  * Tap a folder → sub-panel slides in from right.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
-  X, Sparkles, Archive, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Save, Instagram,
-  LogOut, User, Share2,
+  X, Sparkles, Archive, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Instagram,
+  LogOut, User, Share2, Check,
 } from "lucide-react";
 import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules } from "@/lib/captionPool";
 import { useAuth } from "@/contexts/AuthContext";
@@ -563,38 +563,101 @@ function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount
 function TasteProfileSection() {
   const [profile, setProfile] = useState<string>(() => loadTasteProfile());
   const [rules, setRules] = useState<string>(() => loadAIRules());
-  const [profileSaved, setProfileSaved] = useState(false);
-  const [rulesSaved, setRulesSaved] = useState(false);
+  // Saved indicator: shows "Saved ✓" briefly after every auto-save fires
+  const [profileSavedTick, setProfileSavedTick] = useState(0);
+  const [rulesSavedTick, setRulesSavedTick] = useState(0);
 
-  function handleSaveProfile() {
-    saveTasteProfile(profile);
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 1500);
-  }
-  function handleSaveRules() {
-    saveAIRules(rules);
-    setRulesSaved(true);
-    setTimeout(() => setRulesSaved(false), 1500);
-  }
+  // Auto-save with 1.2s debounce — no Save button to forget. After each save,
+  // bump a tick so the UI can flash "Saved ✓".
+  const profileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rulesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const profileInitialRef = useRef(profile);
+  const rulesInitialRef = useRef(rules);
+
+  useEffect(() => {
+    // Skip the first render's no-op save (initial value === stored value)
+    if (profile === profileInitialRef.current) return;
+    if (profileTimerRef.current) clearTimeout(profileTimerRef.current);
+    profileTimerRef.current = setTimeout(() => {
+      saveTasteProfile(profile);
+      profileInitialRef.current = profile;
+      setProfileSavedTick((t) => t + 1);
+    }, 1200);
+    return () => { if (profileTimerRef.current) clearTimeout(profileTimerRef.current); };
+  }, [profile]);
+
+  useEffect(() => {
+    if (rules === rulesInitialRef.current) return;
+    if (rulesTimerRef.current) clearTimeout(rulesTimerRef.current);
+    rulesTimerRef.current = setTimeout(() => {
+      saveAIRules(rules);
+      rulesInitialRef.current = rules;
+      setRulesSavedTick((t) => t + 1);
+    }, 1200);
+    return () => { if (rulesTimerRef.current) clearTimeout(rulesTimerRef.current); };
+  }, [rules]);
+
+  // Belt + suspenders: on unmount, flush any pending changes immediately so
+  // closing the menu mid-typing doesn't lose the last edit.
+  useEffect(() => {
+    return () => {
+      if (profileTimerRef.current) {
+        clearTimeout(profileTimerRef.current);
+        saveTasteProfile(profile);
+      }
+      if (rulesTimerRef.current) {
+        clearTimeout(rulesTimerRef.current);
+        saveAIRules(rules);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Flash "Saved" for 1.4s after each successful save.
+  const [profileFlashing, setProfileFlashing] = useState(false);
+  const [rulesFlashing, setRulesFlashing] = useState(false);
+  useEffect(() => {
+    if (profileSavedTick === 0) return;
+    setProfileFlashing(true);
+    const id = setTimeout(() => setProfileFlashing(false), 1400);
+    return () => clearTimeout(id);
+  }, [profileSavedTick]);
+  useEffect(() => {
+    if (rulesSavedTick === 0) return;
+    setRulesFlashing(true);
+    const id = setTimeout(() => setRulesFlashing(false), 1400);
+    return () => clearTimeout(id);
+  }, [rulesSavedTick]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
       {/* AI Taste Profile */}
       <div style={{ background: "#141414", border: "1px solid rgba(var(--accent-rgb),0.18)", borderRadius: 12, padding: "14px 14px 12px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
-            AI Taste Profile
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
+              AI Taste Profile
+            </div>
+            {profileFlashing && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 3,
+                color: "#22c55e", fontSize: 10, fontWeight: 600,
+                opacity: 0.9,
+                transition: "opacity 0.2s",
+              }}>
+                <Check size={11} strokeWidth={2.5} /> Saved
+              </span>
+            )}
           </div>
           <span style={{ fontSize: 10, color: "#555" }}>{profile.length}/750</span>
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
-          Describe your aesthetic. The AI uses this when generating dumps and captions.
+          Describe your aesthetic. Saves automatically and syncs across your devices.
         </div>
         <textarea
           value={profile}
           maxLength={750}
           onChange={e => setProfile(e.target.value)}
-          onBlur={() => saveTasteProfile(profile)}
           placeholder="dark editorial, gold accents, automotive, late-night, no clichés..."
           style={{
             width: "100%", minHeight: 80, resize: "vertical",
@@ -604,36 +667,35 @@ function TasteProfileSection() {
             boxSizing: "border-box",
           }}
         />
-        <button onClick={handleSaveProfile} style={{
-          marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5,
-          background: profileSaved ? "rgba(34,197,94,0.1)" : "rgba(var(--accent-rgb),0.1)",
-          border: profileSaved ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(var(--accent-rgb),0.3)",
-          borderRadius: 8, padding: "6px 12px",
-          color: profileSaved ? "#22c55e" : "var(--accent)",
-          fontSize: 11, fontWeight: 700, cursor: "pointer",
-          fontFamily: "inherit", letterSpacing: "0.04em",
-          transition: "all 0.15s",
-        }}>
-          <Save size={12} /> {profileSaved ? "SAVED" : "SAVE"}
-        </button>
       </div>
 
       {/* AI Rules */}
       <div style={{ background: "#141414", border: "1px solid rgba(110,142,200,0.18)", borderRadius: 12, padding: "14px 14px 12px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
-            AI Rules
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
+              AI Rules
+            </div>
+            {rulesFlashing && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 3,
+                color: "#22c55e", fontSize: 10, fontWeight: 600,
+                opacity: 0.9,
+                transition: "opacity 0.2s",
+              }}>
+                <Check size={11} strokeWidth={2.5} /> Saved
+              </span>
+            )}
           </div>
           <span style={{ fontSize: 10, color: "#555" }}>{rules.length}/500</span>
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
-          Strict rules the AI must follow. One per line.
+          Strict rules the AI must follow. One per line. Saves automatically.
         </div>
         <textarea
           value={rules}
           maxLength={500}
           onChange={e => setRules(e.target.value)}
-          onBlur={() => saveAIRules(rules)}
           placeholder={"no emojis\nno hashtags\nlowercase only"}
           style={{
             width: "100%", minHeight: 80, resize: "vertical",
@@ -643,18 +705,6 @@ function TasteProfileSection() {
             boxSizing: "border-box",
           }}
         />
-        <button onClick={handleSaveRules} style={{
-          marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5,
-          background: rulesSaved ? "rgba(34,197,94,0.1)" : "rgba(110,142,200,0.1)",
-          border: rulesSaved ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(110,142,200,0.3)",
-          borderRadius: 8, padding: "6px 12px",
-          color: rulesSaved ? "#22c55e" : "#6E8EC8",
-          fontSize: 11, fontWeight: 700, cursor: "pointer",
-          fontFamily: "inherit", letterSpacing: "0.04em",
-          transition: "all 0.15s",
-        }}>
-          <Save size={12} /> {rulesSaved ? "SAVED" : "SAVE"}
-        </button>
       </div>
     </div>
   );
