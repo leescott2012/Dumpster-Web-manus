@@ -307,8 +307,8 @@ export default function DumpChatSheet({
                 Valet
               </div>
               <div style={{ fontSize: 12, color: "#555", lineHeight: 1.7, maxWidth: 280 }}>
-                Tell me what vibe you want, which photos to lead with, what to swap out.
-                I learn your taste over time.
+                At your service. Tell me what vibe you want, which shot leads,
+                what to swap out. I'll remember your taste.
               </div>
               {/* Quick prompts */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, justifyContent: "center" }}>

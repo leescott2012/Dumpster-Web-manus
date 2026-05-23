@@ -6,7 +6,7 @@
  * Shows once per device (localStorage flag).
  */
 import { useState, useEffect } from "react";
-import { Sparkles, ArrowUpDown, Type, Upload, X, ChevronRight, Share } from "lucide-react";
+import { Sparkles, ArrowUpDown, Type, Upload, X, ChevronRight, Share, Bell, Recycle } from "lucide-react";
 import { IS_OWNER } from "@/lib/photoData";
 
 var SEEN_KEY = "dumpster_welcome_seen_v1";
@@ -47,20 +47,20 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
 
   var features = [
     {
-      icon: ArrowUpDown,
-      title: "Drag & Reorder",
-      desc: "Arrange your carousel sequence with drag and drop",
-      color: "var(--accent)",
-      bg: "rgba(var(--accent-rgb),0.1)",
-      border: "rgba(var(--accent-rgb),0.25)",
-    },
-    {
       icon: Sparkles,
-      title: "AI Suggestions",
-      desc: "Let AI group your photos into the best carousels",
+      title: "AI Suggest",
+      desc: "Auto-group your photos into the strongest carousels",
       color: "#a78bfa",
       bg: "rgba(167,139,250,0.1)",
       border: "rgba(167,139,250,0.25)",
+    },
+    {
+      icon: Bell,
+      title: "Valet",
+      desc: "Chat to reorder, swap shots, and set the vibe",
+      color: "var(--accent)",
+      bg: "rgba(var(--accent-rgb),0.1)",
+      border: "rgba(var(--accent-rgb),0.25)",
     },
     {
       icon: Type,
@@ -69,6 +69,22 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
       color: "#4ade80",
       bg: "rgba(74,222,128,0.1)",
       border: "rgba(74,222,128,0.25)",
+    },
+    {
+      icon: Recycle,
+      title: "AI Recycle",
+      desc: "Find better substitutes from your pool with one tap",
+      color: "#f59e0b",
+      bg: "rgba(245,158,11,0.1)",
+      border: "rgba(245,158,11,0.25)",
+    },
+    {
+      icon: ArrowUpDown,
+      title: "Drag & Reorder",
+      desc: "Manually arrange your carousel by dragging photos",
+      color: "#9ca3af",
+      bg: "rgba(156,163,175,0.1)",
+      border: "rgba(156,163,175,0.25)",
     },
   ];
 
