@@ -7,6 +7,7 @@ import { getAuthHeaders } from "@/lib/supabase";
 import { Type, X, Copy, RefreshCcw, Loader2, Check, Sparkles } from "lucide-react";
 import type { Dump } from "@/lib/photoData";
 import { buildTasteBlock } from "@/lib/captionPool";
+import { compressDataUrlForVision } from "@/lib/imageDownscale";
 
 interface CaptionSheetProps {
   open: boolean;
@@ -36,20 +37,33 @@ export default function CaptionSheet({
   const [errorMsg, setErrorMsg] = useState("");
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [tasteActive, setTasteActive] = useState(false);
+  const [userPrompt, setUserPrompt] = useState("");
+  const [titleOverride, setTitleOverride] = useState("");
+  const [categoryOverride, setCategoryOverride] = useState("");
 
   // When the sheet opens, pre-select the deep-linked dump if any
   useEffect(() => {
     if (open) {
-      setSelectedDumpId(initialDumpId ?? (dumps[0]?.id ?? null));
+      const startDumpId = initialDumpId ?? (dumps[0]?.id ?? null);
+      setSelectedDumpId(startDumpId);
       setPhase("picker");
       setCaptions([]);
       setVibe("");
       setErrorMsg("");
+      setUserPrompt("");
       setTasteActive(Boolean(buildTasteBlock()));
     }
   }, [open, initialDumpId, dumps]);
 
   const selectedDump = dumps.find(d => d.id === selectedDumpId) || null;
+
+  // Re-seed override fields whenever the selected dump changes — but only if
+  // the user hasn't already typed something into them this session.
+  useEffect(() => {
+    if (!selectedDump) return;
+    setTitleOverride(selectedDump.title || "");
+    setCategoryOverride(selectedDump.photos[0]?.category || "");
+  }, [selectedDumpId, selectedDump]);
 
   const generate = useCallback(async () => {
     if (!selectedDump) return;
@@ -58,18 +72,40 @@ export default function CaptionSheet({
 
     try {
       var authH = await getAuthHeaders();
+      // Compress any data-URL photos so the request fits Vercel's 4.5MB cap
+      const compressedPhotos = await Promise.all(
+        selectedDump.photos.slice(0, 12).map(async (p) => ({
+          id: p.id,
+          url: await compressDataUrlForVision(p.url),
+        }))
+      );
       const res = await fetch("/api/ai-caption", {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, authH),
         body: JSON.stringify({
-          dumpTitle: selectedDump.title,
+          photos: compressedPhotos,
+          userPrompt: userPrompt.trim() || undefined,
+          dumpTitle: titleOverride.trim() || selectedDump.title,
           subtitle: selectedDump.subtitle,
-          category: selectedDump.photos[0]?.category,
+          category: categoryOverride.trim() || selectedDump.photos[0]?.category,
           tone,
           tasteBlock: buildTasteBlock(),
         }),
       });
-      const data = await res.json();
+      // Read as text first — Vercel returns plain text for infra errors (e.g. 413).
+      const rawText = await res.text();
+      let data: { captions?: string[]; vibe?: string; error?: string };
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        if (res.status === 413 || /entity too large/i.test(rawText)) {
+          setErrorMsg("Photos add up to too much data. Try a dump with fewer photos.");
+        } else {
+          setErrorMsg(rawText.slice(0, 200) || `Server returned ${res.status}`);
+        }
+        setPhase("error");
+        return;
+      }
       if (!res.ok) {
         setErrorMsg(data.error || "Something went wrong");
         setPhase("error");
@@ -85,7 +121,7 @@ export default function CaptionSheet({
       setErrorMsg(e instanceof Error ? e.message : "Network error");
       setPhase("error");
     }
-  }, [selectedDump, tone, onCaptionsGenerated]);
+  }, [selectedDump, tone, onCaptionsGenerated, userPrompt, titleOverride, categoryOverride]);
 
   const handleCopy = useCallback(async (text: string, idx: number) => {
     try {
@@ -220,6 +256,62 @@ export default function CaptionSheet({
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Prompt textarea — the main user input */}
+              <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12, fontWeight: 700 }}>
+                What's the caption about? <span style={{ color: "#444", textTransform: "none" as const, letterSpacing: 0 }}>(optional)</span>
+              </div>
+              <textarea
+                value={userPrompt}
+                onChange={(e) => setUserPrompt(e.target.value)}
+                placeholder="Tell Claude the mood, the joke, the story — or leave blank to let the photos speak."
+                rows={3}
+                style={{
+                  width: "100%", background: "#141414", border: "1px solid #1e1e1e",
+                  borderRadius: 10, padding: "10px 12px", marginBottom: 20,
+                  color: "#e8e8e8", fontSize: 13, fontFamily: "inherit",
+                  resize: "vertical" as const, outline: "none", lineHeight: 1.5,
+                  boxSizing: "border-box" as const,
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(110,142,200,0.4)"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; }}
+              />
+
+              {/* Editable title + category — collapsed by default to keep sheet clean */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6, fontWeight: 700 }}>
+                    Title
+                  </div>
+                  <input
+                    value={titleOverride}
+                    onChange={(e) => setTitleOverride(e.target.value)}
+                    placeholder={selectedDump?.title || "Dump title"}
+                    style={{
+                      width: "100%", background: "#141414", border: "1px solid #1e1e1e",
+                      borderRadius: 8, padding: "8px 10px",
+                      color: "#e8e8e8", fontSize: 12, fontFamily: "inherit",
+                      outline: "none", boxSizing: "border-box" as const,
+                    }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6, fontWeight: 700 }}>
+                    Category
+                  </div>
+                  <input
+                    value={categoryOverride}
+                    onChange={(e) => setCategoryOverride(e.target.value)}
+                    placeholder={selectedDump?.photos[0]?.category || "e.g. fashion, food"}
+                    style={{
+                      width: "100%", background: "#141414", border: "1px solid #1e1e1e",
+                      borderRadius: 8, padding: "8px 10px",
+                      color: "#e8e8e8", fontSize: 12, fontFamily: "inherit",
+                      outline: "none", boxSizing: "border-box" as const,
+                    }}
+                  />
+                </div>
               </div>
 
               {/* Tone selector */}
