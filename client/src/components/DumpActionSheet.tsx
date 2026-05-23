@@ -1,8 +1,8 @@
 /**
  * DumpActionSheet — iOS-style "..." action menu for a dump
- * Actions: Rate, Heart, Chat with AI, Generate Captions, Export/Share, Delete
+ * Actions: Rate, Heart, Valet (AI assistant), Generate Captions, Export/Share, Delete
  */
-import { Heart, Sparkles, Share2, Trash2, X, MessageCircle, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Heart, Sparkles, Share2, Trash2, X, Bell, ThumbsUp, ThumbsDown } from "lucide-react";
 import type { Dump } from "@/lib/photoData";
 
 interface DumpActionSheetProps {
@@ -46,8 +46,8 @@ export default function DumpActionSheet({
       onClick: function() { onHeart(dump.id); onClose(); },
     },
     {
-      icon: <MessageCircle size={18} />,
-      label: "Chat with AI",
+      icon: <Bell size={18} />,
+      label: "Valet",
       sublabel: "Reorder, swap, set the vibe",
       color: "var(--accent)",
       onClick: function() { onChat(dump.id); onClose(); },

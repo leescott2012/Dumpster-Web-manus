@@ -1,6 +1,6 @@
 /**
- * DumpChatSheet — Chat with AI about a specific dump.
- * AI can reorder, swap photos in/out, update vibe, and learn taste preferences.
+ * DumpChatSheet — Valet (AI assistant) for a specific dump.
+ * The Valet can reorder, swap photos in/out, update vibe, and learn taste preferences.
  */
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getAuthHeaders } from "@/lib/supabase";
@@ -242,7 +242,7 @@ export default function DumpChatSheet({
             </div>
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
-                {"Chat · " + dump.title}
+                {"Valet · " + dump.title}
               </div>
               <div style={{ fontSize: 11, color: "#555", marginTop: 1 }}>
                 {dump.photos.length + " photos" + (dump.vibe ? " · " + dump.vibe : "")}

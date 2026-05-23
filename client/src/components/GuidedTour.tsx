@@ -50,7 +50,7 @@ var STEPS: TourStep[] = [
   {
     target: "[data-tour='dump-menu']",
     title: "Dump Actions",
-    body: "Tap ... to open the action menu. Chat with AI about your dump, generate captions, export, rate it, or delete.",
+    body: "Tap ... to open the action menu. Summon the Valet for AI tweaks, generate captions, export, rate it, or delete.",
     icon: MessageCircle,
     iconColor: "#a78bfa",
     position: "bottom",

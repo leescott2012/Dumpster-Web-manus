@@ -27,7 +27,7 @@ export var CREDIT_LABELS: Record<string, string> = {
   ai_caption_pro: "Pro Caption",
   ai_suggest: "AI Suggest Dump",
   ai_recycle: "AI Recycle Pick",
-  ai_chat: "AI Chat",
+  ai_chat: "Valet",
   ai_vibe: "Vibe Analysis",
   ai_rescan_batch: "Batch Rescan",
 };
