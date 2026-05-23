@@ -304,7 +304,7 @@ export default function DumpChatSheet({
             }}>
               <div style={{ fontSize: 28 }}>{"✨"}</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: "#e8e8e8" }}>
-                Talk to me about this dump
+                Valet
               </div>
               <div style={{ fontSize: 12, color: "#555", lineHeight: 1.7, maxWidth: 280 }}>
                 Tell me what vibe you want, which photos to lead with, what to swap out.
