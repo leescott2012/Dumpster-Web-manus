@@ -17,23 +17,90 @@ interface DumpShareSheetProps {
   onClose: () => void;
 }
 
+// iOS Safari sends `<a download>` to the Files app, not Photos. The Web Share
+// API with a File payload pops the system share sheet — which includes
+// "Save Image" → Photos library. That's the UX beta testers expected.
+function isIos(): boolean {
+  if (typeof navigator === "undefined") return false;
+  var ua = navigator.userAgent;
+  // iPad reports as Mac in modern iOS — also check for touch.
+  return /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in document);
+}
+
+async function urlToFile(url: string, filename: string): Promise<File | null> {
+  try {
+    var res = await fetch(url, { mode: "cors" });
+    if (!res.ok) return null;
+    var blob = await res.blob();
+    return new File([blob], filename, { type: blob.type || "image/jpeg" });
+  } catch {
+    return null;
+  }
+}
+
+/** Force a classic download — used on desktop where Files isn't a concern. */
+function triggerDownload(blob: Blob, filename: string) {
+  var blobUrl = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(blobUrl);
+}
+
 async function downloadPhoto(url: string, filename: string): Promise<boolean> {
   try {
-    const res = await fetch(url, { mode: "cors" });
+    // iOS path: share sheet → Save Image goes to Photos library.
+    if (isIos() && typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      var file = await urlToFile(url, filename);
+      if (file && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        try {
+          await navigator.share({ files: [file] });
+          return true;
+        } catch (err) {
+          // User cancelled — don't fall back to download (would be annoying).
+          if (err instanceof Error && err.name === "AbortError") return false;
+          // Other errors (e.g. permission denied) — fall through to download.
+        }
+      }
+    }
+
+    // Desktop / Android / fallback: classic download.
+    var res = await fetch(url, { mode: "cors" });
     if (!res.ok) throw new Error("fetch failed");
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(blobUrl);
+    var blob = await res.blob();
+    triggerDownload(blob, filename);
     return true;
   } catch {
-    // CORS fallback — open in new tab so user can long-press save on mobile
+    // Last resort — open in new tab so user can long-press save on mobile.
     window.open(url, "_blank", "noopener");
+    return false;
+  }
+}
+
+/**
+ * Share multiple files at once. iOS share sheet supports multi-image saves to
+ * Photos in a single tap. Returns true if the share succeeded (or user picked
+ * a destination), false on cancel / unsupported.
+ */
+async function sharePhotosBulk(urls: string[], filenamePrefix: string): Promise<boolean> {
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function") return false;
+
+  var files: File[] = [];
+  for (var i = 0; i < urls.length; i++) {
+    var num = String(i + 1).padStart(2, "0");
+    var f = await urlToFile(urls[i], filenamePrefix + "_" + num + ".jpg");
+    if (f) files.push(f);
+  }
+  if (files.length === 0) return false;
+  if (navigator.canShare && !navigator.canShare({ files: files })) return false;
+
+  try {
+    await navigator.share({ files: files });
+    return true;
+  } catch {
     return false;
   }
 }
@@ -43,6 +110,7 @@ export default function DumpShareSheet({ dump, open, onClose }: DumpShareSheetPr
   const [downloading, setDownloading] = useState(false);
   const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
   const canWebShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const onIos = isIos();
 
   const handleClose = useCallback(() => {
     onClose();
@@ -64,12 +132,25 @@ export default function DumpShareSheet({ dump, open, onClose }: DumpShareSheetPr
   const handleDownloadAll = useCallback(async () => {
     if (!dump) return;
     setDownloading(true);
+    const prefix = dump.title.replace(/\s+/g, "_");
+
+    // iOS: one share-sheet call with all photos → user picks "Save to Photos"
+    // once and gets the whole carousel into their library.
+    if (isIos() && typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      const ok = await sharePhotosBulk(dump.photos.map(p => p.url), prefix);
+      if (ok) {
+        setDownloadedIds(new Set(dump.photos.map(p => p.id)));
+      }
+      setDownloading(false);
+      return;
+    }
+
+    // Desktop / Android: classic per-file download with delay between.
     for (let i = 0; i < dump.photos.length; i++) {
       const p = dump.photos[i];
       const num = String(i + 1).padStart(2, "0");
-      await downloadPhoto(p.url, `${dump.title.replace(/\s+/g, "_")}_${num}.jpg`);
+      await downloadPhoto(p.url, `${prefix}_${num}.jpg`);
       setDownloadedIds(prev => new Set(prev).add(p.id));
-      // Small delay between downloads so browser doesn't block
       if (i < dump.photos.length - 1) await new Promise(r => setTimeout(r, 300));
     }
     setDownloading(false);
@@ -235,8 +316,8 @@ export default function DumpShareSheet({ dump, open, onClose }: DumpShareSheetPr
             onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.background = downloading ? "#111" : "#1a1a1a"; }}
           >
             {downloading
-              ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Downloading...</>
-              : <><Download size={14} /> Download All {dump.photos.length} Photos</>
+              ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> {onIos ? "Preparing..." : "Downloading..."}</>
+              : <><Download size={14} /> {onIos ? `Save All ${dump.photos.length} to Photos` : `Download All ${dump.photos.length} Photos`}</>
             }
           </button>
 

@@ -35,7 +35,8 @@ import GuidedTour, { isTourCompleted } from "@/components/GuidedTour";
 import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions } from "@/lib/captionPool";
-import { uploadPhotoToCloud, saveCloudState, loadCloudState } from "@/lib/cloudSync";
+import { saveCloudState, loadCloudState } from "@/lib/cloudSync";
+import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 
 function HomeContent() {
   var {
@@ -112,66 +113,27 @@ function HomeContent() {
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
   var { user, canAfford } = useAuth();
 
-  // ── Cloud sync: load on sign-in, debounced save on changes ────────────────
-  var [cloudReady, setCloudReady] = useState(false);
-  var cloudSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  var lastSavedHash = useRef("");
-
-  // On sign-in: load cloud state, or give a clean slate if no saved data
+  // ── First sign-in: clear demo content if user hasn't uploaded anything yet.
+  // Cloud sync of workspace JSON was reverted — photos are local-only data URLs,
+  // which would bloat the user_workspaces row past usable size. localStorage is
+  // the source of truth for now.
   useEffect(function() {
-    if (!user) {
-      setCloudReady(false);
-      lastSavedHash.current = "";
-      return;
-    }
-
-    var cancelled = false;
-    loadCloudState(user.id).then(function(cloud) {
-      if (cancelled) return;
-
-      if (cloud && (cloud.dumps.length > 0 || cloud.pool.length > 0)) {
-        // User has saved cloud state — restore it
-        replaceState(cloud.dumps, cloud.pool);
-        lastSavedHash.current = JSON.stringify({ d: cloud.dumps, p: cloud.pool });
-      } else {
-        // No cloud state — first sign-in, clear demo content
-        var hasUploads = pool.some(function(p) { return p.id.startsWith("upload-"); })
-          || dumps.some(function(d) { return d.photos.some(function(p) { return p.id.startsWith("upload-"); }); });
-        if (!hasUploads) {
-          clearDemoContent();
-        }
-      }
-      setCloudReady(true);
-    });
-
-    return function() { cancelled = true; };
+    if (!user) return;
+    var hasUploads = pool.some(function(p) { return p.id.startsWith("upload-"); })
+      || dumps.some(function(d) { return d.photos.some(function(p) { return p.id.startsWith("upload-"); }); });
+    if (!hasUploads) clearDemoContent();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Debounced save — only runs after cloud load completes to avoid saving stale state
+  // ── Always keep at least one empty dump visible so users have a target for
+  // the "From Pool" / "Add More" twin cards. Without this, a freshly cleared
+  // workspace renders as a wall of stats with no upload affordance — beta
+  // testers were getting stuck here.
   useEffect(function() {
-    if (!user || !cloudReady) return;
-
-    // Skip if nothing changed since last save
-    var hash = JSON.stringify({ d: dumps, p: pool });
-    if (hash === lastSavedHash.current) return;
-
-    // Skip saving if state is only demo/stock content (no point saving that)
-    var hasUserContent = pool.some(function(p) { return p.id.startsWith("upload-"); })
-      || dumps.some(function(d) { return d.photos.some(function(p) { return p.id.startsWith("upload-"); }); })
-      || dumps.some(function(d) { return d.id.startsWith("dump-"); });
-
-    if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
-    var uid = user.id;
-    cloudSaveTimer.current = setTimeout(function() {
-      saveCloudState(uid, dumps, pool).then(function(ok) {
-        if (ok) lastSavedHash.current = hash;
-      });
-    }, 2000);
-
-    return function() {
-      if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
-    };
-  }, [user, cloudReady, dumps, pool]);
+    if (dumps.length === 0) {
+      createNewDump();
+    }
+  }, [dumps.length, createNewDump]);
 
   /**
    * Credit gate — checks if user can afford an AI action.
@@ -361,112 +323,59 @@ function HomeContent() {
     setSelectedPhotoId(null);
   }, [contextMenu, dumps, movePhotoFromDumpToPool, removePhotoFromPool]);
 
-  // Upload photos/videos from device
+  // Upload photos/videos from device — local-only storage (data URLs).
+  // Photos are downscaled to ~2048px / JPEG 0.85 so they stay under:
+  //   - Claude Vision's 5 MB per-image limit (was breaking AI Suggest on iPhones)
+  //   - localStorage's per-origin quota (was filling up after ~10 uploads)
+  // Videos are stored as object URLs — Claude doesn't analyze them anyway.
   var handleUploadPhotos = useCallback(function(files: FileList) {
     var total = files.length;
+    if (total === 0) return;
 
-    // ── Signed-in: upload to Supabase Storage for persistent URLs ──
-    if (user) {
-      var uploadPromises: Promise<Photo | null>[] = [];
-      for (var i = 0; i < total; i++) {
-        (function(file: File) {
-          var photoId = "upload-" + nanoid(8);
-          var isVideo = file.type.startsWith("video/");
-
-          uploadPromises.push(
-            uploadPhotoToCloud(file, user.id, photoId).then(function(cloudUrl) {
-              if (cloudUrl) {
-                return {
-                  id: photoId,
-                  url: cloudUrl,
-                  alt: file.name,
-                  isFavorite: false,
-                  category: isVideo ? "Video" : "Uploaded",
-                } as Photo;
-              }
-              // Fallback: use data URL if cloud upload fails
-              return new Promise<Photo>(function(resolve) {
-                if (isVideo) {
-                  resolve({
-                    id: photoId,
-                    url: URL.createObjectURL(file),
-                    alt: file.name,
-                    isFavorite: false,
-                    category: "Video",
-                  });
-                } else {
-                  var reader = new FileReader();
-                  reader.onload = function(e) {
-                    resolve({
-                      id: photoId,
-                      url: (e.target && e.target.result ? e.target.result : "") as string,
-                      alt: file.name,
-                      isFavorite: false,
-                      category: "Uploaded",
-                    });
-                  };
-                  reader.readAsDataURL(file);
-                }
-              });
-            })
-          );
-        })(files[i]);
-      }
-
-      toast("Uploading " + total + (total === 1 ? " photo" : " photos") + "...");
-      Promise.all(uploadPromises).then(function(results) {
-        var photos = results.filter(function(p): p is Photo { return p !== null; });
-        if (photos.length > 0) {
-          addUploadedPhotos(photos);
-          toast("Added " + photos.length + (photos.length === 1 ? " item" : " items") + " to pool");
-        }
-      });
-      return;
+    var hadAnyHeavy = Array.from(files).some(function(f) { return f.size > 1_500_000; });
+    if (hadAnyHeavy) {
+      toast("Processing " + total + (total === 1 ? " photo" : " photos") + "...");
     }
 
-    // ── Guest: use data URLs (localStorage only, no cloud) ──
-    var newPhotos: Photo[] = [];
-    var processed = 0;
-    for (var j = 0; j < total; j++) {
+    var tasks: Promise<Photo>[] = [];
+    for (var i = 0; i < total; i++) {
       (function(file: File) {
         var isVideo = file.type.startsWith("video/");
+        var photoId = "upload-" + nanoid(8);
+
         if (isVideo) {
-          var url = URL.createObjectURL(file);
-          newPhotos.push({
-            id: "upload-" + nanoid(8),
-            url: url,
+          tasks.push(Promise.resolve({
+            id: photoId,
+            url: URL.createObjectURL(file),
             alt: file.name,
             isFavorite: false,
             category: "Video",
-          });
-          processed++;
-          if (processed === total) {
-            addUploadedPhotos(newPhotos);
-            toast("Added " + newPhotos.length + (newPhotos.length === 1 ? " item" : " items") + " to pool");
-          }
+          }));
         } else {
-          var reader = new FileReader();
-          reader.onload = function(e) {
-            if (e.target && e.target.result) {
-              newPhotos.push({
-                id: "upload-" + nanoid(8),
-                url: e.target.result as string,
+          tasks.push(
+            downscaleImageToDataUrl(file).then(function(url) {
+              return {
+                id: photoId,
+                url: url,
                 alt: file.name,
                 isFavorite: false,
                 category: "Uploaded",
-              });
-            }
-            processed++;
-            if (processed === total) {
-              addUploadedPhotos(newPhotos);
-              toast("Added " + newPhotos.length + (newPhotos.length === 1 ? " item" : " items") + " to pool");
-            }
-          };
-          reader.readAsDataURL(file);
+              } as Photo;
+            })
+          );
         }
-      })(files[j]);
+      })(files[i]);
     }
-  }, [user, addUploadedPhotos]);
+
+    Promise.all(tasks).then(function(photos) {
+      if (photos.length === 0) return;
+      addUploadedPhotos(photos);
+      toast("Added " + photos.length + (photos.length === 1 ? " item" : " items") + " to pool");
+    }).catch(function(err) {
+      console.error("[upload] failed:", err);
+      toast("Couldn't process some files — try again");
+    });
+  }, [addUploadedPhotos]);
 
   var handleAICreateDumps = useCallback(function(clusters: SuggestedCluster[]) {
     createDumpsFromSuggestions(clusters);
