@@ -5,6 +5,8 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { syncAIProfileOnSignIn } from "@/lib/aiProfileSync";
+import { setCurrentUserId } from "@/lib/currentUser";
 import type { User, Session } from "@supabase/supabase-js";
 
 export interface UserProfile {
@@ -103,7 +105,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(function({ data: { session: s } }) {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) fetchProfile(s.user.id);
+      setCurrentUserId(s?.user?.id ?? null);
+      if (s?.user) {
+        fetchProfile(s.user.id);
+        // Sync cloud AI memory into localStorage (taste/rules/captions).
+        // Photos and dumps stay local — only the user-level AI knowledge syncs.
+        syncAIProfileOnSignIn(s.user.id).catch(function(e) {
+          console.warn("[AuthContext] AI profile sync failed:", e);
+        });
+      }
       setLoading(false);
     });
 
@@ -111,8 +121,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     var { data: { subscription } } = supabase.auth.onAuthStateChange(function(_event, s) {
       setSession(s);
       setUser(s?.user ?? null);
+      setCurrentUserId(s?.user?.id ?? null);
       if (s?.user) {
         fetchProfile(s.user.id);
+        syncAIProfileOnSignIn(s.user.id).catch(function(e) {
+          console.warn("[AuthContext] AI profile sync failed:", e);
+        });
       } else {
         setProfile(null);
       }

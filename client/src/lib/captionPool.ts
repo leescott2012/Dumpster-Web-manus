@@ -1,8 +1,18 @@
 /**
- * Caption Pool — local persistence for caption library
+ * Caption Pool — local persistence for caption library.
  * Ported from iOS DumpCaption model.
+ *
+ * Sync note: when a user is signed in, every mutation also schedules a
+ * debounced push to Supabase via aiProfileSync. localStorage stays the
+ * source of truth for reads — cloud is just a mirror so AI memory survives
+ * device switches.
  */
 import { nanoid } from "nanoid";
+import { getCurrentUserId, notifyAIProfileChanged } from "./currentUser";
+
+// Avoid an unused-import warning while keeping the helper available for any
+// future direct lookups. notifyAIProfileChanged() reads currentUserId itself.
+void getCurrentUserId;
 
 export type CaptionStyle = "storytelling" | "emoji" | "clean" | "numbered" | "ai" | "custom";
 
@@ -32,6 +42,7 @@ export function loadCaptions(): PoolCaption[] {
 export function saveCaptions(captions: PoolCaption[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(captions));
+    notifyAIProfileChanged();
   } catch {
     // quota exceeded, ignore
   }
@@ -125,12 +136,14 @@ export function loadTasteProfile(): string {
 }
 export function saveTasteProfile(text: string) {
   localStorage.setItem("dumpster_taste_profile", text);
+  notifyAIProfileChanged();
 }
 export function loadAIRules(): string {
   return localStorage.getItem("dumpster_ai_rules") || "";
 }
 export function saveAIRules(text: string) {
   localStorage.setItem("dumpster_ai_rules", text);
+  notifyAIProfileChanged();
 }
 
 export function buildTasteBlock(): string {
