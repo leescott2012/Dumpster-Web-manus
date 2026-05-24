@@ -150,10 +150,18 @@ export default function AuthSheet({ open, onClose }: AuthSheetProps) {
             </div>
           )}
 
-          {/* Legal text */}
+          {/* Legal text — links required for Google OAuth verification */}
           <div style={{ textAlign: "center", marginTop: 24, paddingBottom: 20 }}>
-            <span style={{ fontSize: 11, color: "#444", lineHeight: 1.6 }}>
-              {"By continuing, you agree to our Terms of Service and Privacy Policy."}
+            <span style={{ fontSize: 11, color: "#666", lineHeight: 1.6 }}>
+              By continuing, you agree to our{" "}
+              <a href="/terms" target="_blank" rel="noopener" style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: 2 }}>
+                Terms of Service
+              </a>
+              {" "}and{" "}
+              <a href="/privacy" target="_blank" rel="noopener" style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: 2 }}>
+                Privacy Policy
+              </a>
+              .
             </span>
           </div>
         </div>

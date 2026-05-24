@@ -921,6 +921,19 @@ function AboutPanel({ onReset, onTour }: { onReset?: () => void; onTour?: () => 
           </button>
         </div>
       )}
+
+      {/* Legal links — required for Google OAuth verification */}
+      <div style={{
+        marginTop: 16, paddingTop: 16,
+        borderTop: "1px solid rgba(255,255,255,0.05)",
+        display: "flex", gap: 16,
+        fontSize: 11, color: "rgba(255,255,255,0.4)",
+        letterSpacing: "0.04em",
+      }}>
+        <a href="/privacy" style={{ color: "inherit", textDecoration: "none" }}>Privacy</a>
+        <a href="/terms" style={{ color: "inherit", textDecoration: "none" }}>Terms</a>
+        <a href="mailto:leescott2019@gmail.com" style={{ color: "inherit", textDecoration: "none", marginLeft: "auto" }}>Contact</a>
+      </div>
     </div>
   );
 }
