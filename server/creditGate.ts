@@ -75,20 +75,29 @@ export async function checkCredits(
   if (!budgetOk) return { userId: userId, proceed: false };
 
   // 4) Credit balance
-  var cost = COSTS[action] || 2;
-  var result = await deductCredits(userId, action, cost);
-  if (!result.ok) {
-    res.writeHead(402, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({
-      error: "Not enough credits — need " + cost + ", have " + (result.remaining || 0) + ". Buy more in the credits menu.",
-      code: "insufficient_credits",
-      remaining: result.remaining,
-      cost: cost,
-    }));
-    return { userId: userId, proceed: false };
+  //
+  // TESTING ESCAPE HATCH: set DISABLE_CREDIT_LIMIT=1 in env to skip credit
+  // deduction entirely. Auth + rate limit + daily $ budget still enforce —
+  // those protect us from runaway costs. Remove or flip back to 0 to re-enable
+  // per-user credit gating.
+  var creditsDisabled = process.env.DISABLE_CREDIT_LIMIT === "1";
+  if (!creditsDisabled) {
+    var cost = COSTS[action] || 2;
+    var result = await deductCredits(userId, action, cost);
+    if (!result.ok) {
+      res.writeHead(402, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        error: "Not enough credits — need " + cost + ", have " + (result.remaining || 0) + ". Buy more in the credits menu.",
+        code: "insufficient_credits",
+        remaining: result.remaining,
+        cost: cost,
+      }));
+      return { userId: userId, proceed: false };
+    }
   }
 
-  // Record cost against today's budget (fire-and-forget)
+  // Record cost against today's budget (fire-and-forget) — keep this even
+  // when credits are disabled, so the $20/day circuit breaker still trips.
   recordCost(action).catch(function(e) { console.warn("[creditGate] recordCost failed:", e); });
 
   return { userId: userId, proceed: true };

@@ -139,6 +139,10 @@ function HomeContent() {
    * Returns true if OK to proceed, false if blocked (shows overlay).
    */
   var creditGate = useCallback(function(action: string): boolean {
+    // TESTING ESCAPE HATCH: VITE_DISABLE_CREDIT_LIMIT=1 bypasses the client gate
+    // so testers can iterate without running out. Server still enforces auth,
+    // rate limit, and the $20/day budget circuit breaker.
+    if (import.meta.env.VITE_DISABLE_CREDIT_LIMIT === "1") return true;
     if (canAfford(action)) return true;
     setOutOfCreditsAction(action);
     return false;
