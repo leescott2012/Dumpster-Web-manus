@@ -335,13 +335,19 @@ export default function DumpStrip({
               </div>
             </div>
 
-            {/* Hidden file input — triggered by Add More card */}
+            {/* Hidden file input — triggered by Add More card.
+              * After upload kicks off (files go to pool), we ALSO enter
+              * selection mode for this dump so the user can immediately
+              * pick which uploaded photos belong here. Otherwise the dump
+              * stays empty and the user has to flip back to "From Pool"
+              * — confusing for the obvious "Add More to this dump" intent. */}
             <input ref={fileInputRef} type="file" multiple accept="image/*,video/*"
               style={{ display: "none" }}
               onChange={function(e) {
                 if (e.target.files && e.target.files.length > 0 && onUploadFromDevice) {
                   onUploadFromDevice(e.target.files);
                   e.target.value = "";
+                  onPlusClick(dump.id); // chain into selection mode
                 }
               }}
             />
