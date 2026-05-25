@@ -270,7 +270,15 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
                   <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
                     {profile?.display_name || user.email || "User"}
                   </div>
-                  <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.06em", textTransform: "uppercase" as const, marginTop: 1 }}>
+                  {/* Always show email below display name so multi-account users
+                      can verify which Google account is active (cross-device sync
+                      only works for the same account on each device). */}
+                  {user.email && profile?.display_name && profile.display_name !== user.email && (
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, marginTop: 1 }}>
+                      {user.email}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.06em", textTransform: "uppercase" as const, marginTop: 3 }}>
                     {(profile?.subscription_tier === "pro" ? "PRO" : "FREE") + " · " + (profile ? (profile.credits + profile.daily_credits_remaining) : 0) + " credits"}
                   </div>
                 </div>
