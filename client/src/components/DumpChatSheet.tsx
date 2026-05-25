@@ -7,6 +7,7 @@ import { getAuthHeaders } from "@/lib/supabase";
 import { X, Send, Loader, ArrowUpDown, ArrowDownToLine, ArrowUpFromLine, Palette, Brain } from "lucide-react";
 import type { Dump, Photo } from "@/lib/photoData";
 import { loadTasteProfile, saveTasteProfile } from "@/lib/captionPool";
+import { friendlyError } from "@/lib/friendlyError";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -170,8 +171,9 @@ export default function DumpChatSheet({
       setMessages(finalMessages);
       saveChatHistory(dump.id, finalMessages);
     } catch (e: unknown) {
-      var errText = e instanceof Error ? e.message : "Something went wrong";
-      var errorMsg: ChatMessage = { role: "assistant", text: "Sorry, I hit an error: " + errText };
+      var fe = friendlyError(e, "ai_chat");
+      var errText = fe.hint ? fe.message + " " + fe.hint : fe.message;
+      var errorMsg: ChatMessage = { role: "assistant", text: errText };
       var errorMessages = newMessages.concat([errorMsg]);
       setMessages(errorMessages);
       saveChatHistory(dump.id, errorMessages);

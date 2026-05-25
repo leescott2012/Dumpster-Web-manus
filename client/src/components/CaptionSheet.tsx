@@ -8,6 +8,7 @@ import { Type, X, Copy, RefreshCcw, Loader2, Check, Sparkles } from "lucide-reac
 import type { Dump } from "@/lib/photoData";
 import { buildTasteBlock } from "@/lib/captionPool";
 import { compressDataUrlForVision } from "@/lib/imageDownscale";
+import { friendlyError } from "@/lib/friendlyError";
 
 interface CaptionSheetProps {
   open: boolean;
@@ -35,6 +36,7 @@ export default function CaptionSheet({
   const [captions, setCaptions] = useState<string[]>([]);
   const [vibe, setVibe] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [errorHint, setErrorHint] = useState("");
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [tasteActive, setTasteActive] = useState(false);
   const [userPrompt, setUserPrompt] = useState("");
@@ -50,6 +52,7 @@ export default function CaptionSheet({
       setCaptions([]);
       setVibe("");
       setErrorMsg("");
+      setErrorHint("");
       setUserPrompt("");
       setTasteActive(Boolean(buildTasteBlock()));
     }
@@ -98,16 +101,16 @@ export default function CaptionSheet({
       try {
         data = JSON.parse(rawText);
       } catch {
-        if (res.status === 413 || /entity too large/i.test(rawText)) {
-          setErrorMsg("Photos add up to too much data. Try a dump with fewer photos.");
-        } else {
-          setErrorMsg(rawText.slice(0, 200) || `Server returned ${res.status}`);
-        }
+        const fe = friendlyError(rawText || `HTTP ${res.status}`, "ai_caption");
+        setErrorMsg(fe.message);
+        setErrorHint(fe.hint || "");
         setPhase("error");
         return;
       }
       if (!res.ok) {
-        setErrorMsg(data.error || "Something went wrong");
+        const fe = friendlyError(data.error || `HTTP ${res.status}`, "ai_caption");
+        setErrorMsg(fe.message);
+        setErrorHint(fe.hint || "");
         setPhase("error");
         return;
       }
@@ -118,7 +121,9 @@ export default function CaptionSheet({
       onCaptionsGenerated(selectedDump.id, caps, vibeStr);
       setPhase("result");
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "Network error");
+      const fe = friendlyError(e, "ai_caption");
+      setErrorMsg(fe.message);
+      setErrorHint(fe.hint || "");
       setPhase("error");
     }
   }, [selectedDump, tone, onCaptionsGenerated, userPrompt, titleOverride, categoryOverride]);
@@ -140,6 +145,7 @@ export default function CaptionSheet({
       setCaptions([]);
       setVibe("");
       setErrorMsg("");
+      setErrorHint("");
     }, 300);
   }, [onClose]);
 
@@ -397,8 +403,10 @@ export default function CaptionSheet({
                 background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
                 color: "#ef4444", fontSize: 13, marginBottom: 20, textAlign: "left",
               }}>
-                <strong style={{ display: "block", marginBottom: 4 }}>Error</strong>
-                {errorMsg}
+                <strong style={{ display: "block", marginBottom: 4 }}>{errorMsg}</strong>
+                {errorHint && (
+                  <span style={{ color: "rgba(239,68,68,0.7)", fontSize: 12 }}>{errorHint}</span>
+                )}
               </div>
               <button onClick={generate} style={{
                 display: "inline-flex", alignItems: "center", gap: 8,

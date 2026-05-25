@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   X, Sparkles, Archive, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Instagram,
-  LogOut, User, Share2, Check,
+  LogOut, User, Share2, Check, Cloud, CloudOff,
 } from "lucide-react";
 import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules } from "@/lib/captionPool";
 import { useAuth } from "@/contexts/AuthContext";
@@ -571,6 +571,12 @@ function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount
 type SaveStatus = "idle" | "saving" | "saved";
 
 function TasteProfileSection() {
+  // Auth state — used to flip the sync indicator between Cloud (signed in,
+  // syncing) and CloudOff (signed out, local-only). The actual cloud writes are
+  // already handled in captionPool.ts via notifyAIProfileChanged → currentUser.
+  const { user } = useAuth();
+  const isSignedIn = !!user;
+
   const [profile, setProfile] = useState<string>(() => loadTasteProfile());
   const [rules, setRules] = useState<string>(() => loadAIRules());
   const [profileStatus, setProfileStatus] = useState<SaveStatus>("idle");
@@ -637,15 +643,18 @@ function TasteProfileSection() {
       <div style={{ background: "#141414", border: "1px solid rgba(var(--accent-rgb),0.18)", borderRadius: 12, padding: "14px 14px 12px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
               AI Taste Profile
+              <CloudSyncBadge signedIn={isSignedIn} />
             </div>
             <SaveStatusPill status={profileStatus} />
           </div>
           <span style={{ fontSize: 10, color: "#555" }}>{profile.length}/750</span>
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
-          Describe your aesthetic. Saves automatically and syncs across your devices.
+          {isSignedIn
+            ? "Describe your aesthetic. Saves automatically and syncs across your devices."
+            : "Describe your aesthetic. Saves on this device. Sign in to sync across devices."}
         </div>
         <textarea
           value={profile}
@@ -666,15 +675,18 @@ function TasteProfileSection() {
       <div style={{ background: "#141414", border: "1px solid rgba(110,142,200,0.18)", borderRadius: 12, padding: "14px 14px 12px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
               AI Rules
+              <CloudSyncBadge signedIn={isSignedIn} />
             </div>
             <SaveStatusPill status={rulesStatus} />
           </div>
           <span style={{ fontSize: 10, color: "#555" }}>{rules.length}/500</span>
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
-          Strict rules the AI must follow. One per line. Saves automatically.
+          {isSignedIn
+            ? "Strict rules the AI must follow. One per line. Saves automatically."
+            : "Strict rules the AI must follow. Sign in to sync across devices."}
         </div>
         <textarea
           value={rules}
@@ -743,6 +755,30 @@ function SaveStatusPill({ status }: { status: SaveStatus }) {
     }}>
       <Check size={12} strokeWidth={3} /> Saved
       <style>{`@keyframes pop-saved { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }`}</style>
+    </span>
+  );
+}
+
+/**
+ * Tiny inline cloud icon next to field titles indicating sync state:
+ *   - signed in  → Cloud (accent color) with title "Synced across your devices"
+ *   - signed out → CloudOff   (muted)        with title "Local-only — sign in to sync"
+ *
+ * Browser native tooltip via the title attribute is fine on desktop. On mobile
+ * the user can tap-hold the icon to see it. Doesn't need a full tooltip
+ * component for one byte of info.
+ */
+function CloudSyncBadge({ signedIn }: { signedIn: boolean }) {
+  if (signedIn) {
+    return (
+      <span title="Synced across your devices" style={{ display: "inline-flex", alignItems: "center", color: "var(--accent)", opacity: 0.7 }}>
+        <Cloud size={12} strokeWidth={2.2} />
+      </span>
+    );
+  }
+  return (
+    <span title="Local-only on this device. Sign in to sync." style={{ display: "inline-flex", alignItems: "center", color: "#666" }}>
+      <CloudOff size={12} strokeWidth={2.2} />
     </span>
   );
 }

@@ -8,6 +8,7 @@ import { Sparkles, X, RefreshCcw, Plus, Loader2, Minus } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
 import { buildTasteBlock } from "@/lib/captionPool";
 import { compressDataUrlForVision } from "@/lib/imageDownscale";
+import { friendlyError } from "@/lib/friendlyError";
 
 export interface SuggestedCluster {
   name: string;
@@ -35,6 +36,7 @@ export default function AISuggestSheet({
   const [phase, setPhase] = useState<Phase>("idle");
   const [cluster, setCluster] = useState<SuggestedCluster | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [errorHint, setErrorHint] = useState("");
   // Re-evaluate taste block each time the sheet opens so edits in MainMenu are picked up
   const [tasteActive, setTasteActive] = useState(false);
   useEffect(() => {
@@ -91,23 +93,25 @@ export default function AISuggestSheet({
       try {
         data = JSON.parse(rawText);
       } catch {
-        if (res.status === 413 || /entity too large/i.test(rawText)) {
-          setErrorMsg("Your photos add up to too much data. Try fewer photos or smaller files.");
-        } else {
-          setErrorMsg(rawText.slice(0, 200) || `Server returned ${res.status}`);
-        }
+        // Non-JSON response (infra error from Vercel) — friendly-translate it
+        const fe = friendlyError(rawText || `HTTP ${res.status}`, "ai_suggest");
+        setErrorMsg(fe.message);
+        setErrorHint(fe.hint || "");
         setPhase("error");
         return;
       }
       if (!res.ok) {
-        setErrorMsg(data.error || "Something went wrong");
+        const fe = friendlyError(data.error || `HTTP ${res.status}`, "ai_suggest");
+        setErrorMsg(fe.message);
+        setErrorHint(fe.hint || "");
         setPhase("error");
         return;
       }
 
       const first: SuggestedCluster | undefined = (data.clusters || [])[0];
       if (!first || first.photoIds.length < 2) {
-        setErrorMsg("Claude couldn't find a good sequence. Try again.");
+        setErrorMsg("Couldn't build a sequence from these photos.");
+        setErrorHint("Try a different selection or add more variety.");
         setPhase("error");
         return;
       }
@@ -115,7 +119,9 @@ export default function AISuggestSheet({
       setCluster(first);
       setPhase("result");
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "Network error");
+      const fe = friendlyError(e, "ai_suggest");
+      setErrorMsg(fe.message);
+      setErrorHint(fe.hint || "");
       setPhase("error");
     }
   }, [photosToAnalyze]);
@@ -145,6 +151,7 @@ export default function AISuggestSheet({
       setPhase("idle");
       setCluster(null);
       setErrorMsg("");
+      setErrorHint("");
       variationRef.current = 0;
     }, 300);
   }, [onClose]);
@@ -393,8 +400,10 @@ export default function AISuggestSheet({
                 background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
                 color: "#ef4444", fontSize: 13, marginBottom: 20, textAlign: "left",
               }}>
-                <strong style={{ display: "block", marginBottom: 4 }}>Error</strong>
-                {errorMsg}
+                <strong style={{ display: "block", marginBottom: 4 }}>{errorMsg}</strong>
+                {errorHint && (
+                  <span style={{ color: "rgba(239,68,68,0.7)", fontSize: 12 }}>{errorHint}</span>
+                )}
               </div>
               <button onClick={handleAnalyze} style={{
                 display: "inline-flex", alignItems: "center", gap: 8,

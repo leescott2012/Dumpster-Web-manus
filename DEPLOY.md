@@ -57,6 +57,20 @@ Set these in **Vercel → Project (dumpster-web-manus) → Settings → Environm
 
 ---
 
+## Supabase database migrations
+
+The web app expects four tables (RLS-enforced) and one storage bucket. Each SQL file in the repo is **idempotent** — safe to re-run.
+
+| Migration | What | Run when |
+|---|---|---|
+| `supabase-cloud-sync.sql` | `user_workspaces` table (dumps/pool JSON, currently unused — kept for revival) | Once on project creation |
+| `supabase-storage-uploads.sql` | `workspace-uploads` storage bucket + RLS (currently unused — photos are local) | Once on project creation |
+| `supabase-ai-profile.sql` | `user_ai_profile` table for cross-device AI memory (taste profile, AI rules, caption pool) | **Required** — every AI feature touches this |
+
+Run them in **Supabase → SQL Editor → New Query** → paste → Run. Each prints "Success. No rows returned." when applied (or already present).
+
+---
+
 ## What's wired
 
 | Route | Type | File |
@@ -129,8 +143,10 @@ npx vercel redeploy <url> --target production
 ## Local dev
 
 ```bash
-pnpm install
-pnpm dev   # Vite + middleware on http://localhost:3000
+npm install      # works — package-lock.json is canonical
+npm run dev      # Vite + middleware on http://localhost:3000
 ```
+
+> **Both `package-lock.json` and `pnpm-lock.yaml` exist** because the project's been touched by both managers. npm wins (it's what CI uses). If you use pnpm and the lockfiles drift, delete `pnpm-lock.yaml` and `pnpm install` from scratch — don't commit a regenerated one without also bumping `package-lock.json` to match.
 
 `.env` (gitignored) holds your local secrets. Copy `.env.example` and fill in values. Local dev fails open when Upstash env vars are missing (rate limit and budget are bypassed) — see `server/rateLimit.ts` and `server/dailyBudget.ts`.
