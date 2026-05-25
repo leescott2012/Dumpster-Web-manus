@@ -58,12 +58,17 @@ export function useAuth(): AuthState {
 }
 
 // Credit costs (duplicated from credits.ts to avoid circular imports in server)
+// Mirror of CREDIT_COSTS in client/src/lib/credits.ts. Duplicated here to
+// avoid the AuthContext importing from a sibling lib file (circular-import
+// risk via supabase). Keep these in sync with credits.ts AND with
+// server/creditGate.ts COSTS.
 var COSTS: Record<string, number> = {
-  ai_caption_casual: 1,
-  ai_caption_pro: 3,
+  ai_caption: 1,
   ai_suggest: 15,
-  ai_recycle: 5,
   ai_chat: 2,
+  // planned, no server endpoint yet:
+  ai_caption_pro: 3,
+  ai_recycle: 5,
   ai_vibe: 5,
   ai_rescan_batch: 20,
 };

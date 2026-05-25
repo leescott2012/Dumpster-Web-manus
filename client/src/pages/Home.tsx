@@ -527,7 +527,7 @@ function HomeContent() {
               onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
               onRenameDump={renameDump} onPlusClick={handlePlusClick}
               onMenuClick={function(dumpId) { setActionSheetDumpId(dumpId); }}
-              onCaptionClick={function(dumpId) { if (creditGate("ai_caption_casual")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
+              onCaptionClick={function(dumpId) { if (creditGate("ai_caption")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
               onUploadFromDevice={handleUploadPhotos}
               isCustom={!originalDumpIds.includes(dump.id)}
             />
@@ -662,7 +662,7 @@ function HomeContent() {
         open={menuOpen}
         onClose={function() { setMenuOpen(false); }}
         onAISuggest={function() { if (creditGate("ai_suggest")) setAiSheetOpen(true); }}
-        onCaptions={function() { if (creditGate("ai_caption_casual")) { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); } }}
+        onCaptions={function() { if (creditGate("ai_caption")) { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); } }}
         onIGScrub={function() { setIGScrubOpen(true); }}
         onReset={handleReset}
         onTour={startTour}
@@ -700,7 +700,7 @@ function HomeContent() {
           setChatInitialMsg("I rated this dump thumbs down. What could be better about it? Ask me what I don't like.");
           setChatDumpId(dumpId);
         }}
-        onCaptions={function(dumpId) { if (creditGate("ai_caption_casual")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
+        onCaptions={function(dumpId) { if (creditGate("ai_caption")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
         onExport={function(dumpId) { setShareSheetDumpId(dumpId); }}
         onDelete={function(dumpId) { handleDeleteDump(dumpId); }}
       />

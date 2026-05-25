@@ -5,29 +5,33 @@
  * Cheap models = fewer credits, premium models = more.
  */
 
+// Server-side action names live in server/creditGate.ts COSTS. Keep these in
+// sync — same key, same cost — or the local affordability check will lie.
+// Entries marked "(planned)" don't have a server endpoint yet but are kept
+// here so future UI work has the cost ready.
 export var CREDIT_COSTS: Record<string, number> = {
   // Captions
-  ai_caption_casual: 1,      // Claude Haiku — cheap
-  ai_caption_pro: 3,         // Claude Sonnet — premium
+  ai_caption: 1,             // Claude Haiku vision — generates 3 captions
 
   // Dump building
-  ai_suggest: 15,            // AI suggest dump (vision analysis)
-  ai_recycle: 5,             // AI pick replacement photo
+  ai_suggest: 15,            // Claude Haiku vision — clusters pool into a dump
 
-  // Chat & analysis
-  ai_chat: 2,                // AI chat message
-  ai_vibe: 5,                // Vibe analysis
+  // Chat
+  ai_chat: 2,                // Valet — chat to reorder / swap / set vibe
 
-  // Batch operations
-  ai_rescan_batch: 20,       // Batch rescan 10 photos
+  // Planned — costs reserved for future endpoints
+  ai_caption_pro: 3,         // (planned) Sonnet caption upgrade
+  ai_recycle: 5,             // (planned) AI pick replacement photo
+  ai_vibe: 5,                // (planned) Vibe analysis
+  ai_rescan_batch: 20,       // (planned) Batch rescan 10 photos
 };
 
 export var CREDIT_LABELS: Record<string, string> = {
-  ai_caption_casual: "Casual Caption",
-  ai_caption_pro: "Pro Caption",
+  ai_caption: "AI Caption",
   ai_suggest: "AI Suggest Dump",
-  ai_recycle: "AI Recycle Pick",
   ai_chat: "Valet",
+  ai_caption_pro: "Pro Caption",
+  ai_recycle: "AI Recycle Pick",
   ai_vibe: "Vibe Analysis",
   ai_rescan_batch: "Batch Rescan",
 };
