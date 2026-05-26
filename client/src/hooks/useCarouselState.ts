@@ -34,6 +34,7 @@ function deepCloneDumps(dumps: Dump[]): Dump[] {
         return { id: p.id, url: p.url, alt: p.alt, isFavorite: p.isFavorite, category: p.category };
       }),
       captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating,
+      chatHistory: d.chatHistory,
     };
   });
 }
@@ -149,6 +150,7 @@ export function useCarouselState() {
           id: d.id, number: d.number, title: d.title, subtitle: d.subtitle,
           photos: d.photos.filter(function(p) { return p.id.startsWith("upload-"); }),
           captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating,
+          chatHistory: d.chatHistory,
         };
       });
       persist(SK_DUMPS, kept);
@@ -170,7 +172,7 @@ export function useCarouselState() {
         var photos = d.photos.slice();
         var moved = photos.splice(fromIndex, 1)[0];
         photos.splice(toIndex, 0, moved);
-        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
+        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
       });
     });
   }, []);
@@ -188,12 +190,12 @@ export function useCarouselState() {
       var photo = fromDump.photos[fromIndex];
       return prev.map(function(d) {
         if (d.id === fromDumpId) {
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== fromIndex; }), captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== fromIndex; }), captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
         }
         if (d.id === toDumpId) {
           var photos = d.photos.slice();
           photos.splice(toIndex, 0, photo);
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
         }
         return d;
       });
@@ -214,7 +216,7 @@ export function useCarouselState() {
           if (d.photos.length >= 20) return d;
           var photos = d.photos.slice();
           photos.splice(toIndex, 0, capturedPhoto);
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
         });
       });
       return prev.filter(function(p) { return p.id !== photoId; });
@@ -232,7 +234,7 @@ export function useCarouselState() {
       setPool(function(prevPool) { return prevPool.concat([photo]); });
       return prev.map(function(d) {
         if (d.id !== dumpId) return d;
-        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== photoIndex; }), captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
+        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos.filter(function(_, i) { return i !== photoIndex; }), captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
       });
     });
   }, []);
@@ -264,7 +266,7 @@ export function useCarouselState() {
       var dumpPhotos = dump.photos.slice();
       setPool(function(prevPool) { return prevPool.concat(dumpPhotos); });
       return prev.filter(function(d) { return d.id !== dumpId; }).map(function(d, i) {
-        return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
+        return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
       });
     });
   }, []);
@@ -295,7 +297,7 @@ export function useCarouselState() {
   var renameDump = useCallback(function(dumpId: string, title: string) {
     setDumps(function(prev) {
       return prev.map(function(d) {
-        return d.id === dumpId ? { id: d.id, number: d.number, title: title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited } : d;
+        return d.id === dumpId ? { ...d, title: title } : d;
       });
     });
   }, []);
@@ -303,7 +305,7 @@ export function useCarouselState() {
   var setDumpCaptions = useCallback(function(dumpId: string, captions: string[], vibe: string) {
     setDumps(function(prev) {
       return prev.map(function(d) {
-        return d.id === dumpId ? { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: captions, vibe: vibe, favorited: d.favorited } : d;
+        return d.id === dumpId ? { ...d, captions: captions, vibe: vibe } : d;
       });
     });
   }, []);
@@ -311,7 +313,7 @@ export function useCarouselState() {
   var toggleDumpFavorite = useCallback(function(dumpId: string) {
     setDumps(function(prev) {
       return prev.map(function(d) {
-        return d.id === dumpId ? { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: !d.favorited, rating: d.rating } : d;
+        return d.id === dumpId ? { ...d, favorited: !d.favorited } : d;
       });
     });
   }, []);
@@ -351,7 +353,7 @@ export function useCarouselState() {
       // Merge new dumps into state
       setDumps(function(prevDumps) {
         var combined = prevDumps.concat(newDumps).map(function(d, i) {
-          return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
+          return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
         });
         return combined;
       });
@@ -382,7 +384,7 @@ export function useCarouselState() {
           }
           if (!found) reordered.push(d.photos[k]);
         }
-        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: reordered, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
+        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: reordered, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
       });
     });
   }, []);
@@ -391,7 +393,18 @@ export function useCarouselState() {
   var setDumpVibe = useCallback(function(dumpId: string, vibe: string) {
     setDumps(function(prev) {
       return prev.map(function(d) {
-        return d.id === dumpId ? { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: vibe, favorited: d.favorited } : d;
+        return d.id === dumpId ? { ...d, vibe: vibe } : d;
+      });
+    });
+  }, []);
+
+  // Persist Valet chat history on the dump itself so it syncs cross-device
+  // alongside the dump (workspace JSON carries it). Caller (DumpChatSheet)
+  // also writes to localStorage as a low-latency cache.
+  var setDumpChatHistory = useCallback(function(dumpId: string, chatHistory: import("@/lib/photoData").ChatHistoryEntry[]) {
+    setDumps(function(prev) {
+      return prev.map(function(d) {
+        return d.id === dumpId ? { ...d, chatHistory: chatHistory } : d;
       });
     });
   }, []);
@@ -417,7 +430,7 @@ export function useCarouselState() {
           // Put old photo back to pool (via outer setPool return)
           var photos = d.photos.slice();
           photos[idx] = capturedNewPhoto;
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating };
+          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
         });
       });
       // Find the old photo to put back in pool
@@ -461,5 +474,6 @@ export function useCarouselState() {
     toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto,
+    setDumpChatHistory,
   };
 }

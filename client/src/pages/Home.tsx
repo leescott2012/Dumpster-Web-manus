@@ -46,7 +46,7 @@ function HomeContent() {
     removePhotoFromPool, createNewDump, deleteDump,
     toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
-    reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto,
+    reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto, setDumpChatHistory,
   } = useCarouselState();
 
   var { dragState, updateDragPosition, endDrag } = useDrag();
@@ -628,7 +628,7 @@ function HomeContent() {
           onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.18)"; e.currentTarget.style.borderColor = "var(--accent)"; }}
           onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.1)"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.3)"; }}
         >
-          <Sparkles size={15} /> AI Suggest
+          <Sparkles size={15} /> Auto Gen
         </button>
         <button data-tour="new-dump" onClick={handleCreateDump} style={{
           display: "flex", alignItems: "center", gap: "8px",
@@ -806,6 +806,7 @@ function HomeContent() {
         onSwapIn={movePhotoFromPoolToDump}
         onSwapOut={movePhotoFromDumpToPool}
         onUpdateVibe={setDumpVibe}
+        onChatHistoryChange={setDumpChatHistory}
         initialMessage={chatInitialMsg}
       />
       <DragGhost />

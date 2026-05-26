@@ -34,6 +34,9 @@ interface DumpChatSheetProps {
   onSwapIn: (photoId: string, dumpId: string, position: number) => void;
   onSwapOut: (dumpId: string, photoIndex: number) => void;
   onUpdateVibe: (dumpId: string, vibe: string) => void;
+  /** Persists chat history onto the Dump itself so it syncs cross-device
+   *  via the workspace JSON. localStorage stays the low-latency read cache. */
+  onChatHistoryChange?: (dumpId: string, messages: ChatMessage[]) => void;
   /** Auto-send this message when the sheet opens (e.g. from thumbs-down) */
   initialMessage?: string | null;
 }
@@ -68,7 +71,7 @@ var ACTION_META: Record<string, { icon: typeof ArrowUpDown; label: string; color
 
 export default function DumpChatSheet({
   open, dump, pool, onClose,
-  onReorder, onSwapIn, onSwapOut, onUpdateVibe,
+  onReorder, onSwapIn, onSwapOut, onUpdateVibe, onChatHistoryChange,
   initialMessage,
 }: DumpChatSheetProps) {
   var [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -77,10 +80,14 @@ export default function DumpChatSheet({
   var scrollRef = useRef<HTMLDivElement>(null);
   var autoSentRef = useRef<string | null>(null);
 
-  // Load chat history when opening for a dump
+  // Load chat history when opening for a dump.
+  // Prefer dump.chatHistory (synced from cloud via workspace JSON) and fall
+  // back to localStorage for users coming from a pre-sync version.
   useEffect(function() {
     if (open && dump) {
-      var saved = loadChatHistory(dump.id);
+      var saved = (dump.chatHistory && dump.chatHistory.length > 0)
+        ? (dump.chatHistory as ChatMessage[])
+        : loadChatHistory(dump.id);
       setMessages(saved);
       setInput("");
       setLoading(false);
@@ -170,6 +177,9 @@ export default function DumpChatSheet({
       var finalMessages = newMessages.concat([assistantMsg]);
       setMessages(finalMessages);
       saveChatHistory(dump.id, finalMessages);
+      // Push onto the Dump itself too — workspace JSON sync carries it cross-device.
+      // Trim to last 20 here (saveChatHistory does the same for localStorage).
+      onChatHistoryChange?.(dump.id, finalMessages.slice(-20));
     } catch (e: unknown) {
       var fe = friendlyError(e, "ai_chat");
       var errText = fe.hint ? fe.message + " " + fe.hint : fe.message;
@@ -177,6 +187,7 @@ export default function DumpChatSheet({
       var errorMessages = newMessages.concat([errorMsg]);
       setMessages(errorMessages);
       saveChatHistory(dump.id, errorMessages);
+      onChatHistoryChange?.(dump.id, errorMessages.slice(-20));
     } finally {
       setLoading(false);
     }

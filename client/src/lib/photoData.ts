@@ -17,6 +17,26 @@ export interface Dump {
   vibe?: string;
   favorited?: boolean;
   rating?: "up" | "down" | null;
+  /** Valet chat history for this dump — last 20 messages.
+   *  Stored on the dump itself so it syncs across devices via workspace JSON. */
+  chatHistory?: ChatHistoryEntry[];
+}
+
+/** One Valet message persisted per-dump (mirrors DumpChatSheet's ChatMessage). */
+export interface ChatHistoryEntry {
+  role: "user" | "assistant";
+  text: string;
+  actions?: ChatHistoryAction[];
+}
+
+export interface ChatHistoryAction {
+  type: "reorder" | "swap_in" | "swap_out" | "update_vibe" | "taste_update";
+  photoIds?: string[];
+  photoId?: string;
+  position?: number;
+  index?: number;
+  vibe?: string;
+  preference?: string;
 }
 
 // ── Owner detection ────────────────────────────────────────────────────────
