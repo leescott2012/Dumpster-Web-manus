@@ -14,6 +14,7 @@
  */
 import type { ServerResponse } from "http";
 import { Redis } from "@upstash/redis";
+import { captureServerMessage } from "./sentry.js";
 
 var redis: Redis | null = null;
 function getRedis(): Redis | null {
@@ -88,8 +89,16 @@ export async function recordCost(action: string): Promise<void> {
   var limit = budgetCents();
   var pct = (newTotal / limit) * 100;
   if (pct >= alertPct() && pct - (cost / limit) * 100 < alertPct()) {
-    // First crossing of alert threshold today
-    console.warn("[dailyBudget] ⚠️  Crossed " + alertPct() + "% of daily budget: $" + (newTotal / 100).toFixed(2) + " / $" + (limit / 100).toFixed(2));
+    // First crossing of alert threshold today — alert via console + Sentry
+    var msg = "Crossed " + alertPct() + "% of daily AI budget: $" +
+      (newTotal / 100).toFixed(2) + " / $" + (limit / 100).toFixed(2);
+    console.warn("[dailyBudget] ⚠️  " + msg);
+    captureServerMessage(msg, "dailyBudget.alertThreshold", "warning", {
+      action: action,
+      spentCents: newTotal,
+      limitCents: limit,
+      pct: Number(pct.toFixed(1)),
+    });
   }
 }
 

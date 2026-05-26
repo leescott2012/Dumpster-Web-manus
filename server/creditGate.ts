@@ -14,6 +14,7 @@ import { createClient } from "@supabase/supabase-js";
 import { deductCredits } from "./supabaseAdmin.js";
 import { enforceRateLimit } from "./rateLimit.js";
 import { checkBudget, recordCost } from "./dailyBudget.js";
+import { captureServerError } from "./sentry.js";
 
 var supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 var supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "";
@@ -98,7 +99,10 @@ export async function checkCredits(
 
   // Record cost against today's budget (fire-and-forget) — keep this even
   // when credits are disabled, so the $20/day circuit breaker still trips.
-  recordCost(action).catch(function(e) { console.warn("[creditGate] recordCost failed:", e); });
+  recordCost(action).catch(function(e) {
+    console.warn("[creditGate] recordCost failed:", e);
+    captureServerError(e, "creditGate.recordCost", { action: action, userId: userId });
+  });
 
   return { userId: userId, proceed: true };
 }

@@ -6,6 +6,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { IncomingMessage, ServerResponse } from "http";
+import { captureServerError } from "./sentry.js";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -209,6 +210,7 @@ export async function handleAIChat(
     res.end(JSON.stringify(result));
   } catch (err: unknown) {
     console.error("[AI Chat] Anthropic error:", err);
+    captureServerError(err, "ai-chat");
     var errMsg = err instanceof Error ? err.message : "Unknown error";
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Claude API error: " + errMsg }));

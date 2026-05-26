@@ -8,6 +8,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
+import { captureServerError } from "./sentry.js";
 
 export interface CaptionPhotoInput {
   id: string;
@@ -190,6 +191,11 @@ Respond ONLY with valid JSON, no markdown, no code fences:
     res.end(JSON.stringify(result));
   } catch (err: unknown) {
     console.error("[AI Caption] Anthropic error:", err);
+    captureServerError(err, "ai-caption", {
+      photoCount: photos.length,
+      hasUserPrompt: !!payload.userPrompt,
+      tone: tone,
+    });
     const msg = err instanceof Error ? err.message : "Unknown error";
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Claude API error: " + msg }));

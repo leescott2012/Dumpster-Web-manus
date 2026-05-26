@@ -5,6 +5,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import Stripe from "stripe";
 import { addCredits, supabaseAdmin } from "../server/supabaseAdmin.js";
+import { captureServerError } from "../server/sentry.js";
 
 export const config = { runtime: "nodejs", maxDuration: 15, memory: 256 };
 
@@ -145,6 +146,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   } catch (err) {
     var errMsg = err instanceof Error ? err.message : "Unknown error";
     console.error("Webhook error:", errMsg);
+    // High-signal alert: a payment webhook failing means we may be missing
+    // credit grants. Tag distinctively so it stands out in the Sentry feed.
+    captureServerError(err, "stripe-webhook");
     res.writeHead(500).end("Error: " + errMsg);
   }
 }
