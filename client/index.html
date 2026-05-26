@@ -25,6 +25,23 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Static fallback footer with Privacy/Terms links.
+      Google's OAuth brand-verification crawler may scan the HTML before
+      running JavaScript. Without these links in the static markup, the
+      verification fails with "homepage doesn't link to your privacy policy".
+      The React app footer also includes the same links; this is the belt
+      under the suspenders.
+    -->
+    <noscript>
+      <footer style="text-align:center;color:#666;font-size:12px;padding:24px;font-family:system-ui,sans-serif">
+        Dumpster — Instagram carousel sequencing tool.
+        <br><br>
+        <a href="/privacy" style="color:#888;margin:0 8px">Privacy Policy</a>
+        <a href="/terms" style="color:#888;margin:0 8px">Terms of Service</a>
+        <a href="mailto:leescott2019@gmail.com" style="color:#888;margin:0 8px">Contact</a>
+      </footer>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

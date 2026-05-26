@@ -649,12 +649,27 @@ function HomeContent() {
       </aside>{/* end .dumpster-pool */}
       </div>{/* end .dumpster-layout */}
 
-      {/* Footer */}
+      {/* Footer \u2014 Privacy/Terms links here are visible on every page load so
+          Google's OAuth brand-verification crawler can find them. Without a
+          top-level link the verification fails ("homepage doesn't link to
+          your privacy policy"). */}
       <footer style={{
         maxWidth: "1100px", margin: "0 auto", padding: "40px 32px",
         textAlign: "center", color: "#666", fontSize: "12px", borderTop: "1px solid #1e1e1e",
+        display: "flex", flexDirection: "column", gap: 10, alignItems: "center",
       }}>
-        Dumpster \u00B7 Carousel Dump Builder
+        <div>Dumpster \u00B7 Carousel Dump Builder</div>
+        <div style={{ display: "flex", gap: 16, color: "#555" }}>
+          <a href="/privacy" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
+            Privacy
+          </a>
+          <a href="/terms" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
+            Terms
+          </a>
+          <a href="mailto:leescott2019@gmail.com" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
+            Contact
+          </a>
+        </div>
       </footer>
 
       {/* Overlays */}
