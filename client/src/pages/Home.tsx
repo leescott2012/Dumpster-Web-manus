@@ -35,7 +35,8 @@ import GuidedTour, { isTourCompleted } from "@/components/GuidedTour";
 import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions } from "@/lib/captionPool";
-import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
+import { downscaleImageToDataUrl, dataUrlToBlob } from "@/lib/imageDownscale";
+import { uploadPhotoToCloud, loadCloudState, saveCloudState } from "@/lib/cloudSync";
 
 function HomeContent() {
   var {
@@ -112,17 +113,56 @@ function HomeContent() {
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
   var { user, canAfford } = useAuth();
 
-  // ── First sign-in: clear demo content if user hasn't uploaded anything yet.
-  // Cloud sync of workspace JSON was reverted — photos are local-only data URLs,
-  // which would bloat the user_workspaces row past usable size. localStorage is
-  // the source of truth for now.
+  // ── Cloud workspace sync — load on sign-in, save on change (debounced).
+  //
+  // Photos are uploaded to Supabase Storage so their URLs are tiny HTTPS
+  // strings instead of MB-sized data URLs — that's what makes syncing the
+  // dumps/pool JSON viable. Without that, a single 5-photo dump would blow
+  // past the 1 MB jsonb practical limit.
+  //
+  // Flow:
+  //  1. User signs in → hasLoadedFromCloud=false → fetch cloud state
+  //     - cloud has data → replaceState (their prior workspace)
+  //     - cloud empty → clearDemoContent (first-time user)
+  //  2. Mark hasLoadedFromCloud=true → enable the save effect
+  //  3. Any subsequent dumps/pool change → debounced 1.5s → saveCloudState
+  //
+  // The hasLoadedFromCloud ref prevents the save effect from overwriting
+  // cloud with the demo-content placeholder during the initial render race.
+  var hasLoadedFromCloudRef = useRef(false);
   useEffect(function() {
-    if (!user) return;
-    var hasUploads = pool.some(function(p) { return p.id.startsWith("upload-"); })
-      || dumps.some(function(d) { return d.photos.some(function(p) { return p.id.startsWith("upload-"); }); });
-    if (!hasUploads) clearDemoContent();
+    if (!user) { hasLoadedFromCloudRef.current = false; return; }
+    var cancelled = false;
+    loadCloudState(user.id).then(function(cloud) {
+      if (cancelled) return;
+      if (cloud && (cloud.dumps.length > 0 || cloud.pool.length > 0)) {
+        replaceState(cloud.dumps, cloud.pool);
+      } else {
+        var hasUploads = pool.some(function(p) { return p.id.startsWith("upload-"); })
+          || dumps.some(function(d) { return d.photos.some(function(p) { return p.id.startsWith("upload-"); }); });
+        if (!hasUploads) clearDemoContent();
+      }
+      hasLoadedFromCloudRef.current = true;
+    }).catch(function(err) {
+      console.warn("[cloudSync] load failed, keeping local state:", err);
+      hasLoadedFromCloudRef.current = true; // don't block saves on transient load errors
+    });
+    return function() { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // Debounced cloud save whenever dumps or pool change after we've loaded
+  useEffect(function() {
+    if (!user || !hasLoadedFromCloudRef.current) return;
+    var userId = user.id; // narrow once outside the timer callback
+    var t = setTimeout(function() {
+      saveCloudState(userId, dumps, pool).catch(function(err) {
+        console.warn("[cloudSync] save failed:", err);
+      });
+    }, 1500);
+    return function() { clearTimeout(t); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dumps, pool, user]);
 
   // ── Always keep at least one empty dump visible so users have a target for
   // the "From Pool" / "Add More" twin cards. Without this, a freshly cleared
@@ -326,11 +366,12 @@ function HomeContent() {
     setSelectedPhotoId(null);
   }, [contextMenu, dumps, movePhotoFromDumpToPool, removePhotoFromPool]);
 
-  // Upload photos/videos from device — local-only storage (data URLs).
-  // Photos are downscaled to ~2048px / JPEG 0.85 so they stay under:
-  //   - Claude Vision's 5 MB per-image limit (was breaking AI Suggest on iPhones)
-  //   - localStorage's per-origin quota (was filling up after ~10 uploads)
-  // Videos are stored as object URLs — Claude doesn't analyze them anyway.
+  // Upload photos/videos from device.
+  //   Signed-in user: downscale → upload to Supabase Storage → store HTTPS URL.
+  //                   Cross-device persistence + workspace JSON stays small.
+  //   Guest:          data URL only — works offline but doesn't persist past the tab.
+  // Photos are downscaled to ~2048px / JPEG 0.85 first so Claude Vision's
+  // 5 MB per-image limit isn't exceeded and Storage egress stays low.
   var handleUploadPhotos = useCallback(function(files: FileList) {
     var total = files.length;
     if (total === 0) return;
@@ -347,22 +388,54 @@ function HomeContent() {
         var photoId = "upload-" + nanoid(8);
 
         if (isVideo) {
-          tasks.push(Promise.resolve({
-            id: photoId,
-            url: URL.createObjectURL(file),
-            alt: file.name,
-            isFavorite: false,
-            category: "Video",
-          }));
+          // Videos: upload original to cloud if signed in (Storage caps at 20 MB),
+          // else fall back to ephemeral object URL.
+          if (user) {
+            tasks.push(
+              uploadPhotoToCloud(file, user.id, photoId).then(function(cloudUrl) {
+                return {
+                  id: photoId,
+                  url: cloudUrl || URL.createObjectURL(file), // fallback if upload fails
+                  alt: file.name,
+                  isFavorite: false,
+                  category: "Video",
+                } as Photo;
+              })
+            );
+          } else {
+            tasks.push(Promise.resolve({
+              id: photoId,
+              url: URL.createObjectURL(file),
+              alt: file.name,
+              isFavorite: false,
+              category: "Video",
+            }));
+          }
         } else {
           tasks.push(
-            downscaleImageToDataUrl(file).then(function(url) {
+            downscaleImageToDataUrl(file).then(async function(dataUrl) {
+              // Signed-in users: convert downscaled data URL back to a Blob and
+              // upload to Supabase Storage. Use the HTTPS URL so workspace JSON
+              // stays tiny and the photo persists across devices.
+              if (user) {
+                try {
+                  var blob = await dataUrlToBlob(dataUrl);
+                  var blobAsFile = new File([blob], file.name, { type: blob.type || "image/jpeg" });
+                  var cloudUrl = await uploadPhotoToCloud(blobAsFile, user.id, photoId);
+                  if (cloudUrl) {
+                    return {
+                      id: photoId, url: cloudUrl, alt: file.name,
+                      isFavorite: false, category: "Uploaded",
+                    } as Photo;
+                  }
+                } catch (uploadErr) {
+                  console.warn("[upload] cloud upload failed, using data URL:", uploadErr);
+                }
+              }
+              // Guest mode OR cloud upload failed → keep the data URL
               return {
-                id: photoId,
-                url: url,
-                alt: file.name,
-                isFavorite: false,
-                category: "Uploaded",
+                id: photoId, url: dataUrl, alt: file.name,
+                isFavorite: false, category: "Uploaded",
               } as Photo;
             })
           );
@@ -378,7 +451,7 @@ function HomeContent() {
       console.error("[upload] failed:", err);
       toast("Couldn't process some files — try again");
     });
-  }, [addUploadedPhotos]);
+  }, [addUploadedPhotos, user]);
 
   var handleAICreateDumps = useCallback(function(clusters: SuggestedCluster[]) {
     createDumpsFromSuggestions(clusters);

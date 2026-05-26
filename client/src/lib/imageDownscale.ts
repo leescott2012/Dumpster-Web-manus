@@ -96,6 +96,15 @@ export async function downscaleImageToDataUrl(file: File): Promise<string> {
 }
 
 /**
+ * Convert a data: URL back into a Blob (for upload to Supabase Storage).
+ * Uses fetch under the hood — handles base64 and any media type.
+ */
+export async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  var res = await fetch(dataUrl);
+  return await res.blob();
+}
+
+/**
  * Compress an existing data URL down further for Vision API requests.
  * Resizes to 1024px max longest side, JPEG quality 0.65 → ~80–150 KB per image.
  * Why: Vercel caps serverless request bodies at 4.5 MB. With 20 photos this
