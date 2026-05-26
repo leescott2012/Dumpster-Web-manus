@@ -1,14 +1,22 @@
 /**
- * AISuggestSheet — Claude Vision Haiku single-dump suggestion flow
- * Suggests ONE dump at a time (2–20 photos). Accept or get a new suggestion.
+ * AutoGenSheet — Auto-generate a dump from the pool.
+ *
+ * UI is named "Auto Gen" for users; file/class names keep "AISuggest" for
+ * backward compat with server action names, Sentry breadcrumbs, etc.
+ *
+ * Default path: Claude Vision Haiku (smart clustering, costs 15 credits).
+ * Fallback path: pure-JS offline algorithm (free, instant) — used silently
+ * if any AI failure happens (5MB, 429, 503, 504, network down).
  */
 import { useState, useCallback, useRef, useEffect } from "react";
+import { toast } from "sonner";
 import { getAuthHeaders } from "@/lib/supabase";
 import { Sparkles, X, RefreshCcw, Plus, Loader2, Minus } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
 import { buildTasteBlock } from "@/lib/captionPool";
 import { compressDataUrlForVision } from "@/lib/imageDownscale";
 import { friendlyError } from "@/lib/friendlyError";
+import { offlineAutoGen } from "@/lib/offlineAutoGen";
 
 export interface SuggestedCluster {
   name: string;
@@ -58,9 +66,25 @@ export default function AISuggestSheet({
     }
   }, [targetCount, stepperMax]);
 
+  /**
+   * Try the offline algorithm and show its result. Returns true if it produced
+   * a valid cluster (so the AI error can be hidden), false otherwise.
+   * Called whenever an AI failure happens — silent graceful degradation.
+   */
+  const tryOfflineFallback = useCallback(async (aiFailureReason: string) => {
+    const offline = await offlineAutoGen(photosToAnalyze, targetCount);
+    if (!offline) return false;
+    setCluster(offline);
+    setPhase("result");
+    // Subtle toast so the user knows it wasn't the full-AI path
+    toast(`Used quick gen (${aiFailureReason})`);
+    return true;
+  }, [photosToAnalyze, targetCount]);
+
   const analyze = useCallback(async (variation: number) => {
     setPhase("loading");
     setErrorMsg("");
+    setErrorHint("");
 
     try {
       var authH = await getAuthHeaders();
@@ -93,8 +117,9 @@ export default function AISuggestSheet({
       try {
         data = JSON.parse(rawText);
       } catch {
-        // Non-JSON response (infra error from Vercel) — friendly-translate it
+        // Non-JSON response (infra error from Vercel) — fall back to offline
         const fe = friendlyError(rawText || `HTTP ${res.status}`, "ai_suggest");
+        if (await tryOfflineFallback(fe.message.toLowerCase().replace(/\.$/, ""))) return;
         setErrorMsg(fe.message);
         setErrorHint(fe.hint || "");
         setPhase("error");
@@ -102,6 +127,7 @@ export default function AISuggestSheet({
       }
       if (!res.ok) {
         const fe = friendlyError(data.error || `HTTP ${res.status}`, "ai_suggest");
+        if (await tryOfflineFallback(fe.message.toLowerCase().replace(/\.$/, ""))) return;
         setErrorMsg(fe.message);
         setErrorHint(fe.hint || "");
         setPhase("error");
@@ -110,6 +136,8 @@ export default function AISuggestSheet({
 
       const first: SuggestedCluster | undefined = (data.clusters || [])[0];
       if (!first || first.photoIds.length < 2) {
+        // AI succeeded but didn't return a useful cluster — try offline silently
+        if (await tryOfflineFallback("AI couldn't find a sequence")) return;
         setErrorMsg("Couldn't build a sequence from these photos.");
         setErrorHint("Try a different selection or add more variety.");
         setPhase("error");
@@ -120,11 +148,12 @@ export default function AISuggestSheet({
       setPhase("result");
     } catch (e) {
       const fe = friendlyError(e, "ai_suggest");
+      if (await tryOfflineFallback(fe.message.toLowerCase().replace(/\.$/, ""))) return;
       setErrorMsg(fe.message);
       setErrorHint(fe.hint || "");
       setPhase("error");
     }
-  }, [photosToAnalyze]);
+  }, [photosToAnalyze, targetCount, tryOfflineFallback]);
 
   const handleAnalyze = useCallback(() => {
     variationRef.current = 0;
@@ -205,7 +234,7 @@ export default function AISuggestSheet({
             </div>
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
-                AI Suggest
+                Auto Gen
               </div>
               <div style={{ fontSize: 11, color: "#666", marginTop: 1 }}>
                 Claude Vision · {photosToAnalyze.length} photos

@@ -57,8 +57,8 @@ var STEPS: TourStep[] = [
   },
   {
     target: "[data-tour='ai-suggest']",
-    title: "AI Suggest",
-    body: "Let AI analyze your pool photos and automatically group them into carousel dumps based on vibe, color, and theme.",
+    title: "Auto Gen",
+    body: "One tap — Dumpster builds the strongest carousel from your pool. Uses AI when available, falls back to a smart offline algorithm when it isn't.",
     icon: Sparkles,
     iconColor: "var(--accent)",
     position: "bottom",
@@ -83,7 +83,7 @@ var STEPS: TourStep[] = [
   {
     target: "[data-tour='upload-card']",
     title: "Upload Your Photos",
-    body: "Add your own photos and videos here. Once uploaded, use AI Suggest to auto-create your carousels.",
+    body: "Add your own photos and videos here. Once uploaded, tap Auto Gen to auto-create your carousels.",
     icon: Upload,
     iconColor: "var(--accent)",
     position: "left",

@@ -48,8 +48,8 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
   var features = [
     {
       icon: Sparkles,
-      title: "AI Suggest",
-      desc: "Auto-group your photos into the strongest carousels",
+      title: "Auto Gen",
+      desc: "Auto-group your photos into the strongest carousels — works offline too",
       color: "#a78bfa",
       bg: "rgba(167,139,250,0.1)",
       border: "rgba(167,139,250,0.25)",

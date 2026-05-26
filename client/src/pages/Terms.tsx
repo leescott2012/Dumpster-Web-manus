@@ -38,7 +38,7 @@ export default function Terms() {
       <P>
         To make the app work, you grant us a narrow, temporary license to
         process your content for the specific feature you triggered — for
-        example, sending a photo to Anthropic Claude when you tap AI Suggest.
+        example, sending a photo to Anthropic Claude when you tap Auto Gen.
         This license ends when the request completes. We do not use your
         content to train AI models, run ads, or sell to third parties.
       </P>

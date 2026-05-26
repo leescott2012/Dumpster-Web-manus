@@ -28,7 +28,7 @@ export var CREDIT_COSTS: Record<string, number> = {
 
 export var CREDIT_LABELS: Record<string, string> = {
   ai_caption: "AI Caption",
-  ai_suggest: "AI Suggest Dump",
+  ai_suggest: "Auto Gen Dump",
   ai_chat: "Valet",
   ai_caption_pro: "Pro Caption",
   ai_recycle: "AI Recycle Pick",

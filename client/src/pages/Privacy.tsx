@@ -31,7 +31,7 @@ export default function Privacy() {
         <LI><Strong>Your AI preferences sync to your account.</Strong> Taste profile, rules,
           and saved captions are stored in our database (Supabase) so they survive
           across devices.</LI>
-        <LI><Strong>AI features send photos to Anthropic.</Strong> When you tap AI Suggest,
+        <LI><Strong>AI features send photos to Anthropic.</Strong> When you tap Auto Gen,
           AI Caption, or Valet (AI Chat), the relevant images and text go to
           Anthropic's Claude API. Anthropic does not train on this data per
           their API terms.</LI>
