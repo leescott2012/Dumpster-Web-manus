@@ -17,6 +17,7 @@ import { IS_OWNER } from "./photoData";
 import { onAIProfileChanged } from "./currentUser";
 import {
   loadCaptions,
+  loadCaptionsRaw,
   saveCaptions,
   loadTasteProfile,
   saveTasteProfile,
@@ -24,6 +25,8 @@ import {
   saveAIRules,
   type PoolCaption,
 } from "./captionPool";
+// loadCaptions is kept in scope for any future use; raw is what sync needs.
+void loadCaptions;
 
 export interface CloudAIProfile {
   taste_profile: string;
@@ -70,7 +73,8 @@ export async function saveCloudAIProfile(userId: string): Promise<boolean> {
       user_id: userId,
       taste_profile: loadTasteProfile(),
       ai_rules: loadAIRules(),
-      caption_pool: loadCaptions(),
+      // Use raw (includes tombstones) so deletions propagate across devices
+      caption_pool: loadCaptionsRaw(),
       updated_at: new Date().toISOString(),
     });
 
@@ -111,8 +115,18 @@ function mergeIntoLocal(cloud: CloudAIProfile) {
   }
   // If both have rules, prefer local (user typed those explicitly, don't override).
 
-  // Caption pool: union by id, cloud version of conflicts.
-  var localCaps = loadCaptions();
+  // Caption pool: union by id, with tombstone-aware merge.
+  //
+  // Rules:
+  //   - If EITHER side has deleted=true → final is deleted=true (tombstone wins).
+  //     This prevents resurrecting captions the user removed on another device.
+  //   - If both have the same id with no tombstone → cloud's flag state wins
+  //     (favorited/banned). Cloud is the canonical cross-device record.
+  //   - Items only on one side → kept as-is.
+  //
+  // Raw load (includes tombstones) so we don't accidentally re-create rows
+  // the user already deleted locally but haven't synced yet.
+  var localCaps = loadCaptionsRaw();
   var cloudById = new Map<string, PoolCaption>();
   for (var i = 0; i < cloud.caption_pool.length; i++) {
     cloudById.set(cloud.caption_pool[i].id, cloud.caption_pool[i]);
@@ -123,9 +137,16 @@ function mergeIntoLocal(cloud: CloudAIProfile) {
   }
 
   var merged: PoolCaption[] = [];
-  // Cloud first (with their flag state preserved)
-  cloudById.forEach(function(c) { merged.push(c); });
-  // Then any local-only captions
+  cloudById.forEach(function(c) {
+    var l = localById.get(c.id);
+    // Tombstone wins from either side
+    if (c.deleted || (l && l.deleted)) {
+      merged.push(Object.assign({}, c, { deleted: true, favorited: false, banned: false }));
+    } else {
+      merged.push(c);
+    }
+  });
+  // Local-only captions (kept as-is, including any local tombstones not yet in cloud)
   localById.forEach(function(c) {
     if (!cloudById.has(c.id)) merged.push(c);
   });

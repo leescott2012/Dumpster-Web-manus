@@ -24,11 +24,28 @@ export interface PoolCaption {
   banned: boolean;
   dumpId?: string;       // optional link to a dump
   createdAt: number;     // epoch ms
+  /**
+   * Soft-delete tombstone. We keep the row in the synced pool so other
+   * devices learn the user deleted it; otherwise a re-merge from cloud
+   * would resurrect deleted captions. UI hides anything with deleted=true.
+   */
+  deleted?: boolean;
 }
 
 const STORAGE_KEY = "dumpster_captions";
 
+/**
+ * Public reader — used by UI. Excludes tombstoned (deleted) captions.
+ */
 export function loadCaptions(): PoolCaption[] {
+  return loadCaptionsRaw().filter(function(c) { return !c.deleted; });
+}
+
+/**
+ * Internal reader — used by cloud sync. Includes tombstones so they
+ * propagate across devices and prevent resurrection on merge.
+ */
+export function loadCaptionsRaw(): PoolCaption[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return seedCaptions();
@@ -106,10 +123,16 @@ export function toggleBanned(id: string): PoolCaption[] {
   return list;
 }
 
+/**
+ * Soft-delete a caption. Tombstones the row (deleted=true) so cloud sync
+ * propagates the deletion to other devices and merge-from-cloud doesn't
+ * resurrect it. UI's loadCaptions() filters tombstones out.
+ */
 export function removeCaption(id: string): PoolCaption[] {
-  const list = loadCaptions().filter(c => c.id !== id);
+  const raw = loadCaptionsRaw();
+  const list = raw.map(c => c.id === id ? { ...c, deleted: true, favorited: false, banned: false } : c);
   saveCaptions(list);
-  return list;
+  return list.filter(c => !c.deleted);
 }
 
 export function importCaptions(texts: string[], style: CaptionStyle): PoolCaption[] {
