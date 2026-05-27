@@ -35,8 +35,8 @@ import GuidedTour, { isTourCompleted } from "@/components/GuidedTour";
 import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions } from "@/lib/captionPool";
-import { downscaleImageToDataUrl, dataUrlToBlob } from "@/lib/imageDownscale";
-import { uploadPhotoToCloud, loadCloudState, saveCloudState } from "@/lib/cloudSync";
+import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
+import { syncAIProfileOnSignIn } from "@/lib/aiProfileSync";
 
 function HomeContent() {
   var {
@@ -113,56 +113,15 @@ function HomeContent() {
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
   var { user, canAfford } = useAuth();
 
-  // ── Cloud workspace sync — load on sign-in, save on change (debounced).
-  //
-  // Photos are uploaded to Supabase Storage so their URLs are tiny HTTPS
-  // strings instead of MB-sized data URLs — that's what makes syncing the
-  // dumps/pool JSON viable. Without that, a single 5-photo dump would blow
-  // past the 1 MB jsonb practical limit.
-  //
-  // Flow:
-  //  1. User signs in → hasLoadedFromCloud=false → fetch cloud state
-  //     - cloud has data → replaceState (their prior workspace)
-  //     - cloud empty → clearDemoContent (first-time user)
-  //  2. Mark hasLoadedFromCloud=true → enable the save effect
-  //  3. Any subsequent dumps/pool change → debounced 1.5s → saveCloudState
-  //
-  // The hasLoadedFromCloud ref prevents the save effect from overwriting
-  // cloud with the demo-content placeholder during the initial render race.
-  var hasLoadedFromCloudRef = useRef(false);
+  // ── AI profile sync — merge captions/taste/rules from cloud on sign-in.
+  // Photos and workspace (dumps + pool) are device-local for beta.
   useEffect(function() {
-    if (!user) { hasLoadedFromCloudRef.current = false; return; }
-    var cancelled = false;
-    loadCloudState(user.id).then(function(cloud) {
-      if (cancelled) return;
-      if (cloud && (cloud.dumps.length > 0 || cloud.pool.length > 0)) {
-        replaceState(cloud.dumps, cloud.pool);
-      } else {
-        var hasUploads = pool.some(function(p) { return p.id.startsWith("upload-"); })
-          || dumps.some(function(d) { return d.photos.some(function(p) { return p.id.startsWith("upload-"); }); });
-        if (!hasUploads) clearDemoContent();
-      }
-      hasLoadedFromCloudRef.current = true;
-    }).catch(function(err) {
-      console.warn("[cloudSync] load failed, keeping local state:", err);
-      hasLoadedFromCloudRef.current = true; // don't block saves on transient load errors
+    if (!user) return;
+    syncAIProfileOnSignIn(user.id).catch(function(err) {
+      console.warn("[aiProfileSync] sign-in sync failed:", err);
     });
-    return function() { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
-
-  // Debounced cloud save whenever dumps or pool change after we've loaded
-  useEffect(function() {
-    if (!user || !hasLoadedFromCloudRef.current) return;
-    var userId = user.id; // narrow once outside the timer callback
-    var t = setTimeout(function() {
-      saveCloudState(userId, dumps, pool).catch(function(err) {
-        console.warn("[cloudSync] save failed:", err);
-      });
-    }, 1500);
-    return function() { clearTimeout(t); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dumps, pool, user]);
 
   // ── Always keep at least one empty dump visible so users have a target for
   // the "From Pool" / "Add More" twin cards. Without this, a freshly cleared
@@ -388,51 +347,16 @@ function HomeContent() {
         var photoId = "upload-" + nanoid(8);
 
         if (isVideo) {
-          // Videos: upload original to cloud if signed in (Storage caps at 20 MB),
-          // else fall back to ephemeral object URL.
-          if (user) {
-            tasks.push(
-              uploadPhotoToCloud(file, user.id, photoId).then(function(cloudUrl) {
-                return {
-                  id: photoId,
-                  url: cloudUrl || URL.createObjectURL(file), // fallback if upload fails
-                  alt: file.name,
-                  isFavorite: false,
-                  category: "Video",
-                } as Photo;
-              })
-            );
-          } else {
-            tasks.push(Promise.resolve({
-              id: photoId,
-              url: URL.createObjectURL(file),
-              alt: file.name,
-              isFavorite: false,
-              category: "Video",
-            }));
-          }
+          tasks.push(Promise.resolve({
+            id: photoId,
+            url: URL.createObjectURL(file),
+            alt: file.name,
+            isFavorite: false,
+            category: "Video",
+          }));
         } else {
           tasks.push(
-            downscaleImageToDataUrl(file).then(async function(dataUrl) {
-              // Signed-in users: convert downscaled data URL back to a Blob and
-              // upload to Supabase Storage. Use the HTTPS URL so workspace JSON
-              // stays tiny and the photo persists across devices.
-              if (user) {
-                try {
-                  var blob = await dataUrlToBlob(dataUrl);
-                  var blobAsFile = new File([blob], file.name, { type: blob.type || "image/jpeg" });
-                  var cloudUrl = await uploadPhotoToCloud(blobAsFile, user.id, photoId);
-                  if (cloudUrl) {
-                    return {
-                      id: photoId, url: cloudUrl, alt: file.name,
-                      isFavorite: false, category: "Uploaded",
-                    } as Photo;
-                  }
-                } catch (uploadErr) {
-                  console.warn("[upload] cloud upload failed, using data URL:", uploadErr);
-                }
-              }
-              // Guest mode OR cloud upload failed → keep the data URL
+            downscaleImageToDataUrl(file).then(function(dataUrl) {
               return {
                 id: photoId, url: dataUrl, alt: file.name,
                 isFavorite: false, category: "Uploaded",

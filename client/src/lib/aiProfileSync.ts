@@ -151,6 +151,10 @@ function mergeIntoLocal(cloud: CloudAIProfile) {
 export async function syncAIProfileOnSignIn(userId: string): Promise<boolean> {
   if (IS_OWNER) return false;
 
+  // Belt-and-suspenders: also wire here in case the module-load init was
+  // tree-shaken in some bundling path. ensureAIProfileWired is idempotent.
+  ensureAIProfileWired();
+
   var cloud = await loadCloudAIProfile(userId);
 
   if (cloud) {
@@ -194,4 +198,22 @@ export function scheduleAIProfileSave(userId: string | null) {
 
 // Wire up the pub/sub so captionPool mutations trigger debounced cloud saves
 // without captionPool needing to import this module directly.
-onAIProfileChanged(scheduleAIProfileSave);
+//
+// IMPORTANT: this MUST run on every module load. We previously had a bare
+// `onAIProfileChanged(scheduleAIProfileSave)` here but Vite tree-shook it
+// (saw no observable side-effects on the call), leaving the handler unset
+// and silently dropping every cloud sync. Wrapping in an exported,
+// idempotent initializer that gets called from syncAIProfileOnSignIn
+// guarantees registration any time the auth flow actually runs.
+var wired = false;
+export function ensureAIProfileWired() {
+  if (wired) return;
+  onAIProfileChanged(scheduleAIProfileSave);
+  wired = true;
+}
+
+// Also try at module-load — covers cases where the user is already signed in
+// before AuthContext fires its initial session callback. Wrapping in a real
+// statement (assignment) makes the side-effect non-removable by tree-shakers.
+var _wireOnLoad = (function() { ensureAIProfileWired(); return true; })();
+void _wireOnLoad;
