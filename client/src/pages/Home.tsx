@@ -37,6 +37,7 @@ import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions } from "@/lib/captionPool";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
+import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn } from "@/lib/aiProfileSync";
 
 function HomeContent() {
@@ -356,11 +357,19 @@ function HomeContent() {
             category: "Video",
           }));
         } else {
+          // Extract EXIF from the ORIGINAL file in parallel with the downscale
+          // (downscale strips EXIF, so we have to read it before reencoding).
           tasks.push(
-            downscaleImageToDataUrl(file).then(function(dataUrl) {
+            Promise.all([
+              extractPhotoMeta(file),
+              downscaleImageToDataUrl(file),
+            ]).then(function(results) {
+              var meta = results[0];
+              var dataUrl = results[1];
               return {
                 id: photoId, url: dataUrl, alt: file.name,
                 isFavorite: false, category: "Uploaded",
+                meta: meta,
               } as Photo;
             })
           );

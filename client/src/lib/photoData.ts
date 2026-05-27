@@ -5,6 +5,30 @@ export interface Photo {
   alt: string;
   isFavorite: boolean;
   category: string;
+  /**
+   * EXIF-derived metadata captured at upload time. The downscale step
+   * strips EXIF, so we read it from the original File before resizing
+   * and stash a curated subset here. All fields optional — older photos
+   * uploaded before the EXIF feature won't have any.
+   */
+  meta?: PhotoMeta;
+}
+
+export interface PhotoMeta {
+  /** Epoch ms when the photo was taken (from EXIF DateTimeOriginal). */
+  takenAt?: number;
+  /** GPS latitude (decimal degrees, +N/-S). Treat as PII. */
+  lat?: number;
+  /** GPS longitude (decimal degrees, +E/-W). Treat as PII. */
+  lng?: number;
+  /** Camera make + model, e.g. "Apple iPhone 14 Pro". */
+  camera?: string;
+  /** Image orientation in degrees (0/90/180/270) — kept for sanity, downscale
+   *  already auto-rotates the pixels. */
+  orientation?: number;
+  /** Source pixel dimensions before downscale (for aspect / portrait detection). */
+  width?: number;
+  height?: number;
 }
 
 export interface Dump {

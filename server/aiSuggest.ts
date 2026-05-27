@@ -14,6 +14,39 @@ export interface PhotoInput {
   url: string;
   alt: string;
   category: string;
+  /** EXIF metadata captured at upload (see client/src/lib/exif.ts). */
+  meta?: {
+    takenAt?: number;
+    lat?: number;
+    lng?: number;
+    camera?: string;
+  };
+}
+
+/**
+ * Compact a meta object into a prompt-friendly line:
+ *   "taken 2024-09-12 14:32 · iPhone 14 Pro · 37.78,-122.41"
+ * Returns "" if nothing useful is present.
+ */
+function metaLine(m?: PhotoInput["meta"]): string {
+  if (!m) return "";
+  const parts: string[] = [];
+  if (m.takenAt) {
+    const d = new Date(m.takenAt);
+    parts.push(
+      "taken " +
+      d.getUTCFullYear() + "-" +
+      String(d.getUTCMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getUTCDate()).padStart(2, "0") + " " +
+      String(d.getUTCHours()).padStart(2, "0") + ":" +
+      String(d.getUTCMinutes()).padStart(2, "0")
+    );
+  }
+  if (m.camera) parts.push(m.camera);
+  if (typeof m.lat === "number" && typeof m.lng === "number") {
+    parts.push(m.lat.toFixed(3) + "," + m.lng.toFixed(3));
+  }
+  return parts.length ? "  [" + parts.join(" · ") + "]" : "";
 }
 
 // Optional seed passed by client so re-runs pick different groupings
@@ -133,7 +166,7 @@ export async function handleAISuggest(
     }
     content.push({
       type: "text",
-      text: `Photo ${i + 1} [${capped[i].category}]: ${capped[i].alt}`,
+      text: `Photo ${i + 1} [${capped[i].category}]: ${capped[i].alt}${metaLine(capped[i].meta)}`,
     });
   }
 

@@ -97,6 +97,7 @@ export default function AISuggestSheet({
           url: await compressDataUrlForVision(p.url),
           alt: p.alt,
           category: p.category,
+          meta: p.meta,
         }))
       );
       const res = await fetch("/api/ai-suggest", {

@@ -15,6 +15,37 @@ export interface CaptionPhotoInput {
   url: string;
   alt?: string;
   category?: string;
+  /** EXIF metadata captured at upload — see client/src/lib/exif.ts */
+  meta?: {
+    takenAt?: number;
+    lat?: number;
+    lng?: number;
+    camera?: string;
+  };
+}
+
+/**
+ * Summarize the date range + first location across a photo batch so the
+ * AI can write captions that reference time of day, season, place.
+ * Returns "" when no metadata is present in the batch.
+ */
+function summarizeBatchMeta(photos: CaptionPhotoInput[]): string {
+  const dates = photos.map((p) => p.meta?.takenAt).filter((t): t is number => typeof t === "number");
+  const firstGps = photos.find((p) => typeof p.meta?.lat === "number" && typeof p.meta?.lng === "number")?.meta;
+  const cameras = Array.from(new Set(photos.map((p) => p.meta?.camera).filter(Boolean)));
+  const out: string[] = [];
+  if (dates.length > 0) {
+    const min = new Date(Math.min.apply(null, dates));
+    const max = new Date(Math.max.apply(null, dates));
+    const fmt = (d: Date) =>
+      d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0");
+    out.push(min.getTime() === max.getTime() ? "Taken: " + fmt(min) : "Date range: " + fmt(min) + " → " + fmt(max));
+  }
+  if (firstGps && typeof firstGps.lat === "number" && typeof firstGps.lng === "number") {
+    out.push("Location: " + firstGps.lat.toFixed(3) + ", " + firstGps.lng.toFixed(3) + " (rough)");
+  }
+  if (cameras.length === 1) out.push("Shot on: " + cameras[0]);
+  return out.join("\n");
 }
 
 export interface CaptionRequest {
@@ -121,6 +152,8 @@ Respond ONLY with valid JSON, no markdown, no code fences:
   const metaLines: string[] = [`Dump title: "${payload.dumpTitle}"`];
   if (payload.subtitle) metaLines.push(`Theme / subtitle: "${payload.subtitle}"`);
   if (payload.category) metaLines.push(`Category: ${payload.category}`);
+  const exifSummary = summarizeBatchMeta(photos);
+  if (exifSummary) metaLines.push(exifSummary);
   content.push({ type: "text", text: metaLines.join("\n") });
 
   // Photos

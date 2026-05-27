@@ -72,12 +72,26 @@ export async function offlineAutoGen(
   var orientations = await Promise.all(oriPromises);
 
   // Score
+  // Find newest takenAt in the pool so we can do a relative "recency boost"
+  // for photos taken close in time — that's usually the same trip / event.
+  var newestTaken = 0;
+  for (var k = 0; k < pool.length; k++) {
+    var t = pool[k].meta?.takenAt;
+    if (typeof t === "number" && t > newestTaken) newestTaken = t;
+  }
+  var WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
   var scored: ScoredPhoto[] = pool.map(function(p, i) {
     var score = 0;
     if (p.isFavorite) score += 10;
     if (p.id.indexOf("upload-") === 0) score += 3;
     var isPortrait = orientations[i];
     if (isPortrait === true) score += 1;
+    // Recency boost: same week as the newest photo gets a small bump,
+    // so a single carousel tends to come from one shoot/trip.
+    if (newestTaken && p.meta?.takenAt && (newestTaken - p.meta.takenAt) < WEEK_MS) {
+      score += 2;
+    }
     return { photo: p, score: score, isPortrait: isPortrait };
   });
 

@@ -80,6 +80,9 @@ export default function CaptionSheet({
         selectedDump.photos.slice(0, 12).map(async (p) => ({
           id: p.id,
           url: await compressDataUrlForVision(p.url),
+          alt: p.alt,
+          category: p.category,
+          meta: p.meta,
         }))
       );
       const res = await fetch("/api/ai-caption", {
