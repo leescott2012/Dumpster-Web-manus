@@ -118,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         syncAIProfileOnSignIn(s.user.id).catch(function(e) {
           console.warn("[AuthContext] AI profile sync failed:", e);
         });
+        ensureAIProfileWired();
       }
       setLoading(false);
     });
@@ -132,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         syncAIProfileOnSignIn(s.user.id).catch(function(e) {
           console.warn("[AuthContext] AI profile sync failed:", e);
         });
+        ensureAIProfileWired();
       } else {
         setProfile(null);
       }

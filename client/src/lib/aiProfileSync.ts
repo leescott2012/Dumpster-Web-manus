@@ -37,8 +37,6 @@ export interface CloudAIProfile {
  * yet (new user) or owner mode is on.
  */
 export async function loadCloudAIProfile(userId: string): Promise<CloudAIProfile | null> {
-  if (IS_OWNER) return null;
-
   var { data, error } = await supabase
     .from("user_ai_profile")
     .select("taste_profile, ai_rules, caption_pool, updated_at")
@@ -66,8 +64,6 @@ export async function loadCloudAIProfile(userId: string): Promise<CloudAIProfile
  * Returns true on success — caller can use this to update a "last saved" hash.
  */
 export async function saveCloudAIProfile(userId: string): Promise<boolean> {
-  if (IS_OWNER) return false;
-
   var { error } = await supabase
     .from("user_ai_profile")
     .upsert({
@@ -149,8 +145,6 @@ function mergeIntoLocal(cloud: CloudAIProfile) {
  * Returns true if local state was modified (so the UI can re-read).
  */
 export async function syncAIProfileOnSignIn(userId: string): Promise<boolean> {
-  if (IS_OWNER) return false;
-
   // Belt-and-suspenders: also wire here in case the module-load init was
   // tree-shaken in some bundling path. ensureAIProfileWired is idempotent.
   ensureAIProfileWired();
@@ -182,7 +176,7 @@ var saveTimer: ReturnType<typeof setTimeout> | null = null;
 var pendingUserId: string | null = null;
 
 export function scheduleAIProfileSave(userId: string | null) {
-  if (!userId || IS_OWNER) return;
+  if (!userId) return;
   pendingUserId = userId;
 
   if (saveTimer) clearTimeout(saveTimer);
