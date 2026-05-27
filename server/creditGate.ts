@@ -42,6 +42,7 @@ var COSTS: Record<string, number> = {
   ai_caption: 1,
   ai_chat: 2,
   ai_recycle: 5,
+  ig_scrub: 5, // Apify scraping costs us ~5¢/call — charge accordingly
 };
 
 /**

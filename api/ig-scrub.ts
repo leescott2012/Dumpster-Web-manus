@@ -8,6 +8,7 @@
  * Env: APIFY_TOKEN  (set in Vercel dashboard)
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { checkCredits } from "../server/creditGate.js";
 
 const IMAGE_EXT = /\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i;
 const VIDEO_EXT = /\.(mp4|mov|webm)(\?|$)/i;
@@ -94,6 +95,12 @@ interface ApifyPost {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).end();
+
+  // Auth + rate limit + daily budget + credit gate.
+  // Previously this endpoint was open and any caller could trigger paid
+  // Apify scraping ($ per call). Discovered during the 2026-05-27 bug audit.
+  const gate = await checkCredits(req, res, "ig_scrub");
+  if (!gate.proceed) return;
 
   const { urls } = req.body as { urls: string[] };
   if (!urls || !Array.isArray(urls)) {
