@@ -23,12 +23,26 @@ export interface PhotoMeta {
   lng?: number;
   /** Camera make + model, e.g. "Apple iPhone 14 Pro". */
   camera?: string;
+  /** Lens model, e.g. "Main Camera". For phones. */
+  lens?: string;
+  /** ISO sensitivity. */
+  iso?: number;
+  /** Focal length in mm (35mm equivalent if available, else raw). */
+  focalLength?: number;
+  /** F-number (aperture), e.g. 1.78. */
+  fStop?: number;
+  /** Shutter speed as a fraction (e.g. 1/40 stored as 0.025). */
+  shutterSpeed?: number;
+  /** Original file format hint — "JPEG", "HEIF", "PNG", "WEBP". */
+  format?: string;
   /** Image orientation in degrees (0/90/180/270) — kept for sanity, downscale
    *  already auto-rotates the pixels. */
   orientation?: number;
   /** Source pixel dimensions before downscale (for aspect / portrait detection). */
   width?: number;
   height?: number;
+  /** Source file size in bytes (before downscale). */
+  fileSize?: number;
 }
 
 export interface Dump {

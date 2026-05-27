@@ -29,6 +29,15 @@ export async function extractPhotoMeta(file: File): Promise<PhotoMeta> {
   // Bail fast for non-images — videos and screenshots have no useful EXIF.
   if (!file.type.startsWith("image/")) return {};
 
+  // File-level details we can populate even if EXIF parse fails (screenshots,
+  // re-saved photos, etc.). These don't require EXIF.
+  var fallback: PhotoMeta = { fileSize: file.size };
+  if (file.type === "image/heic" || file.type === "image/heif") fallback.format = "HEIF";
+  else if (file.type === "image/jpeg") fallback.format = "JPEG";
+  else if (file.type === "image/png") fallback.format = "PNG";
+  else if (file.type === "image/webp") fallback.format = "WEBP";
+  else if (file.type === "image/gif") fallback.format = "GIF";
+
   try {
     var raw = await exifr.parse(file, {
       // Only ask for the tags we'll actually use — keeps the parse light.
@@ -39,6 +48,12 @@ export async function extractPhotoMeta(file: File): Promise<PhotoMeta> {
         "GPSLongitude",
         "Make",
         "Model",
+        "LensModel",
+        "ISO",
+        "FocalLength",
+        "FocalLengthIn35mmFormat",
+        "FNumber",
+        "ExposureTime",
         "Orientation",
         "ExifImageWidth",
         "ExifImageHeight",
@@ -52,9 +67,9 @@ export async function extractPhotoMeta(file: File): Promise<PhotoMeta> {
       xmp: false,
     });
 
-    if (!raw) return {};
+    if (!raw) return fallback;
 
-    var meta: PhotoMeta = {};
+    var meta: PhotoMeta = Object.assign({}, fallback);
 
     var taken = raw.DateTimeOriginal || raw.CreateDate;
     if (taken instanceof Date) {
@@ -80,6 +95,14 @@ export async function extractPhotoMeta(file: File): Promise<PhotoMeta> {
       }
     }
 
+    if (raw.LensModel) meta.lens = String(raw.LensModel).trim();
+    if (typeof raw.ISO === "number") meta.iso = raw.ISO;
+    // Prefer 35mm-equivalent focal length when available (matches what iOS shows)
+    var fl = raw.FocalLengthIn35mmFormat || raw.FocalLength;
+    if (typeof fl === "number") meta.focalLength = fl;
+    if (typeof raw.FNumber === "number") meta.fStop = raw.FNumber;
+    if (typeof raw.ExposureTime === "number") meta.shutterSpeed = raw.ExposureTime;
+
     if (typeof raw.Orientation === "number") meta.orientation = raw.Orientation;
 
     var w = raw.ExifImageWidth || raw.PixelXDimension;
@@ -89,8 +112,8 @@ export async function extractPhotoMeta(file: File): Promise<PhotoMeta> {
 
     return meta;
   } catch (_err) {
-    // exifr throws on malformed/unknown formats — treat as "no EXIF" and move on
-    return {};
+    // exifr throws on malformed/unknown formats — still return what we know
+    return fallback;
   }
 }
 
