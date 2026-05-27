@@ -28,6 +28,7 @@ import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
 import AuthSheet from "@/components/AuthSheet";
 import CreditsSheet from "@/components/CreditsSheet";
+import BugReportButton from "@/components/BugReportButton";
 import CreditsBadge from "@/components/CreditsBadge";
 import WelcomeOverlay from "@/components/WelcomeOverlay";
 import DemoBanner from "@/components/DemoBanner";
@@ -769,6 +770,7 @@ function HomeContent() {
         onAuthClick={function() { setOutOfCreditsAction(null); setAuthSheetOpen(true); }}
         onProClick={function() { setOutOfCreditsAction(null); setCreditsSheetOpen(true); }}
       />
+      <BugReportButton />
     </div>
   );
 }
