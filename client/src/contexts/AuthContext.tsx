@@ -5,7 +5,7 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { syncAIProfileOnSignIn } from "@/lib/aiProfileSync";
+import { syncAIProfileOnSignIn, ensureAIProfileWired } from "@/lib/aiProfileSync";
 import { setCurrentUserId } from "@/lib/currentUser";
 import type { User, Session } from "@supabase/supabase-js";
 
