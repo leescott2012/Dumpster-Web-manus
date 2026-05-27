@@ -98,12 +98,15 @@ export async function handleAISuggest(
   let variation = 0;
   let targetCount: number | null = null;
   let tasteBlock = "";
+  let userHint = "";
   try {
     const body = await readBody(req);
-    const parsed = JSON.parse(body) as { photos?: PhotoInput[]; variation?: number; targetCount?: number | null; tasteBlock?: string };
+    const parsed = JSON.parse(body) as { photos?: PhotoInput[]; variation?: number; targetCount?: number | null; tasteBlock?: string; userHint?: string };
     photos = parsed.photos || [];
     variation = parsed.variation || 0;
     tasteBlock = parsed.tasteBlock || "";
+    // Cap freeform input so a malicious / runaway prompt can't blow up the request
+    userHint = (parsed.userHint || "").slice(0, 500);
     if (typeof parsed.targetCount === "number" && parsed.targetCount >= 2 && parsed.targetCount <= 20) {
       targetCount = parsed.targetCount;
     }
@@ -174,9 +177,15 @@ export async function handleAISuggest(
     ? `Select EXACTLY ${targetCount} photos that form the strongest possible Instagram carousel together.`
     : `Select 2–20 photos that form the strongest single Instagram carousel. Choose a number that feels natural for the theme — quality over quantity, don't pad.`;
 
+  // Append user's freeform "anything else?" note as the highest-weight signal.
+  // It's already capped at 500 chars on the way in.
+  const userHintBlock = userHint.trim()
+    ? `\n\nUser instructions (follow these carefully): ${userHint.trim()}`
+    : "";
+
   content.push({
     type: "text",
-    text: `From these ${capped.length} photos: ${countInstruction} Give the carousel a punchy name (3–5 words) and a subtitle describing the vibe (under 10 words).
+    text: `From these ${capped.length} photos: ${countInstruction} Give the carousel a punchy name (3–5 words) and a subtitle describing the vibe (under 10 words).${userHintBlock}
 
 Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
 {"clusters":[{"name":"Name Here","subtitle":"Vibe here","photoIndices":[2,5,7,11]}]}`,

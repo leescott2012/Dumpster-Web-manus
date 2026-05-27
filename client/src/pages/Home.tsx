@@ -4,7 +4,7 @@
  * "+" card = pool selection mode, Double tap = lightbox, Hold+move = drag
  * No rules, no onboarding hints. App name: Dumpster.
  */
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { DragProvider, useDrag } from "@/contexts/DragContext";
 import { useCarouselState } from "@/hooks/useCarouselState";
 import DumpStrip from "@/components/DumpStrip";
@@ -709,6 +709,13 @@ function HomeContent() {
         onClose={function() { setAiSheetOpen(false); }}
         poolPhotos={pool}
         onCreateDumps={handleAICreateDumps}
+        usedPhotoIds={useMemo(function() {
+          var set = new Set<string>();
+          for (var i = 0; i < dumps.length; i++) {
+            for (var j = 0; j < dumps[i].photos.length; j++) set.add(dumps[i].photos[j].id);
+          }
+          return set;
+        }, [dumps])}
       />
       <DumpActionSheet
         open={actionSheetDumpId !== null}

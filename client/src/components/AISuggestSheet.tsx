@@ -8,7 +8,7 @@
  * Fallback path: pure-JS offline algorithm (free, instant) — used silently
  * if any AI failure happens (5MB, 429, 503, 504, network down).
  */
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { getAuthHeaders } from "@/lib/supabase";
 import { Sparkles, X, RefreshCcw, Plus, Loader2, Minus } from "lucide-react";
@@ -17,6 +17,7 @@ import { buildTasteBlock } from "@/lib/captionPool";
 import { compressDataUrlForVision } from "@/lib/imageDownscale";
 import { friendlyError } from "@/lib/friendlyError";
 import { offlineAutoGen } from "@/lib/offlineAutoGen";
+import AutoGenAdvanced, { EMPTY_FILTERS, applyAutoGenFilters, type AutoGenFilters } from "./AutoGenAdvanced";
 
 export interface SuggestedCluster {
   name: string;
@@ -29,6 +30,8 @@ interface AISuggestSheetProps {
   onClose: () => void;
   poolPhotos: Photo[];
   onCreateDumps: (clusters: SuggestedCluster[]) => void;
+  /** Photo IDs already used in existing dumps — enables Discovery mode. */
+  usedPhotoIds?: Set<string>;
 }
 
 type Phase = "idle" | "loading" | "result" | "error";
@@ -40,7 +43,10 @@ export default function AISuggestSheet({
   onClose,
   poolPhotos,
   onCreateDumps,
+  usedPhotoIds,
 }: AISuggestSheetProps) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [filters, setFilters] = useState<AutoGenFilters>(EMPTY_FILTERS);
   const [phase, setPhase] = useState<Phase>("idle");
   const [cluster, setCluster] = useState<SuggestedCluster | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -52,7 +58,14 @@ export default function AISuggestSheet({
   }, [open]);
   const variationRef = useRef(0);
 
-  const photosToAnalyze = poolPhotos.slice(0, MAX_PHOTOS);
+  // Apply advanced filters BEFORE truncating to MAX_PHOTOS so the cap is
+  // applied to the filtered subset (not the full pool).
+  const filteredPool = useMemo(
+    () => applyAutoGenFilters(poolPhotos, filters, usedPhotoIds),
+    [poolPhotos, filters, usedPhotoIds]
+  );
+  const photosToAnalyze = filteredPool.slice(0, MAX_PHOTOS);
+  const filteredOutCount = poolPhotos.length - filteredPool.length;
 
   // Stepper for how many photos go in the dump (null = Auto)
   const stepperMax = Math.min(20, photosToAnalyze.length);
@@ -108,6 +121,9 @@ export default function AISuggestSheet({
           variation,
           targetCount,
           tasteBlock: buildTasteBlock(),
+          // Pass any freeform vibe note from Advanced — server appends it
+          // to the prompt verbatim.
+          userHint: filters.vibeNote.trim() || undefined,
         }),
       });
 
@@ -154,7 +170,7 @@ export default function AISuggestSheet({
       setErrorHint(fe.hint || "");
       setPhase("error");
     }
-  }, [photosToAnalyze, targetCount, tryOfflineFallback]);
+  }, [photosToAnalyze, targetCount, tryOfflineFallback, filters.vibeNote]);
 
   const handleAnalyze = useCallback(() => {
     variationRef.current = 0;
@@ -377,6 +393,26 @@ export default function AISuggestSheet({
                     </div>
                   </div>
 
+                  {/* Advanced filters — date, time, category, mix mode, vibe */}
+                  <AutoGenAdvanced
+                    availableCategories={poolPhotos.map(function(p) { return p.category; })}
+                    open={advancedOpen}
+                    onToggleOpen={function() { setAdvancedOpen(function(v) { return !v; }); }}
+                    value={filters}
+                    onChange={setFilters}
+                  />
+
+                  {/* Filter result preview — only when filters actually drop something */}
+                  {filteredOutCount > 0 && (
+                    <div style={{
+                      fontSize: 11, color: "#666",
+                      marginBottom: 14, letterSpacing: "0.02em",
+                    }}>
+                      Filters match <span style={{ color: "var(--accent)", fontWeight: 700 }}>{filteredPool.length}</span> of {poolPhotos.length} photos
+                      {filteredPool.length < 2 ? " — need at least 2 to gen." : ""}
+                    </div>
+                  )}
+
                   {/* Taste active indicator */}
                   {tasteActive && (
                     <div style={{
@@ -391,13 +427,20 @@ export default function AISuggestSheet({
                     </div>
                   )}
 
-                  <button onClick={handleAnalyze} style={{
-                    display: "inline-flex", alignItems: "center", gap: 8,
-                    background: "var(--accent)", border: "none", borderRadius: 10,
-                    padding: "13px 28px", color: "#000",
-                    fontSize: 14, fontWeight: 700, cursor: "pointer",
-                    letterSpacing: "0.02em", fontFamily: "inherit",
-                  }}>
+                  <button
+                    onClick={handleAnalyze}
+                    disabled={filteredPool.length < 2}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 8,
+                      background: filteredPool.length < 2 ? "#2a2a2a" : "var(--accent)",
+                      border: "none", borderRadius: 10,
+                      padding: "13px 28px",
+                      color: filteredPool.length < 2 ? "#666" : "#000",
+                      fontSize: 14, fontWeight: 700,
+                      cursor: filteredPool.length < 2 ? "default" : "pointer",
+                      letterSpacing: "0.02em", fontFamily: "inherit",
+                    }}
+                  >
                     <Sparkles size={15} /> Generate Suggestion
                   </button>
                 </>
