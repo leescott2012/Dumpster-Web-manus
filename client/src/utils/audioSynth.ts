@@ -1,6 +1,30 @@
 // High-tech sci-fi Sound Effects Generator using Web Audio API
 // This operates completely within the client browser, requiring no assets.
 
+// Persisted mute flag — affects both the synth (beeps/startup) and is read
+// from elsewhere (Admin.tsx handleReadAloud) to silence ElevenLabs / browser TTS.
+const MUTE_KEY = "dumpster.admin.muted";
+let _muted = false;
+try { _muted = localStorage.getItem(MUTE_KEY) === "1"; } catch { /* SSR */ }
+
+type MuteListener = (muted: boolean) => void;
+const _muteListeners = new Set<MuteListener>();
+
+export function isMuted(): boolean { return _muted; }
+export function setMuted(next: boolean): void {
+  _muted = next;
+  try { localStorage.setItem(MUTE_KEY, next ? "1" : "0"); } catch { /* SSR */ }
+  // Stop in-flight TTS when muting
+  if (next && typeof window !== "undefined" && "speechSynthesis" in window) {
+    try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+  }
+  _muteListeners.forEach(fn => { try { fn(next); } catch { /* noop */ } });
+}
+export function onMuteChange(fn: MuteListener): () => void {
+  _muteListeners.add(fn);
+  return () => _muteListeners.delete(fn);
+}
+
 class SciFiSynth {
   private ctx: AudioContext | null = null;
 
@@ -20,6 +44,7 @@ class SciFiSynth {
 
   // A brief, nice high-pitch confirmation sound
   playBeep(frequency = 880, duration = 0.08, type: OscillatorType = 'sine') {
+    if (_muted) return;
     try {
       this.initCtx();
       if (!this.ctx) return;
@@ -49,6 +74,7 @@ class SciFiSynth {
 
   // Tech startup sequence
   playStartup() {
+    if (_muted) return;
     try {
       this.initCtx();
       if (!this.ctx) return;
@@ -80,6 +106,7 @@ class SciFiSynth {
 
   // System diagnostic scan sound
   playScan() {
+    if (_muted) return;
     try {
       this.initCtx();
       if (!this.ctx) return;
@@ -113,6 +140,7 @@ class SciFiSynth {
 
   // Error alert sound
   playAlert() {
+    if (_muted) return;
     try {
       this.initCtx();
       if (!this.ctx) return;

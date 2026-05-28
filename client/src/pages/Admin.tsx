@@ -12,9 +12,9 @@ import {
 import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Terminal, Shield, Zap, 
-  ShieldAlert, RefreshCw, Home, LogOut
+import {
+  Terminal, Shield, Zap,
+  ShieldAlert, RefreshCw, Home, LogOut, Volume2, VolumeX
 } from "lucide-react";
 
 // Genius Components
@@ -23,6 +23,7 @@ import ConsoleTerminal from "@/components/genius/ConsoleTerminal";
 import SystemWidget from "@/components/genius/SystemWidget";
 import AgentControl from "@/components/genius/AgentControl";
 import { sfx } from "@/lib/geniusAudio";
+import { isMuted, setMuted, onMuteChange } from "@/utils/audioSynth";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -161,6 +162,17 @@ export default function Admin() {
   const [isWarmingUp, setIsWarmingUp] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
 
+  // Global mute — persists in localStorage. Silences SFX + TTS (ElevenLabs
+  // and browser SpeechSynthesis). Mirror state into React so the button icon
+  // can re-render when toggled.
+  const [muted, setMutedState] = useState<boolean>(isMuted());
+  useEffect(() => {
+    return onMuteChange(setMutedState);
+  }, []);
+  const toggleMute = useCallback(() => {
+    setMuted(!isMuted());
+  }, []);
+
   // Audio setup
   const addLog = (msg: string) => {
     setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -289,6 +301,13 @@ export default function Admin() {
   // Falls back to browser SpeechSynthesis when /api/tts fails (free-tier ElevenLabs
   // 402, missing key, network error, etc.) so the assistant always speaks.
   const handleReadAloud = useCallback(async (text: string): Promise<void> => {
+    // Honor global mute — no SFX, no ElevenLabs, no browser TTS.
+    // Reply text still ends up in the terminal log so you can read it.
+    if (isMuted()) {
+      addLog(`[Genius] (muted) ${text}`);
+      setHudState('idle');
+      return;
+    }
     setHudState('speaking');
     addLog(`[Genius] Synthesizing voice output...`);
 
@@ -524,6 +543,13 @@ export default function Admin() {
         </div>
 
         <div className="flex items-center gap-4">
+          <button
+            onClick={toggleMute}
+            title={muted ? "Unmute audio" : "Mute audio"}
+            className={`p-2 rounded-lg transition-colors ${muted ? "text-red-500/70 hover:bg-red-500/10" : "hover:bg-[#D4AF37]/10"}`}
+          >
+            {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          </button>
           <button onClick={fetchStats} className="p-2 hover:bg-[#D4AF37]/10 rounded-lg transition-colors group">
             <RefreshCw className="w-4 h-4 group-active:rotate-180 transition-transform duration-500" />
           </button>
