@@ -13,7 +13,7 @@ import PhotoLightbox from "@/components/PhotoLightbox";
 import PhotoContextMenu from "@/components/PhotoContextMenu";
 import DragGhost from "@/components/DragGhost";
 import type { Photo } from "@/lib/photoData";
-import { Plus, RotateCcw, Sparkles, Menu } from "lucide-react";
+import { Plus, RotateCcw, Sparkles, Menu, Cpu } from "lucide-react";
 import { toast } from "sonner";
 import { nanoid } from "nanoid";
 import AISuggestSheet, { type SuggestedCluster } from "@/components/AISuggestSheet";
@@ -35,6 +35,7 @@ import DemoBanner from "@/components/DemoBanner";
 import GuidedTour, { isTourCompleted } from "@/components/GuidedTour";
 import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { JARVISWorkspace } from "@/components/jarvis";
 import { loadCaptions } from "@/lib/captionPool";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
@@ -114,6 +115,7 @@ function HomeContent() {
   var [authSheetOpen, setAuthSheetOpen] = useState(false);
   var [creditsSheetOpen, setCreditsSheetOpen] = useState(false);
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
+  var [jarvisOpen, setJarvisOpen] = useState(false);
   var { user, canAfford } = useAuth();
 
   // ── AI profile sync — merge captions/taste/rules from cloud on sign-in.
@@ -458,6 +460,29 @@ function HomeContent() {
             onAuthClick={function() { setAuthSheetOpen(true); }}
           />
           <button
+            onClick={function(e) { e.stopPropagation(); setJarvisOpen(true); }}
+            title="JARVIS Neural Matrix"
+            style={{
+              width: 36, height: 36, borderRadius: "50%",
+              background: "rgba(212,175,55,0.08)",
+              border: "1px solid rgba(212,175,55,0.30)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", color: "#D4AF37",
+              transition: "all 0.18s",
+              boxShadow: "0 0 8px rgba(212,175,55,0.15)",
+            }}
+            onMouseEnter={function(e) {
+              e.currentTarget.style.background = "rgba(212,175,55,0.18)";
+              e.currentTarget.style.boxShadow = "0 0 14px rgba(212,175,55,0.4)";
+            }}
+            onMouseLeave={function(e) {
+              e.currentTarget.style.background = "rgba(212,175,55,0.08)";
+              e.currentTarget.style.boxShadow = "0 0 8px rgba(212,175,55,0.15)";
+            }}
+          >
+            <Cpu size={15} />
+          </button>
+          <button
             onClick={function(e) { e.stopPropagation(); setMenuOpen(true); }}
             style={{
               width: 36, height: 36, borderRadius: 9,
@@ -788,6 +813,11 @@ function HomeContent() {
         onClose={function() { setOutOfCreditsAction(null); }}
         onAuthClick={function() { setOutOfCreditsAction(null); setAuthSheetOpen(true); }}
         onProClick={function() { setOutOfCreditsAction(null); setCreditsSheetOpen(true); }}
+      />
+      <JARVISWorkspace
+        open={jarvisOpen}
+        onClose={function() { setJarvisOpen(false); }}
+        title="JARVIS"
       />
       <BugReportButton />
     </div>
