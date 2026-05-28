@@ -164,7 +164,22 @@ export default function Admin() {
 
   // Audio setup
   const addLog = (msg: string) => {
-    setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
+    const timestamp = new Date().toLocaleTimeString();
+    const fullMsg = `[${timestamp}] ${msg}`;
+    setLogs(prev => [...prev.slice(-49), fullMsg]);
+    
+    // Extract log level from message
+    const levelMatch = msg.match(/\[(SYSTEM|SUCCESS|ERROR|BOOT|INFO|CRITICAL|FAIL|USER|GENIUS|AGENT|WARN)\]/);
+    const level = levelMatch ? levelMatch[1] : 'INFO';
+    
+    // Persist to database asynchronously
+    if (session) {
+      supabase.from('system_logs').insert({
+        level,
+        message: msg,
+        metadata: { timestamp, source: 'dashboard' }
+      }).catch(err => console.warn('Log persistence failed:', err));
+    }
   };
 
   // Track Supabase session
@@ -211,6 +226,26 @@ export default function Admin() {
     } finally {
       setLoading(false);
       setHudState('idle');
+    }
+  }, [session]);
+
+  // Load previous logs from database on session load
+  useEffect(function() {
+    if (session) {
+      supabase
+        .from('system_logs')
+        .select('level, message')
+        .order('created_at', { ascending: false })
+        .limit(50)
+        .then(({ data: logs }) => {
+          if (logs && logs.length > 0) {
+            const previousLogs = logs
+              .reverse()
+              .map((log: any) => `[${log.level}] ${log.message}`);
+            setLogs(previousLogs);
+          }
+        })
+        .catch(err => console.warn('Could not load previous logs:', err));
     }
   }, [session]);
 

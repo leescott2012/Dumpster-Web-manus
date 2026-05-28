@@ -7,12 +7,21 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getUserFromRequest } from "../server/creditGate.js";
+import { createClient } from "@supabase/supabase-js";
+
+// Supabase client for logging
+const supabase = createClient(
+  process.env.SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+);
 
 const GENIUS_SYSTEM_PROMPT = `You are Genius, the AI core of the Chamillion Collective — a hyper-intelligent, 
 calm, and slightly sardonic AI assistant built into the admin dashboard. You speak with precision and confidence. 
 You are aware of the Dumpster app (an Instagram carousel photo dump creator for iOS). 
 Keep responses concise — 1-3 sentences max. No markdown. Speak naturally as if through a voice interface.
-Address the user as "sir" occasionally, in the style of a sophisticated AI assistant.`;
+Address the user as "sir" occasionally, in the style of a sophisticated AI assistant.
+
+You have access to recent conversation history and system activity. Use this context to provide more personalized and relevant responses.`;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).end();
@@ -33,6 +42,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let replyText = "";
 
   try {
+    // Fetch recent logs for context (last 15 messages)
+    let recentContext = "";
+    try {
+      const { createClient } = await import("@supabase/supabase-js");
+      const supabase = createClient(
+        process.env.SUPABASE_URL || "",
+        process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+      );
+      const { data: logs } = await supabase
+        .from("system_logs")
+        .select("level, message")
+        .order("created_at", { ascending: false })
+        .limit(15);
+      
+      if (logs && logs.length > 0) {
+        recentContext = "\n\nRecent conversation history:\n" + 
+          logs
+            .reverse()
+            .map((log: any) => `[${log.level}] ${log.message}`)
+            .join("\n");
+      }
+    } catch (e) {
+      console.warn("Could not fetch logs:", e);
+    }
+
     if (openaiKey) {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -44,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           model: "gpt-4o-mini",
           max_tokens: 150,
           messages: [
-            { role: "system", content: GENIUS_SYSTEM_PROMPT },
+            { role: "system", content: GENIUS_SYSTEM_PROMPT + recentContext },
             { role: "user", content: transcript },
           ],
         }),
@@ -90,6 +124,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!replyText) {
       replyText = "I processed your request, sir, but received an empty response from the neural core. Please try again.";
+    }
+
+    // Log the interaction to system_logs
+    try {
+      const { createClient } = await import("@supabase/supabase-js");
+      const supabase = createClient(
+        process.env.SUPABASE_URL || "",
+        process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+      );
+      
+      await supabase.from("system_logs").insert([
+        { level: "USER", message: transcript },
+        { level: "GENIUS", message: replyText }
+      ]);
+    } catch (e) {
+      console.warn("Could not log to database:", e);
     }
 
     return res.status(200).json({ reply: replyText });
