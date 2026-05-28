@@ -1,252 +1,224 @@
-import { motion } from "motion/react";
-import { Mic, MicOff, Radio, Sparkles } from "lucide-react";
-import { sfx } from "../utils/audioSynth";
+import React, { useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface ArcReactorProps {
-  status: "idle" | "listening" | "thinking" | "speaking";
-  themeColor: 'arc-blue' | 'reactor-orange' | 'matrix-green' | 'crimson-alert';
-  isMuted: boolean;
-  onToggleMute: () => void;
-  transcript?: string;
-  isVolumeActive?: boolean;
+  status: 'idle' | 'listening' | 'thinking' | 'speaking';
+  isOnline?: boolean;
+  themeColor?: string; // Kept for compatibility but we default to Gold
 }
 
-export default function ArcReactor({
-  status,
-  themeColor,
-  isMuted,
-  onToggleMute,
-  transcript,
-  isVolumeActive = false
-}: ArcReactorProps) {
+const GOLD = "#D4AF37"; // Chamillion Collective Gold
 
-  // Color mapping variables
-  const colorThemeMap = {
-    'arc-blue': {
-      glow: "shadow-[0_0_50px_rgba(200,169,110,0.4)]",
-      text: "text-accent",
-      border: "border-accent/30",
-      accent: "#c8a96e",
-      radial: "radial-gradient(circle, rgba(200,169,110,0.2) 0%, rgba(10,10,10,0) 70%)",
-      svgStreak: "#c8a96e"
-    },
-    'reactor-orange': {
-      glow: "shadow-[0_0_50px_rgba(245,158,11,0.4)]",
-      text: "text-amber-500",
-      border: "border-amber-500/30",
-      accent: "#f59e0b",
-      radial: "radial-gradient(circle, rgba(245,158,11,0.2) 0%, rgba(15,23,42,0) 70%)",
-      svgStreak: "#f59e0b"
-    },
-    'matrix-green': {
-      glow: "shadow-[0_0_50px_rgba(16,185,129,0.4)]",
-      text: "text-emerald-400",
-      border: "border-emerald-500/30",
-      accent: "#10b981",
-      radial: "radial-gradient(circle, rgba(16,185,129,0.2) 0%, rgba(15,23,42,0) 70%)",
-      svgStreak: "#10b981"
-    },
-    'crimson-alert': {
-      glow: "shadow-[0_0_50px_rgba(239,68,68,0.4)]",
-      text: "text-rose-500",
-      border: "border-rose-500/30",
-      accent: "#ef4444",
-      radial: "radial-gradient(circle, rgba(239,68,68,0.2) 0%, rgba(15,23,42,0) 70%)",
-      svgStreak: "#ef4444"
-    }
-  };
-
-  const choice = colorThemeMap[themeColor];
-
-  // Specific state descriptions
-  const stateLabels = {
-    idle: { title: "ONLINE - SYSTEM SECURED", subtitle: "Awaiting activation commands...", color: choice.text },
-    listening: { title: "EARS ACTIVE - DECRYPTING SPEECH", subtitle: "Syncing voice stream in real-time...", color: "text-red-400 animate-pulse" },
-    thinking: { title: "NEURAL COGNITION RUNNING", subtitle: "Querying Gemini core modules...", color: "text-amber-400" },
-    speaking: { title: "DISSOLVING SPEECH SYNTHESIS", subtitle: "Modulating voice frequency oscillator...", color: "text-cyan-400 animate-pulse" }
-  };
-
-  const currentMeta = stateLabels[status];
-
-  // Handle clicking reactor core directly
-  const handleReactorClick = () => {
-    sfx.playBeep(status === 'idle' ? 660 : 440, 0.1);
-    onToggleMute();
-  };
+const StarField = ({ count = 50, status }: { count?: number; status: string }) => {
+  const stars = useMemo(() => {
+    return Array.from({ length: count }).map((_, i) => ({
+      id: i,
+      size: Math.random() * 2 + 0.5,
+      radius: 40 + Math.random() * 80,
+      angle: Math.random() * Math.PI * 2,
+      speed: (Math.random() * 0.02 + 0.01) * (Math.random() > 0.5 ? 1 : -1),
+      delay: Math.random() * 2,
+    }));
+  }, [count]);
 
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-card/30 backdrop-blur-md rounded-2xl border border-border/80 relative overflow-hidden" id="arc-reactor-widget">
-      {/* Dynamic Background Radial Aura */}
-      <div 
-        className="absolute inset-0 pointer-events-none transition-all duration-1000"
-        style={{ background: choice.radial }}
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {stars.map((star) => (
+        <motion.div
+          key={star.id}
+          className="absolute rounded-full bg-white"
+          style={{
+            width: star.size,
+            height: star.size,
+            boxShadow: `0 0 4px ${GOLD}`,
+          }}
+          animate={{
+            x: [
+              Math.cos(star.angle) * star.radius,
+              Math.cos(star.angle + Math.PI) * star.radius,
+              Math.cos(star.angle + Math.PI * 2) * star.radius,
+            ],
+            y: [
+              Math.sin(star.angle) * star.radius,
+              Math.sin(star.angle + Math.PI) * star.radius,
+              Math.sin(star.angle + Math.PI * 2) * star.radius,
+            ],
+            opacity: [0.2, 0.8, 0.2],
+            scale: status === 'speaking' ? [1, 1.8, 1] : [1, 1.2, 1],
+          }}
+          transition={{
+            duration: 10 / Math.abs(star.speed * 100),
+            repeat: Infinity,
+            ease: "linear",
+            delay: star.delay,
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
+const OrbitalRing = ({ radius, duration, opacity = 0.2, reverse = false, status }: any) => {
+  const isActive = status === 'speaking' || status === 'listening';
+  
+  return (
+    <motion.div
+      className="absolute rounded-full border border-dashed"
+      style={{
+        width: radius * 2,
+        height: radius * 2,
+        borderColor: GOLD,
+        opacity: opacity,
+        left: `calc(50% - ${radius}px)`,
+        top: `calc(50% - ${radius}px)`,
+      }}
+      animate={{ 
+        rotate: reverse ? -360 : 360,
+        scale: isActive ? [1, 1.05, 1] : 1,
+        opacity: isActive ? [opacity, opacity * 2, opacity] : opacity
+      }}
+      transition={{
+        rotate: { duration, repeat: Infinity, ease: "linear" },
+        scale: { duration: 0.5, repeat: Infinity },
+        opacity: { duration: 0.5, repeat: Infinity }
+      }}
+    />
+  );
+};
+
+export default function ArcReactor({ status, isOnline = true }: ArcReactorProps) {
+  const isSpeaking = status === 'speaking';
+  const isThinking = status === 'thinking';
+  const isListening = status === 'listening';
+
+  return (
+    <div className="relative w-64 h-64 flex items-center justify-center bg-transparent overflow-hidden">
+      {/* Background Star Field (Galaxy Effect) */}
+      <StarField count={40} status={status} />
+
+      {/* Outer Glow Nebula */}
+      <motion.div
+        className="absolute w-48 h-48 rounded-full"
+        style={{
+          background: `radial-gradient(circle, ${GOLD}22 0%, transparent 70%)`,
+        }}
+        animate={{
+          scale: isSpeaking ? [1, 1.3, 1] : [1, 1.1, 1],
+          opacity: isOnline ? [0.2, 0.4, 0.2] : 0.1,
+        }}
+        transition={{ duration: 3, repeat: Infinity }}
       />
 
-      {/* Hexagonal Tech Decal Decoration */}
-      <div className="absolute top-3 left-4 flex gap-1 items-center text-[10px] font-mono tracking-widest text-slate-500">
-        <Radio className="w-2.5 h-2.5" />
-        <span>Genius COGNITIVE REACTOR</span>
-      </div>
+      {/* Orbital Rings (Galaxy Structure) */}
+      <OrbitalRing radius={110} duration={25} opacity={0.05} status={status} />
+      <OrbitalRing radius={90} duration={18} opacity={0.1} reverse status={status} />
+      <OrbitalRing radius={70} duration={12} opacity={0.15} status={status} />
 
-      <div className="absolute top-3 right-4 flex gap-1 items-center text-[10px] font-mono tracking-widest text-slate-500">
-        <span>STATUS: {status.toUpperCase()}</span>
-      </div>
-
-      {/* Actual Arc Reactor Core Visual representation */}
-      <div className="relative w-64 h-64 flex items-center justify-center mt-6">
+      {/* Main Reactor Body */}
+      <div className="relative z-10 w-40 h-40 flex items-center justify-center">
         
-        {/* Outer glowing particle circle */}
-        <div className={`absolute inset-0 rounded-full border border-dashed border-slate-700/40 p-4 transition-all duration-700 ${status === 'listening' ? 'border-red-500/20 scale-105' : ''}`} />
-
-        {/* Orbit ring 1 - Rotates Clockwise slowly */}
+        {/* Rotating Outer Frame with Tech Ticks */}
         <motion.div
+          className="absolute inset-0 border-2 border-[#D4AF37]/20 rounded-full border-t-transparent border-b-transparent"
           animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 15, ease: "linear" }}
-          className="absolute w-52 h-52 border-2 border-dotted rounded-full opacity-60 pointer-events-none"
-          style={{ borderColor: status === 'listening' ? '#f43f5e' : choice.accent, opacity: status === 'thinking' ? 0.9 : 0.4 }}
+          transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
         />
-
-        {/* Orbit ring 2 - Rotates Counter-Clockwise medium */}
+        
         <motion.div
+          className="absolute inset-4 border border-[#D4AF37]/40 rounded-full border-l-transparent border-r-transparent"
           animate={{ rotate: -360 }}
-          transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
-          className="absolute w-44 h-44 rounded-full border border-dashed border-spacing-2 pointer-events-none"
-          style={{ borderColor: choice.accent, opacity: status === 'speaking' ? 0.8 : 0.3 }}
+          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
         />
 
-        {/* Staggered rotating geometric ticks ring */}
+        {/* Inner Pulsing Core */}
         <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 25, ease: "linear" }}
-          className="absolute w-40 h-40 pointer-events-none opacity-40"
-        >
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <circle
-              cx="50"
-              cy="50"
-              r="45"
-              stroke={status === 'listening' ? '#ef4444' : choice.svgStreak}
-              strokeWidth="1"
-              strokeDasharray="4, 12, 16, 12"
-              fill="none"
-            />
-          </svg>
-        </motion.div>
-
-        {/* Reactor Core Central Mesh Button */}
-        <motion.button
-          onClick={handleReactorClick}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className={`absolute z-10 w-28 h-28 rounded-full bg-slate-950 flex flex-col items-center justify-center cursor-pointer border-3 relative ${choice.glow} transition-all duration-500`}
-          style={{ 
-            borderColor: isMuted ? "#475569" : (status === 'listening' ? '#ef4444' : choice.accent),
+          className="relative w-24 h-24 rounded-full flex items-center justify-center"
+          style={{
+            background: `radial-gradient(circle, ${GOLD}33 0%, transparent 80%)`,
+            boxShadow: isOnline ? `0 0 40px ${GOLD}22` : 'none',
           }}
+          animate={{
+            scale: isSpeaking ? [1, 1.2, 1] : isListening ? [1, 1.1, 1] : 1,
+          }}
+          transition={{ duration: 0.4, repeat: isSpeaking || isListening ? Infinity : 0 }}
         >
-          {/* Internal rotating reactor mesh plates */}
-          <motion.div 
-            animate={{ rotate: status === 'thinking' ? -360 : 360 }}
-            transition={{ repeat: Infinity, duration: status === 'thinking' ? 2 : 12, ease: "linear" }}
-            className="absolute inset-0.5 rounded-full pointer-events-none opacity-20"
+          {/* The Singularity (Center Point) */}
+          <motion.div
+            className="w-12 h-12 rounded-full flex items-center justify-center border-2 border-[#D4AF37]"
+            style={{
+              background: '#000',
+              boxShadow: isOnline ? `inset 0 0 15px ${GOLD}44, 0 0 15px ${GOLD}44` : 'none',
+            }}
           >
-            <svg viewBox="0 0 100 100" className="w-full h-full">
-              {[...Array(8)].map((_, i) => (
-                <line
-                  key={i}
-                  x1="50"
-                  y1="50"
-                  x2={50 + 40 * Math.cos((i * Math.PI) / 4)}
-                  y2={50 + 40 * Math.sin((i * Math.PI) / 4)}
-                  stroke={choice.svgStreak}
-                  strokeWidth="3"
+            <AnimatePresence mode="wait">
+              {isSpeaking ? (
+                <motion.div
+                  key="speaking"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  className="flex gap-1 items-center"
+                >
+                  {[1, 2, 3, 2, 1].map((h, i) => (
+                    <motion.div
+                      key={i}
+                      className="w-0.5 bg-[#D4AF37]"
+                      animate={{ height: [6, 18, 6] }}
+                      transition={{ duration: 0.3, repeat: Infinity, delay: i * 0.05 }}
+                    />
+                  ))}
+                </motion.div>
+              ) : isThinking ? (
+                <motion.div
+                  key="thinking"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-6 h-6 border-2 border-[#D4AF37] border-t-transparent rounded-full"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
                 />
-              ))}
-            </svg>
+              ) : (
+                <motion.div
+                  key="idle"
+                  className="w-3 h-3 rounded-full bg-[#D4AF37]"
+                  animate={{
+                    scale: [1, 1.4, 1],
+                    opacity: [0.4, 1, 0.4],
+                  }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+              )}
+            </AnimatePresence>
           </motion.div>
 
-          {/* Central state icon */}
-          <div className="z-20 text-center flex flex-col items-center justify-center">
-            {isMuted ? (
-              <MicOff className="w-8 h-8 text-slate-500 animate-[pulse_1.5s_infinite]" />
-            ) : status === 'listening' ? (
-              <Mic className="w-8 h-8 text-rose-500 animate-ping absolute" />
-            ) : status === 'thinking' ? (
-              <Sparkles className="w-8 h-8 text-amber-500 animate-spin" />
-            ) : (
-              <Mic className={`w-8 h-8 ${choice.text}`} />
-            )}
-
-            {status === 'listening' && (
-              <Mic className="w-8 h-8 text-rose-500 z-10" />
-            )}
-
-            <span className="text-[9px] font-mono tracking-widest mt-1 text-slate-400 font-bold uppercase">
-              {isMuted ? "MUTED" : (status === 'listening' ? "RECORDING" : "TAP CORE")}
-            </span>
-          </div>
-
-          {/* Dynamic volume expanding waves */}
-          {status === 'speaking' && !isMuted && (
-            <span className="absolute inset-0 rounded-full border border-cyan-400/40 animate-[ping_1.5s_infinite]" />
-          )}
-
-          {status === 'listening' && !isMuted && (
-            <span className="absolute inset-0 rounded-full border border-rose-500/50 animate-[ping_1s_infinite]" />
-          )}
-        </motion.button>
-
-        {/* Ambient Waveform Bars rotating in orbit around the core */}
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-          {[...Array(12)].map((_, idx) => {
-            const angle = (idx * 360) / 12;
-            const height = status === 'speaking' 
-              ? Math.floor(Math.random() * 18 + 6) 
-              : status === 'listening' 
-                ? Math.floor(Math.random() * 22 + 8) 
-                : 4;
-            return (
-              <div
-                key={idx}
-                className="absolute w-1 rounded-sm transition-all duration-150"
-                style={{
-                  transform: `rotate(${angle}deg) translateY(-64px)`,
-                  height: `${height}px`,
-                  backgroundColor: status === 'listening' ? '#f43f5e' : choice.accent,
-                  opacity: status === 'idle' ? 0.2 : 0.8
-                }}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Voice Transcript Bubble Overlay */}
-      {transcript && status === 'listening' && (
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-6 p-3 bg-red-950/20 border border-red-500/20 rounded-xl max-w-sm text-center"
-        >
-          <span className="text-xs font-mono text-red-300 italic tracking-wide">
-            " {transcript} ... "
-          </span>
+          {/* Floating Data Nodes (Orbital Stars) */}
+          {[0, 120, 240].map((angle, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-1.5 h-1.5 rounded-full bg-[#D4AF37]"
+              style={{
+                boxShadow: `0 0 8px ${GOLD}`,
+              }}
+              animate={{
+                x: [
+                  Math.cos((angle * Math.PI) / 180) * 35,
+                  Math.cos(((angle + 120) * Math.PI) / 180) * 35,
+                  Math.cos(((angle + 240) * Math.PI) / 180) * 35,
+                  Math.cos(((angle + 360) * Math.PI) / 180) * 35,
+                ],
+                y: [
+                  Math.sin((angle * Math.PI) / 180) * 35,
+                  Math.sin(((angle + 120) * Math.PI) / 180) * 35,
+                  Math.sin(((angle + 240) * Math.PI) / 180) * 35,
+                  Math.sin(((angle + 360) * Math.PI) / 180) * 35,
+                ],
+                scale: isSpeaking ? [1, 1.5, 1] : 1,
+              }}
+              transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+            />
+          ))}
         </motion.div>
-      )}
-
-      {/* Core status summary readout */}
-      <div className="mt-6 text-center z-10">
-        <h3 className={`font-mono text-xs font-bold tracking-widest ${currentMeta.color}`}>
-          {currentMeta.title}
-        </h3>
-        <p className="font-mono text-[10px] text-slate-400 tracking-wide mt-1">
-          {currentMeta.subtitle}
-        </p>
-      </div>
-
-      {/* Quick wake instructions */}
-      <div className="mt-4 flex gap-2 items-center text-[10px] text-slate-500 font-mono">
-        <span className="px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800">CLICK REACTOR CORE</span>
-        <span>To toggle Voice Recognition</span>
       </div>
     </div>
   );
