@@ -5,9 +5,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { text } = req.body;
+  const { text, voiceId: requestedVoiceId } = req.body;
   const apiKey = process.env.ELEVENLABS_API_KEY;
-  const voiceId = process.env.ELEVENLABS_VOICE_ID || '8Ln42OXYupYsag45MAUy';
+
+  // Allowed voice IDs (whitelist to prevent abuse)
+  const ALLOWED_VOICES = [
+    '8Ln42OXYupYsag45MAUy', // Voice 1 (default)
+    'bbGtsRRKUfYO634UxSjz', // Voice 2
+  ];
+  const voiceId = ALLOWED_VOICES.includes(requestedVoiceId)
+    ? requestedVoiceId
+    : (process.env.ELEVENLABS_VOICE_ID || '8Ln42OXYupYsag45MAUy');
 
   if (!apiKey) {
     return res.status(500).json({ error: 'ElevenLabs API key not configured' });

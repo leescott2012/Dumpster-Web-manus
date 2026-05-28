@@ -155,6 +155,13 @@ export default function Admin() {
   const [isWarmingUp, setIsWarmingUp] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
 
+  // Voice selection
+  const VOICES = [
+    { id: '8Ln42OXYupYsag45MAUy', label: 'VOICE_01' },
+    { id: 'bbGtsRRKUfYO634UxSjz', label: 'VOICE_02' },
+  ];
+  const [selectedVoice, setSelectedVoice] = useState('8Ln42OXYupYsag45MAUy');
+
   // Audio setup
   const addLog = (msg: string) => {
     setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -351,7 +358,7 @@ export default function Admin() {
       const response = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text, voiceId: selectedVoice })
       });
       
       if (response.ok) {
@@ -456,6 +463,22 @@ export default function Admin() {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Voice Selector */}
+          <div className="flex items-center gap-1 border border-[#D4AF37]/20 rounded-lg p-1">
+            {VOICES.map(v => (
+              <button
+                key={v.id}
+                onClick={() => { setSelectedVoice(v.id); sfx.playBeep(660, 0.06); addLog(`[Genius] Voice switched to ${v.label}.`); }}
+                className={`px-3 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${
+                  selectedVoice === v.id
+                    ? 'bg-[#D4AF37] text-black'
+                    : 'text-[#D4AF37]/40 hover:text-[#D4AF37]/80'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
           <button onClick={fetchStats} className="p-2 hover:bg-[#D4AF37]/10 rounded-lg transition-colors group">
             <RefreshCw className="w-4 h-4 group-active:rotate-180 transition-transform duration-500" />
           </button>
