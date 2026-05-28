@@ -108,41 +108,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.warn("Could not fetch logs:", e);
     }
 
-    if (openaiKey) {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${openaiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          max_tokens: 150,
-          messages: [
-            { role: "system", content: GENIUS_SYSTEM_PROMPT + statsBlock(stats) + recentContext },
-            { role: "user", content: transcript },
-          ],
-        }),
-      });
-      const data = await response.json() as any;
-      replyText = data.choices?.[0]?.message?.content?.trim() || "";
-    } else if (googleKey) {
-      // Google Gemini fallback
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${googleKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: GENIUS_SYSTEM_PROMPT + statsBlock(stats) + recentContext }] },
-            contents: [{ parts: [{ text: transcript }] }],
-            generationConfig: { maxOutputTokens: 150 },
-          }),
-        }
-      );
-      const data = await response.json() as any;
-      replyText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
-    } else if (anthropicKey) {
+    // Provider preference: Anthropic Claude first (matches the rest of the app's
+    // AI calls — ai_chat, ai_suggest, etc. — for tone consistency), then Gemini
+    // free-tier, then OpenAI. Falls through to the next if the higher-priority
+    // key isn't set.
+    if (anthropicKey) {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -151,16 +121,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-3-haiku-20240307",
-          max_tokens: 150,
+          model: "claude-haiku-4-5",
+          max_tokens: 400,
           system: GENIUS_SYSTEM_PROMPT + statsBlock(stats) + recentContext,
           messages: [{ role: "user", content: transcript }],
         }),
       });
       const data = await response.json() as any;
       replyText = data.content?.[0]?.text?.trim() || "";
-    } else {
-      replyText = "Neural link established, sir. However, no AI model key is configured in the environment. Please add OPENAI_API_KEY, GOOGLE_API_KEY, or ANTHROPIC_API_KEY to your Vercel environment variables.";
+      // Defensive: if Anthropic returns an error envelope, fall through.
+      if (!replyText && data?.error?.message) {
+        console.warn("[genius-chat] anthropic error, falling back:", data.error.message);
+      }
+    }
+    if (!replyText && googleKey) {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${googleKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: GENIUS_SYSTEM_PROMPT + statsBlock(stats) + recentContext }] },
+            contents: [{ parts: [{ text: transcript }] }],
+            generationConfig: { maxOutputTokens: 400 },
+          }),
+        }
+      );
+      const data = await response.json() as any;
+      replyText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    }
+    if (!replyText && openaiKey) {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${openaiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          max_tokens: 400,
+          messages: [
+            { role: "system", content: GENIUS_SYSTEM_PROMPT + statsBlock(stats) + recentContext },
+            { role: "user", content: transcript },
+          ],
+        }),
+      });
+      const data = await response.json() as any;
+      replyText = data.choices?.[0]?.message?.content?.trim() || "";
+    }
+    if (!replyText && !anthropicKey && !googleKey && !openaiKey) {
+      replyText = "Neural link established, sir. However, no AI model key is configured in the environment. Please add ANTHROPIC_API_KEY, GOOGLE_API_KEY, or OPENAI_API_KEY to your Vercel environment variables.";
     }
 
     if (!replyText) {
