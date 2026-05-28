@@ -4,11 +4,16 @@
  * Returns aggregated user activity for the /admin dashboard.
  * Protected: only the account set in ADMIN_USER_ID env var can access this.
  *
+ * Query params:
+ *   ?range=7d   → last 7 days
+ *   ?range=30d  → last 30 days (default)
+ *   ?range=all  → all time
+ *
  * Queries (all via service_role — bypasses RLS):
  *   - auth.users          → total users, join dates, last sign-in
  *   - profiles            → credits, subscription tier
- *   - credit_transactions → AI feature usage and spend (last 30 days)
- *   - activity_log        → DAU, photo uploads, exports (last 30 days)
+ *   - credit_transactions → AI feature usage and spend
+ *   - activity_log        → DAU, photo uploads, exports
  *
  * Set ADMIN_USER_ID in Vercel env to your Supabase user UUID.
  * Find it: Supabase → Authentication → Users → your row → copy UUID.
@@ -54,6 +59,7 @@ interface AdminStats {
   feature_usage: FeatureUsageRow[];
   dau: DauRow[];
   users: UserRow[];
+  range: string;
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -76,33 +82,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ error: "Forbidden." });
   }
 
+  // 3) Parse date range
+  const range = (req.query.range as string) ?? "30d";
+  let rangeMs: number | null;
+  let dauDays: number;
+
+  if (range === "7d") {
+    rangeMs = 7 * 24 * 60 * 60 * 1000;
+    dauDays = 7;
+  } else if (range === "all") {
+    rangeMs = null; // no filter
+    dauDays = 30;
+  } else {
+    // default: 30d
+    rangeMs = 30 * 24 * 60 * 60 * 1000;
+    dauDays = 14;
+  }
+
+  const rangeStart = rangeMs
+    ? new Date(Date.now() - rangeMs).toISOString()
+    : new Date(0).toISOString();
+
   try {
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const oneDayAgo     = new Date(Date.now() -      24 * 60 * 60 * 1000).toISOString();
-    const sevenDaysAgo  = new Date(Date.now() -  7 * 24 * 60 * 60 * 1000).toISOString();
+    const oneDayAgo    = new Date(Date.now() -      24 * 60 * 60 * 1000).toISOString();
+    const sevenDaysAgo = new Date(Date.now() -  7 * 24 * 60 * 60 * 1000).toISOString();
 
     // ── Parallel data fetches ─────────────────────────────────────────────────
     const [usersResult, profilesResult, txResult, activityResult] = await Promise.all([
-      // All auth users (paginated at 1000 — fine for beta)
       supabaseAdmin.auth.admin.listUsers({ perPage: 1000 }),
 
-      // All profiles
       supabaseAdmin
         .from("profiles")
         .select("id, credits, subscription_tier"),
 
-      // Credit transactions last 30 days (debits only: amount < 0)
       supabaseAdmin
         .from("credit_transactions")
         .select("user_id, amount, type, created_at")
         .lt("amount", 0)
-        .gte("created_at", thirtyDaysAgo),
+        .gte("created_at", rangeStart),
 
-      // Activity log last 30 days
       supabaseAdmin
         .from("activity_log")
         .select("user_id, event, metadata, created_at")
-        .gte("created_at", thirtyDaysAgo),
+        .gte("created_at", rangeStart),
     ]);
 
     const authUsers  = usersResult.data?.users ?? [];
@@ -128,10 +150,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ).size;
 
     const txToday = txRows.filter(r => r.created_at >= oneDayAgo);
-    const ai_calls_today     = txToday.length;
+    const ai_calls_today      = txToday.length;
     const credits_spent_today = txToday.reduce((s, r) => s + Math.abs(r.amount), 0);
 
-    // ── Feature usage (last 30 days) ──────────────────────────────────────────
+    // ── Feature usage ─────────────────────────────────────────────────────────
     const featureMap = new Map<string, { count: number; credits: number }>();
     for (const tx of txRows) {
       const key = tx.type as string;
@@ -144,25 +166,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map(([action, v]) => ({ action, count: v.count, credits: v.credits }))
       .sort((a, b) => b.count - a.count);
 
-    // ── DAU (last 14 days, session_start events) ──────────────────────────────
-    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    // ── DAU ───────────────────────────────────────────────────────────────────
+    const dauWindowStart = new Date(Date.now() - dauDays * 24 * 60 * 60 * 1000).toISOString();
     const dauMap = new Map<string, Set<string>>();
     for (const r of sessionEvents) {
-      if (r.created_at < fourteenDaysAgo) continue;
-      const day = r.created_at.slice(0, 10); // "YYYY-MM-DD"
+      if (r.created_at < dauWindowStart) continue;
+      const day = r.created_at.slice(0, 10);
       if (!dauMap.has(day)) dauMap.set(day, new Set());
       dauMap.get(day)!.add(r.user_id as string);
     }
-    // Fill in every day in the range (even zero days)
     const dau: DauRow[] = [];
-    for (let d = 0; d < 14; d++) {
-      const dt = new Date(Date.now() - (13 - d) * 24 * 60 * 60 * 1000);
+    for (let d = 0; d < dauDays; d++) {
+      const dt = new Date(Date.now() - (dauDays - 1 - d) * 24 * 60 * 60 * 1000);
       const key = dt.toISOString().slice(0, 10);
       dau.push({ date: key, count: dauMap.get(key)?.size ?? 0 });
     }
 
     // ── Per-user stats ─────────────────────────────────────────────────────────
-    // Build per-user aggregates from tx + activity
     const userTx = new Map<string, { calls: number; credits: number }>();
     for (const tx of txRows) {
       const uid = tx.user_id as string;
@@ -172,7 +192,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userTx.set(uid, existing);
     }
 
-    const userPhotos = new Map<string, number>();
+    const userPhotos  = new Map<string, number>();
     const userExports = new Map<string, number>();
     for (const r of actRows) {
       const uid = r.user_id as string;
@@ -189,19 +209,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const profile = profileById.get(u.id);
       const tx      = userTx.get(u.id);
       return {
-        id:            u.id,
-        email:         u.email ?? "",
-        created_at:    u.created_at,
+        id:              u.id,
+        email:           u.email ?? "",
+        created_at:      u.created_at,
         last_sign_in_at: u.last_sign_in_at ?? null,
-        tier:          profile?.subscription_tier ?? "free",
-        credits:       profile?.credits ?? 0,
-        ai_calls:      tx?.calls ?? 0,
-        credits_used:  tx?.credits ?? 0,
+        tier:            profile?.subscription_tier ?? "free",
+        credits:         profile?.credits ?? 0,
+        ai_calls:        tx?.calls ?? 0,
+        credits_used:    tx?.credits ?? 0,
         photos_uploaded: userPhotos.get(u.id) ?? 0,
-        exports:       userExports.get(u.id) ?? 0,
+        exports:         userExports.get(u.id) ?? 0,
       };
     }).sort((a, b) => {
-      // Sort: most recently active first
       const aTime = a.last_sign_in_at ?? a.created_at;
       const bTime = b.last_sign_in_at ?? b.created_at;
       return bTime.localeCompare(aTime);
@@ -212,6 +231,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       feature_usage,
       dau,
       users,
+      range,
     };
 
     return res.status(200).json(stats);
