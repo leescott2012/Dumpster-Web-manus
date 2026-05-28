@@ -36,8 +36,16 @@ export interface CloudAIProfile {
 }
 
 /**
- * Fetch the user's AI profile from Supabase. Returns null if no row exists
- * yet (new user) or owner mode is on.
+ * Fetch the user's AI profile from Supabase.
+ *
+ * Returns:
+ *   - CloudAIProfile when the row exists
+ *   - null when the user genuinely has no row yet (PGRST116 "no rows")
+ *
+ * Throws on any other error (network, RLS, etc). The caller MUST distinguish
+ * these cases — previously this returned null for both, which caused first-
+ * sign-in network errors to fall through to "bootstrap from local," wiping
+ * the user's cloud profile with empty local data.
  */
 export async function loadCloudAIProfile(userId: string): Promise<CloudAIProfile | null> {
   var { data, error } = await supabase
@@ -46,13 +54,13 @@ export async function loadCloudAIProfile(userId: string): Promise<CloudAIProfile
     .eq("user_id", userId)
     .single();
 
-  if (error || !data) {
-    // PGRST116 = no row found (expected for new users)
-    if (error && error.code !== "PGRST116") {
-      console.error("[aiProfileSync] load failed:", error);
-    }
-    return null;
+  if (error) {
+    // PGRST116 = no row found (legitimate new-user case)
+    if (error.code === "PGRST116") return null;
+    console.error("[aiProfileSync] load failed:", error);
+    throw new Error("loadCloudAIProfile: " + error.message);
   }
+  if (!data) return null;
 
   return {
     taste_profile: data.taste_profile || "",
@@ -187,10 +195,11 @@ function mergeIntoLocal(cloud: CloudAIProfile) {
 
 /**
  * One-shot initial sync on sign-in.
- *   - If cloud exists → merge it into localStorage, return true (caller can
- *     trigger UI refresh).
- *   - If cloud is empty → push current localStorage up to cloud (first-time
- *     bootstrap for existing users who built up local AI memory before sync).
+ *   - If cloud row exists → merge into localStorage, push merged state back.
+ *   - If cloud row is genuinely missing (PGRST116) → bootstrap from local.
+ *   - If cloud load throws (network/RLS error) → bail without touching cloud.
+ *     Critical: we must NOT bootstrap on transient errors, because that would
+ *     overwrite a real cloud profile with the (possibly empty) local one.
  *
  * Returns true if local state was modified (so the UI can re-read).
  */
@@ -199,7 +208,14 @@ export async function syncAIProfileOnSignIn(userId: string): Promise<boolean> {
   // tree-shaken in some bundling path. ensureAIProfileWired is idempotent.
   ensureAIProfileWired();
 
-  var cloud = await loadCloudAIProfile(userId);
+  var cloud: CloudAIProfile | null;
+  try {
+    cloud = await loadCloudAIProfile(userId);
+  } catch (e) {
+    // Transient load error — leave cloud alone. Caller (Home.tsx) logs it.
+    console.warn("[aiProfileSync] cloud load failed — skipping sync:", e);
+    return false;
+  }
 
   if (cloud) {
     mergeIntoLocal(cloud);
@@ -210,7 +226,7 @@ export async function syncAIProfileOnSignIn(userId: string): Promise<boolean> {
     return true;
   }
 
-  // No cloud row yet — bootstrap from local.
+  // No cloud row yet (PGRST116) — bootstrap from local.
   await saveCloudAIProfile(userId);
   return false;
 }

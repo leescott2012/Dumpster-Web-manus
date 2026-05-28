@@ -200,13 +200,15 @@ export default function DumpChatSheet({
     }
   }, [input, sendMessage]);
 
-  // Auto-send initialMessage on thumbs-down (once per open)
+  // Auto-send initialMessage on thumbs-down (once per open).
+  // Timer is cleared on unmount / re-run so we never call sendMessage after
+  // the sheet closed — previously this could fire against a torn-down hook
+  // and trigger a React state-update-on-unmounted-component warning.
   useEffect(function() {
-    if (open && dump && initialMessage && autoSentRef.current !== dump.id + initialMessage) {
-      autoSentRef.current = dump.id + initialMessage;
-      // Small delay so the sheet renders first
-      setTimeout(function() { sendMessage(initialMessage); }, 300);
-    }
+    if (!(open && dump && initialMessage && autoSentRef.current !== dump.id + initialMessage)) return;
+    autoSentRef.current = dump.id + initialMessage;
+    var timer = setTimeout(function() { sendMessage(initialMessage); }, 300);
+    return function() { clearTimeout(timer); };
   }, [open, dump, initialMessage, sendMessage]);
 
   var handleKeyDown = useCallback(function(e: React.KeyboardEvent) {

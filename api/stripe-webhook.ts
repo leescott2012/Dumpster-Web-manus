@@ -47,23 +47,28 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   try {
-    // Prevent duplicate processing
-    var { data: existing } = await supabaseAdmin
+    // Atomic idempotency check — INSERT wins or the PK conflict tells us the
+    // event is already in-flight / processed. The previous select-then-insert
+    // had a race window: two concurrent webhook deliveries (Stripe retries on
+    // 5xx, network blips) could both pass the select, both insert, and both
+    // proceed to addCredits → duplicate charge granted. Found in 2026-05-27 audit.
+    var { error: insertErr } = await supabaseAdmin
       .from("stripe_events")
-      .select("id")
-      .eq("id", event.id)
-      .single();
+      .insert({
+        id: event.id,
+        type: event.type,
+        data: event.data.object as unknown as Record<string, unknown>,
+      });
 
-    if (existing) {
-      res.writeHead(200).end("Already processed");
-      return;
+    if (insertErr) {
+      // 23505 = unique_violation in Postgres — another delivery already won.
+      if (insertErr.code === "23505") {
+        res.writeHead(200).end("Already processed");
+        return;
+      }
+      // Anything else — let outer catch report via Sentry.
+      throw insertErr;
     }
-
-    await supabaseAdmin.from("stripe_events").insert({
-      id: event.id,
-      type: event.type,
-      data: event.data.object as unknown as Record<string, unknown>,
-    });
 
     // Handle checkout completed
     if (event.type === "checkout.session.completed") {

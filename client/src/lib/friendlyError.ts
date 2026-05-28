@@ -130,10 +130,13 @@ export function friendlyError(raw: unknown, action?: string): FriendlyMessage {
   }
 
   // ── Default fallback ─────────────────────────────────────────────────────
-  // Show a generic message; the raw text is in the console for debugging.
+  // NEVER show the raw error string — even short ones leak stack-trace-y
+  // junk like "TypeError: Cannot read property 'x' of undefined" that means
+  // nothing to a user (and looks scary). Raw text stays in the console for
+  // debugging only.
   return {
     message: "Something went wrong.",
-    hint: s.length > 0 && s.length < 80 ? s : "Try again — if it keeps failing, email leescott2019@gmail.com.",
+    hint: "Try again — if it keeps failing, email leescott2019@gmail.com.",
     retryable: true,
   };
 }

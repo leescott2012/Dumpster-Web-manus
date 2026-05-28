@@ -410,50 +410,60 @@ export function useCarouselState() {
   }, []);
 
   // Swap one dump photo for a pool photo (recycle) — keeps the same position
+  /**
+   * Swap a photo in a dump with one from the pool.
+   *
+   * Implementation note: the previous version nested setDumps inside setPool
+   * and read dumpsRef.current at an ambiguous point in the lifecycle, leaving
+   * a stale-closure bug. Cleaner approach: do all lookups up-front via refs
+   * (always current), then dispatch two independent state updates. React
+   * batches them automatically so the user sees a single re-render.
+   */
   var swapPhoto = useCallback(function(dumpId: string, oldPhotoId: string, newPhotoId: string) {
-    setPool(function(prevPool) {
-      var newPhoto: Photo | null = null;
-      for (var i = 0; i < prevPool.length; i++) {
-        if (prevPool[i].id === newPhotoId) { newPhoto = prevPool[i]; break; }
-      }
-      if (!newPhoto) return prevPool;
-      var capturedNewPhoto = newPhoto;
-      setDumps(function(prevDumps) {
-        return prevDumps.map(function(d) {
-          if (d.id !== dumpId) return d;
-          var oldPhoto: Photo | null = null;
-          var idx = -1;
-          for (var j = 0; j < d.photos.length; j++) {
-            if (d.photos[j].id === oldPhotoId) { oldPhoto = d.photos[j]; idx = j; break; }
-          }
-          if (!oldPhoto || idx < 0) return d;
-          // Put old photo back to pool (via outer setPool return)
-          var photos = d.photos.slice();
-          photos[idx] = capturedNewPhoto;
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
-        });
-      });
-      // Find the old photo to put back in pool
-      var oldPhotoObj: Photo | null = null;
-      // We need to find it from the current dumps state — but we're inside setPool so we use the dumps from closure
-      // Actually we need to search the dumps. Let's look it up.
-      // Since setDumps was just called (queued), we read from dumpsRef
-      var currentDumps = dumpsRef.current;
-      for (var di = 0; di < currentDumps.length; di++) {
-        if (currentDumps[di].id === dumpId) {
-          for (var pi = 0; pi < currentDumps[di].photos.length; pi++) {
-            if (currentDumps[di].photos[pi].id === oldPhotoId) {
-              oldPhotoObj = currentDumps[di].photos[pi];
-              break;
-            }
-          }
-          break;
+    var currentDumps = dumpsRef.current;
+    var currentPool  = poolRef.current;
+
+    // Find the incoming pool photo
+    var newPhoto: Photo | null = null;
+    for (var i = 0; i < currentPool.length; i++) {
+      if (currentPool[i].id === newPhotoId) { newPhoto = currentPool[i]; break; }
+    }
+    if (!newPhoto) return;
+
+    // Find the outgoing dump photo
+    var targetDump = null as Dump | null;
+    var oldPhoto: Photo | null = null;
+    for (var di = 0; di < currentDumps.length; di++) {
+      if (currentDumps[di].id === dumpId) {
+        targetDump = currentDumps[di];
+        for (var pi = 0; pi < targetDump.photos.length; pi++) {
+          if (targetDump.photos[pi].id === oldPhotoId) { oldPhoto = targetDump.photos[pi]; break; }
         }
+        break;
       }
-      if (oldPhotoObj) {
-        return prevPool.filter(function(p) { return p.id !== newPhotoId; }).concat([oldPhotoObj]);
-      }
-      return prevPool.filter(function(p) { return p.id !== newPhotoId; });
+    }
+    if (!targetDump || !oldPhoto) return;
+
+    // Capture for callbacks (TS narrowing inside setX callbacks doesn't carry).
+    var inPhoto: Photo  = newPhoto;
+    var outPhoto: Photo = oldPhoto;
+
+    // Update dump: replace oldPhoto with newPhoto in-place
+    setDumps(function(prev) {
+      return prev.map(function(d) {
+        if (d.id !== dumpId) return d;
+        return {
+          id: d.id, number: d.number, title: d.title, subtitle: d.subtitle,
+          photos: d.photos.map(function(p) { return p.id === oldPhotoId ? inPhoto : p; }),
+          captions: d.captions, vibe: d.vibe, favorited: d.favorited,
+          rating: d.rating, chatHistory: d.chatHistory,
+        };
+      });
+    });
+
+    // Update pool: remove newPhoto, append oldPhoto
+    setPool(function(prev) {
+      return prev.filter(function(p) { return p.id !== newPhotoId; }).concat([outPhoto]);
     });
   }, []);
 

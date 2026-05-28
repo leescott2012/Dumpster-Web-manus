@@ -68,28 +68,50 @@ export async function deductCredits(
   return { ok: true, remaining: total - cost };
 }
 
-/** Add credits to a user's account (after purchase) */
+/**
+ * Add credits to a user's account (after a Stripe purchase).
+ *
+ * Concurrency-safe: uses an atomic Postgres function (`increment_credits`)
+ * instead of SELECT-then-UPDATE. Two concurrent webhooks granting the same
+ * user credits will serialise at the database level — no double-credit.
+ *
+ * Idempotency: if `stripePaymentId` is supplied, we first try to insert the
+ * transaction row. The `credit_transactions.stripe_payment_id` column has a
+ * unique partial index (see supabase-atomic-credits.sql), so a retried
+ * webhook with the same payment_intent gets a 23505 unique-violation and
+ * we no-op without granting credits twice.
+ */
 export async function addCredits(
   userId: string,
   amount: number,
   type: string,
   stripePaymentId?: string
 ): Promise<void> {
-  // Increment credits
-  var { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("credits")
-    .eq("id", userId)
-    .single();
-
-  if (profile) {
-    await supabaseAdmin
-      .from("profiles")
-      .update({ credits: profile.credits + amount })
-      .eq("id", userId);
+  // 1) Idempotency guard — if this payment_intent already has a tx row, bail.
+  //    (Belt-and-suspenders: stripe-webhook.ts also dedupes by event.id.)
+  if (stripePaymentId) {
+    var { data: existingTx } = await supabaseAdmin
+      .from("credit_transactions")
+      .select("id")
+      .eq("stripe_payment_id", stripePaymentId)
+      .limit(1)
+      .maybeSingle();
+    if (existingTx) {
+      console.log("[addCredits] dedupe — payment_intent already credited:", stripePaymentId);
+      return;
+    }
   }
 
-  // Log
+  // 2) Atomic increment via RPC (no read-modify-write race)
+  var { error: rpcError } = await supabaseAdmin.rpc("increment_credits", {
+    p_user_id: userId,
+    p_amount:  amount,
+  });
+  if (rpcError) {
+    throw new Error("increment_credits failed: " + rpcError.message);
+  }
+
+  // 3) Log the transaction
   await supabaseAdmin.from("credit_transactions").insert({
     user_id: userId,
     amount: amount,
