@@ -12,12 +12,14 @@ import {
 import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Terminal, Shield, Zap, 
-  ShieldAlert, RefreshCw, Home, LogOut
+import {
+  ShieldAlert, RefreshCw, Home, LogOut,
+  ChevronUp, ChevronDown, Search
 } from "lucide-react";
 
 // Genius Components
+import UserDrillModal from "@/components/genius/UserDrillModal";
+
 import GeniusHUD from "@/components/genius/GeniusHUD";
 import ConsoleTerminal from "@/components/genius/ConsoleTerminal";
 import SystemWidget from "@/components/genius/SystemWidget";
@@ -155,6 +157,13 @@ export default function Admin() {
   const [isWarmingUp, setIsWarmingUp] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
 
+  // Date range, table, drill-down
+  const [dateRange, setDateRange] = useState<'7d' | '30d' | 'all'>('30d');
+  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+  const [sortColumn, setSortColumn] = useState<keyof UserRow | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [userSearch, setUserSearch] = useState('');
+
   // Audio setup
   const addLog = (msg: string) => {
     setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -178,9 +187,9 @@ export default function Admin() {
     setLoading(true);
     setHudState('thinking');
     addLog("[SYSTEM] Querying neural database for user telemetry...");
-    
+
     try {
-      const res = await fetch("/api/admin-stats", {
+      const res = await fetch(`/api/admin-stats?range=${dateRange}`, {
         headers: { Authorization: "Bearer " + session.access_token },
       });
       if (!res.ok) {
@@ -205,7 +214,7 @@ export default function Admin() {
       setLoading(false);
       setHudState('idle');
     }
-  }, [session]);
+  }, [session, dateRange]);
 
   useEffect(function() {
     if (session) {
@@ -305,6 +314,16 @@ export default function Admin() {
     }
   };
 
+  // ── Table sort ────────────────────────────────────────────────────────────
+  const handleSort = (col: keyof UserRow) => {
+    if (sortColumn === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(col);
+      setSortDir('desc');
+    }
+  };
+
   // ── Render: session loading ────────────────────────────────────────────────
   if (sessionLoading || (session && isWarmingUp)) {
     return (
@@ -363,6 +382,20 @@ export default function Admin() {
   if (!stats) return null;
 
   const { overview, feature_usage, dau, users } = stats;
+
+  // Filter + sort user table
+  const filteredUsers = users
+    .filter(u => !userSearch || u.email.toLowerCase().includes(userSearch.toLowerCase()))
+    .sort((a, b) => {
+      if (!sortColumn) return 0;
+      const aVal = a[sortColumn] ?? "";
+      const bVal = b[sortColumn] ?? "";
+      const dir = sortDir === 'asc' ? 1 : -1;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return aVal.localeCompare(bVal) * dir;
+      }
+      return ((aVal as number) - (bVal as number)) * dir;
+    });
 
   const dauLabelled = dau.map(d => ({
     ...d,
@@ -435,13 +468,46 @@ export default function Admin() {
             ))}
           </div>
 
+          {/* Holographic Date Range Selector */}
+          <div className="flex items-center gap-3">
+            <div className="text-[9px] text-[#D4AF37]/30 uppercase tracking-[0.3em] font-bold">Time Range</div>
+            <div className="flex items-center gap-1 bg-[#0a0a0a] border border-[#D4AF37]/15 rounded-xl p-1">
+              {([
+                { key: '7d',  label: '7 Days' },
+                { key: '30d', label: '30 Days' },
+                { key: 'all', label: 'All Time' },
+              ] as const).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => { setDateRange(key); addLog(`[SYSTEM] Range filter → ${label}`); }}
+                  className={`relative px-4 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all duration-300 ${
+                    dateRange === key
+                      ? 'text-black bg-[#D4AF37] shadow-[0_0_12px_rgba(212,175,55,0.4)]'
+                      : 'text-[#D4AF37]/40 hover:text-[#D4AF37]/70'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {loading && (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="w-4 h-4 border border-t-transparent border-[#D4AF37]/40 rounded-full"
+              />
+            )}
+          </div>
+
           {/* Charts Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* DAU Chart */}
             <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Neural Activity (DAU)</div>
-                <div className="text-[10px] text-gray-600 uppercase">Last 14 Days</div>
+                <div className="text-[10px] text-gray-600 uppercase">
+                  {dateRange === '7d' ? 'Last 7 Days' : dateRange === 'all' ? 'Last 30 Days' : 'Last 14 Days'}
+                </div>
               </div>
               <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -462,7 +528,9 @@ export default function Admin() {
             <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Synaptic Load (Features)</div>
-                <div className="text-[10px] text-gray-600 uppercase">Last 30 Days</div>
+                <div className="text-[10px] text-gray-600 uppercase">
+                  {dateRange === '7d' ? 'Last 7 Days' : dateRange === 'all' ? 'All Time' : 'Last 30 Days'}
+                </div>
               </div>
               <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -478,25 +546,61 @@ export default function Admin() {
 
           {/* User Registry Table */}
           <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl overflow-hidden">
-            <div className="p-6 border-b border-[#D4AF37]/10 flex items-center justify-between">
-              <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Neural Registry ({users.length} Nodes)</div>
+            <div className="p-6 border-b border-[#D4AF37]/10 flex items-center justify-between gap-4">
+              <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold flex-shrink-0">
+                Neural Registry ({filteredUsers.length}/{users.length} Nodes)
+              </div>
+              {/* Search filter */}
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-[#D4AF37]/30 pointer-events-none" />
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                  placeholder="Filter by email..."
+                  className="w-full bg-[#060606] border border-[#D4AF37]/10 rounded-lg pl-8 pr-3 py-1.5 text-[10px] text-gray-300 placeholder-gray-700 focus:outline-none focus:border-[#D4AF37]/30 transition-colors"
+                />
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[11px] border-collapse">
                 <thead>
                   <tr className="text-[#D4AF37]/40 uppercase tracking-widest border-b border-[#D4AF37]/5">
-                    <th className="px-6 py-4 font-bold">Email</th>
-                    <th className="px-6 py-4 font-bold">Joined</th>
-                    <th className="px-6 py-4 font-bold">Last Sync</th>
-                    <th className="px-6 py-4 font-bold">Tier</th>
-                    <th className="px-6 py-4 font-bold">Credits</th>
-                    <th className="px-6 py-4 font-bold">Calls</th>
+                    {([
+                      { key: 'email',           label: 'Email' },
+                      { key: 'created_at',      label: 'Joined' },
+                      { key: 'last_sign_in_at', label: 'Last Sync' },
+                      { key: 'tier',            label: 'Tier' },
+                      { key: 'credits',         label: 'Credits' },
+                      { key: 'ai_calls',        label: 'Calls' },
+                    ] as { key: keyof UserRow; label: string }[]).map(({ key, label }) => (
+                      <th
+                        key={key}
+                        className="px-6 py-4 font-bold cursor-pointer hover:text-[#D4AF37]/70 transition-colors select-none"
+                        onClick={() => handleSort(key)}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          {label}
+                          <span className="opacity-40">
+                            {sortColumn === key
+                              ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)
+                              : <ChevronDown className="w-3 h-3 opacity-30" />}
+                          </span>
+                        </div>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#D4AF37]/5">
-                  {users.map((u) => (
-                    <tr key={u.id} className="hover:bg-[#D4AF37]/5 transition-colors group">
-                      <td className="px-6 py-4 text-white font-bold">{u.email || "ANON_NODE"}</td>
+                  {filteredUsers.map((u) => (
+                    <tr
+                      key={u.id}
+                      className="hover:bg-[#D4AF37]/5 transition-colors group cursor-pointer"
+                      onClick={() => { setSelectedUser(u); sfx.playBeep(700, 0.05); }}
+                    >
+                      <td className="px-6 py-4 text-white font-bold group-hover:text-[#D4AF37] transition-colors">
+                        {u.email || "ANON_NODE"}
+                      </td>
                       <td className="px-6 py-4 text-gray-500">{fmtDate(u.created_at)}</td>
                       <td className="px-6 py-4 text-gray-500">{fmtDate(u.last_sign_in_at)}</td>
                       <td className="px-6 py-4">
@@ -508,6 +612,13 @@ export default function Admin() {
                       <td className="px-6 py-4 text-gray-400">{u.ai_calls}</td>
                     </tr>
                   ))}
+                  {filteredUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-8 text-center text-gray-700 text-[10px] uppercase tracking-widest">
+                        No nodes match filter.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -553,6 +664,18 @@ export default function Admin() {
 
         </div>
       </div>
+
+      {/* User Drill-Down side panel (fixed overlay) */}
+      {selectedUser && session && (
+        <UserDrillModal
+          userId={selectedUser.id}
+          userEmail={selectedUser.email}
+          userTier={selectedUser.tier}
+          userCredits={selectedUser.credits}
+          sessionToken={session.access_token}
+          onClose={() => setSelectedUser(null)}
+        />
+      )}
     </div>
   );
 }

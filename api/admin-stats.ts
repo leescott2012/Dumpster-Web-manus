@@ -76,10 +76,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ error: "Forbidden." });
   }
 
+  // Parse ?range query param: 7d | 30d | all  (default: 30d)
+  const range = (req.query.range as string) || "30d";
+  const now = Date.now();
+  const rangeMs = range === "7d"  ? 7  * 24 * 60 * 60 * 1000
+               : range === "30d" ? 30 * 24 * 60 * 60 * 1000
+               : null; // null = all time
+  const rangeStart = rangeMs ? new Date(now - rangeMs).toISOString() : new Date(0).toISOString();
+  const dauDays    = range === "7d" ? 7 : range === "all" ? 30 : 14;
+
   try {
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const oneDayAgo     = new Date(Date.now() -      24 * 60 * 60 * 1000).toISOString();
-    const sevenDaysAgo  = new Date(Date.now() -  7 * 24 * 60 * 60 * 1000).toISOString();
+    const oneDayAgo    = new Date(now -     24 * 60 * 60 * 1000).toISOString();
+    const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Build date-filtered queries (skip filter for "all time")
+    let txQuery = supabaseAdmin
+      .from("credit_transactions")
+      .select("user_id, amount, type, created_at")
+      .lt("amount", 0);
+    if (range !== "all") txQuery = txQuery.gte("created_at", rangeStart);
+
+    let actQuery = supabaseAdmin
+      .from("activity_log")
+      .select("user_id, event, metadata, created_at");
+    if (range !== "all") actQuery = actQuery.gte("created_at", rangeStart);
 
     // ── Parallel data fetches ─────────────────────────────────────────────────
     const [usersResult, profilesResult, txResult, activityResult] = await Promise.all([
@@ -91,18 +111,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .from("profiles")
         .select("id, credits, subscription_tier"),
 
-      // Credit transactions last 30 days (debits only: amount < 0)
-      supabaseAdmin
-        .from("credit_transactions")
-        .select("user_id, amount, type, created_at")
-        .lt("amount", 0)
-        .gte("created_at", thirtyDaysAgo),
-
-      // Activity log last 30 days
-      supabaseAdmin
-        .from("activity_log")
-        .select("user_id, event, metadata, created_at")
-        .gte("created_at", thirtyDaysAgo),
+      txQuery,
+      actQuery,
     ]);
 
     const authUsers  = usersResult.data?.users ?? [];
@@ -144,19 +154,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map(([action, v]) => ({ action, count: v.count, credits: v.credits }))
       .sort((a, b) => b.count - a.count);
 
-    // ── DAU (last 14 days, session_start events) ──────────────────────────────
-    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    // ── DAU (session_start events, window based on ?range) ───────────────────
+    const dauWindowStart = new Date(now - dauDays * 24 * 60 * 60 * 1000).toISOString();
     const dauMap = new Map<string, Set<string>>();
     for (const r of sessionEvents) {
-      if (r.created_at < fourteenDaysAgo) continue;
-      const day = r.created_at.slice(0, 10); // "YYYY-MM-DD"
+      if (r.created_at < dauWindowStart) continue;
+      const day = r.created_at.slice(0, 10);
       if (!dauMap.has(day)) dauMap.set(day, new Set());
       dauMap.get(day)!.add(r.user_id as string);
     }
-    // Fill in every day in the range (even zero days)
+    // Fill every day in the window (including zeros)
     const dau: DauRow[] = [];
-    for (let d = 0; d < 14; d++) {
-      const dt = new Date(Date.now() - (13 - d) * 24 * 60 * 60 * 1000);
+    for (let d = 0; d < dauDays; d++) {
+      const dt = new Date(now - (dauDays - 1 - d) * 24 * 60 * 60 * 1000);
       const key = dt.toISOString().slice(0, 10);
       dau.push({ date: key, count: dauMap.get(key)?.size ?? 0 });
     }
