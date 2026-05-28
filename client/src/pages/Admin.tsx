@@ -7,7 +7,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell, defs, linearGradient, stop
+  BarChart, Bar, Cell
 } from "recharts";
 import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
@@ -423,12 +423,16 @@ export default function Admin() {
 
     // Sort
     result.sort((a, b) => {
-      let aVal: string | number = a[sortKey] ?? '';
-      let bVal: string | number = b[sortKey] ?? '';
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      const aVal = (a as any)[sortKey] ?? '';
+      const bVal = (b as any)[sortKey] ?? '';
+      
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
       }
-      return sortDir === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
+      
+      const sA = String(aVal);
+      const sB = String(bVal);
+      return sortDir === 'asc' ? sA.localeCompare(sB) : sB.localeCompare(sA);
     });
 
     return result;
