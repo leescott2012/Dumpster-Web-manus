@@ -26,11 +26,11 @@ export default function ConsoleTerminal({
   // Color mapping variables
   const colorThemeMap = {
     'arc-blue': {
-      text: "text-cyan-400",
-      accentBg: "bg-cyan-500/10",
-      border: "border-cyan-500/30",
-      outlineGlow: "focus-within:border-cyan-400/60 focus-within:ring-cyan-500/20",
-      headerText: "text-cyan-200"
+      text: "text-[#D4AF37]",
+      accentBg: "bg-[#D4AF37]/10",
+      border: "border-[#D4AF37]/30",
+      outlineGlow: "focus-within:border-[#D4AF37]/60 focus-within:ring-[#D4AF37]/20",
+      headerText: "text-[#D4AF37]"
     },
     'reactor-orange': {
       text: "text-amber-500",
@@ -85,7 +85,7 @@ export default function ConsoleTerminal({
             <Shield className="w-2.5 h-2.5" />
             <span>PROTECT: HIGH_SEC</span>
           </span>
-          <span className="flex items-center gap-1 text-emerald-500">
+            <span className="flex items-center gap-1 text-[#D4AF37]">
             <Zap className="w-2.5 h-2.5 animate-pulse" />
             <span>ARC_CORE: ACTIVE</span>
           </span>
@@ -111,7 +111,7 @@ export default function ConsoleTerminal({
           } else if (log.includes("[USER]")) {
             logColor = "text-yellow-400/90 font-semibold";
           } else if (log.includes("[Genius]") || log.includes("[SUCCESS]")) {
-            logColor = "text-cyan-400";
+            logColor = "text-[#D4AF37]";
           } else if (log.includes("[CRITICAL]") || log.includes("[FAIL]")) {
             logColor = "text-rose-500 font-bold";
           } else if (log.includes("[AGENT]")) {
@@ -131,25 +131,25 @@ export default function ConsoleTerminal({
         <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mr-1">Routines:</span>
         <button 
           onClick={() => executeCommandHeader("reactor diagnostics")}
-          className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-cyan-400 text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
+          className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-[#D4AF37] text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
         >
           Diagnose Core
         </button>
         <button 
           onClick={() => executeCommandHeader("agent status")}
-          className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-cyan-400 text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
+          className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-[#D4AF37] text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
         >
           Check Agents
         </button>
         <button 
           onClick={() => executeCommandHeader("weather update")}
-          className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-cyan-400 text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
+          className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-[#D4AF37] text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
         >
           Climate Scouting
         </button>
         <button 
           onClick={() => executeCommandHeader("clear console")}
-          className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-cyan-400 text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
+          className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-[#D4AF37] text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
         >
           Clear Logs
         </button>
