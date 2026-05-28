@@ -229,9 +229,10 @@ export default function Admin() {
     }
   }, [session]);
 
-  // Load previous logs from database on session load
+  // Load previous logs from database on session load (only once per session)
+  const [logsLoaded, setLogsLoaded] = useState(false);
   useEffect(function() {
-    if (session) {
+    if (session && !logsLoaded) {
       supabase
         .from('system_logs')
         .select('level, message')
@@ -244,23 +245,30 @@ export default function Admin() {
               .map((log: any) => `[${log.level}] ${log.message}`);
             setLogs(previousLogs);
           }
+          setLogsLoaded(true);
         })
-        .catch(err => console.warn('Could not load previous logs:', err));
+        .catch(err => {
+          console.warn('Could not load previous logs:', err);
+          setLogsLoaded(true);
+        });
     }
-  }, [session]);
+  }, [session, logsLoaded]);
 
+  const [isInitialized, setIsInitialized] = useState(false);
   useEffect(function() {
-    if (session) {
+    if (session && !isInitialized) {
       fetchStats();
       // Startup sequence
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         setIsWarmingUp(false);
         sfx.playStartup();
         addLog("[BOOT] Genius Neural HUD v4.2 Online.");
         addLog("[INFO] Chamillion Collective secure link established.");
+        setIsInitialized(true);
       }, 1500);
+      return () => clearTimeout(timer);
     }
-  }, [session, fetchStats]);
+  }, [session, fetchStats, isInitialized]);
 
   // ── Sign-in flow ───────────────────────────────────────────────────────────
   const handleGoogle = useCallback(async function() {
