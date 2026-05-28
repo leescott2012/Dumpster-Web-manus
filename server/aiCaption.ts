@@ -79,6 +79,74 @@ const TONE_HINTS: Record<NonNullable<CaptionRequest["tone"]>, string> = {
 
 const MAX_PHOTOS = 12; // cap for cost/speed — captions don't need all 20
 
+// ── Gemini caption generator (uses REST API — no extra SDK needed) ─────────────
+
+async function generateWithGemini(payload: CaptionRequest, apiKey: string): Promise<CaptionResult> {
+  const photos = Array.isArray(payload.photos) ? payload.photos.slice(0, MAX_PHOTOS) : [];
+  const tone = payload.tone ?? "default";
+  const toneHint = TONE_HINTS[tone];
+  const tasteBlock = payload.tasteBlock
+    ? `\n\nUser caption style examples (match this voice):\n${payload.tasteBlock}`
+    : "";
+
+  const metaLines = [`Dump title: "${payload.dumpTitle}"`];
+  if (payload.subtitle) metaLines.push(`Theme: "${payload.subtitle}"`);
+  if (payload.category) metaLines.push(`Category: ${payload.category}`);
+  const exifSummary = summarizeBatchMeta(photos);
+  if (exifSummary) metaLines.push(exifSummary);
+
+  const systemText = `You are an Instagram caption writer for photo dumps (carousels). Write 3 aesthetic captions. ${toneHint} Let the actual visual content guide the captions. Keep them short and scroll-stopping. No clichés. No hashtags unless ironic.${tasteBlock}\n\nRespond ONLY with valid JSON, no markdown: {"captions":["...","...","..."],"vibe":"one or two word descriptor"}`;
+
+  const parts: unknown[] = [
+    { text: systemText + "\n\n" + metaLines.join("\n") },
+  ];
+
+  if (photos.length > 0) {
+    const fetched = await Promise.all(photos.map((p) => fetchImageAsBase64(p.url)));
+    parts.push({ text: `Here are the ${photos.length} photo(s):` });
+    for (const img of fetched) {
+      if (img) parts.push({ inlineData: { mimeType: img.mediaType, data: img.base64 } });
+    }
+  }
+
+  if (payload.userPrompt?.trim()) {
+    parts.push({ text: `User instructions: ${payload.userPrompt.trim()}\n\nWrite 3 captions now. Return JSON only.` });
+  } else {
+    parts.push({ text: "Write 3 captions now. Return JSON only." });
+  }
+
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: { maxOutputTokens: 700, temperature: 0.9 },
+      }),
+    }
+  );
+
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => "");
+    throw new Error(`Gemini ${resp.status}: ${errBody}`);
+  }
+
+  const data = await resp.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
+  let parsed: { captions?: string[]; vibe?: string };
+  try { parsed = JSON.parse(cleaned); }
+  catch { throw new Error("Gemini returned invalid JSON: " + rawText.slice(0, 200)); }
+
+  return {
+    dumpTitle: payload.dumpTitle,
+    captions: Array.isArray(parsed.captions) ? parsed.captions.slice(0, 3) : [],
+    vibe: typeof parsed.vibe === "string" ? parsed.vibe : "curated",
+  };
+}
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -98,10 +166,12 @@ export async function handleAICaption(
     return;
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey === "your_anthropic_api_key_here") {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const googleKey    = process.env.GOOGLE_API_KEY;
+
+  if ((!anthropicKey || anthropicKey === "your_anthropic_api_key_here") && !googleKey) {
     res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "ANTHROPIC_API_KEY is not configured." }));
+    res.end(JSON.stringify({ error: "No AI API key configured (ANTHROPIC_API_KEY or GOOGLE_API_KEY)." }));
     return;
   }
 
@@ -121,6 +191,27 @@ export async function handleAICaption(
     return;
   }
 
+  // ── Try Gemini first if GOOGLE_API_KEY is configured ──────────────────────
+  if (googleKey) {
+    try {
+      const result = await generateWithGemini(payload, googleKey);
+      if (result.captions.length > 0) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
+        return;
+      }
+    } catch (geminiErr) {
+      console.warn("[AI Caption] Gemini failed, falling back to Anthropic:", geminiErr);
+    }
+  }
+
+  if (!anthropicKey || anthropicKey === "your_anthropic_api_key_here") {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Gemini unavailable and ANTHROPIC_API_KEY not configured." }));
+    return;
+  }
+
+  // ── Anthropic fallback ────────────────────────────────────────────────────
   const tone = payload.tone ?? "default";
   const toneHint = TONE_HINTS[tone];
   const tasteBlock = payload.tasteBlock
@@ -132,23 +223,14 @@ export async function handleAICaption(
 Respond ONLY with valid JSON, no markdown, no code fences:
 {"captions":["...","...","..."],"vibe":"one or two word vibe descriptor"}`;
 
-  // Build multi-modal content: photos + text context + user prompt
   const photos = Array.isArray(payload.photos) ? payload.photos.slice(0, MAX_PHOTOS) : [];
 
   type ContentBlock =
-    | {
-        type: "image";
-        source: {
-          type: "base64";
-          media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
-          data: string;
-        };
-      }
+    | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string } }
     | { type: "text"; text: string };
 
   const content: ContentBlock[] = [];
 
-  // Lead text: dump metadata
   const metaLines: string[] = [`Dump title: "${payload.dumpTitle}"`];
   if (payload.subtitle) metaLines.push(`Theme / subtitle: "${payload.subtitle}"`);
   if (payload.category) metaLines.push(`Category: ${payload.category}`);
@@ -156,39 +238,22 @@ Respond ONLY with valid JSON, no markdown, no code fences:
   if (exifSummary) metaLines.push(exifSummary);
   content.push({ type: "text", text: metaLines.join("\n") });
 
-  // Photos
   if (photos.length > 0) {
     const fetched = await Promise.all(photos.map((p) => fetchImageAsBase64(p.url)));
-    content.push({
-      type: "text",
-      text: `Here are the ${photos.length} photo${photos.length === 1 ? "" : "s"} in the carousel:`,
-    });
+    content.push({ type: "text", text: `Here are the ${photos.length} photo${photos.length === 1 ? "" : "s"} in the carousel:` });
     for (let i = 0; i < photos.length; i++) {
       const img = fetched[i];
-      if (img) {
-        content.push({
-          type: "image",
-          source: { type: "base64", media_type: img.mediaType, data: img.base64 },
-        });
-      }
+      if (img) content.push({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.base64 } });
     }
   }
 
-  // User's specific instruction — final, highest-weight signal
-  if (payload.userPrompt && payload.userPrompt.trim()) {
-    content.push({
-      type: "text",
-      text: `\nUser instructions (follow these carefully):\n${payload.userPrompt.trim()}`,
-    });
+  if (payload.userPrompt?.trim()) {
+    content.push({ type: "text", text: `\nUser instructions (follow these carefully):\n${payload.userPrompt.trim()}` });
   }
-
-  content.push({
-    type: "text",
-    text: `\nWrite 3 caption options now. Return JSON only.`,
-  });
+  content.push({ type: "text", text: `\nWrite 3 caption options now. Return JSON only.` });
 
   try {
-    const anthropic = new Anthropic({ apiKey });
+    const anthropic = new Anthropic({ apiKey: anthropicKey });
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5",
       max_tokens: 700,

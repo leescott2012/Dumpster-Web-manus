@@ -19,7 +19,7 @@ interface PhotoInfoPanelProps {
 var FORGE_BASE_URL: string =
   import.meta.env.VITE_FRONTEND_FORGE_API_URL || "https://forge.butterfly-effect.dev";
 var MAPS_PROXY_URL = FORGE_BASE_URL + "/v1/maps/proxy";
-var GOOGLE_MAPS_API_KEY: string = import.meta.env.VITE_FRONTEND_FORGE_API_KEY || "";
+var GOOGLE_MAPS_API_KEY: string = import.meta.env.VITE_GOOGLE_API_KEY || import.meta.env.VITE_FRONTEND_FORGE_API_KEY || "";
 
 function formatDate(epochMs: number): string {
   var d = new Date(epochMs);
