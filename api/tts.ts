@@ -7,7 +7,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { text } = req.body;
   const apiKey = process.env.ELEVENLABS_API_KEY;
-  const voiceId = process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB'; // Adam (Jarvis-like)
+  const voiceId = process.env.ELEVENLABS_VOICE_ID || '8Ln42OXYupYsag45MAUy';
 
   if (!apiKey) {
     return res.status(500).json({ error: 'ElevenLabs API key not configured' });
@@ -22,22 +22,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       body: JSON.stringify({
         text,
-        model_id: 'eleven_monolingual_v1',
+        model_id: 'eleven_turbo_v2',
         voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
+          stability: 0.45,
+          similarity_boost: 0.80,
+          style: 0.3,
+          use_speaker_boost: true,
         },
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`ElevenLabs API error: ${response.statusText}`);
+      const errText = await response.text();
+      throw new Error(`ElevenLabs API error: ${response.status} ${errText}`);
     }
 
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
     res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'no-store');
     res.send(buffer);
   } catch (error: any) {
     console.error('TTS error:', error);

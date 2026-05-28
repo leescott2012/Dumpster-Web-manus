@@ -4,9 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface HUDProps {
   state: 'idle' | 'listening' | 'thinking' | 'speaking';
   isOnline: boolean;
+  onTalk?: () => void;
 }
 
-const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline }) => {
+const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk }) => {
   const [rotation, setRotation] = useState(0);
 
   useEffect(() => {
@@ -87,18 +88,22 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline }) => {
               transition={{ duration: 2, repeat: Infinity }}
             />
 
-            {/* Main Orb */}
+            {/* Main Orb — Click to Talk */}
             <motion.div
               className="relative w-32 h-32 rounded-full flex items-center justify-center overflow-hidden"
               style={{
                 background: `radial-gradient(circle, ${statusColor}33 0%, transparent 70%)`,
                 border: `2px solid ${statusColor}66`,
-                boxShadow: `0 0 20px ${statusColor}44`
+                boxShadow: `0 0 20px ${statusColor}44`,
+                cursor: onTalk && (state === 'idle') ? 'pointer' : 'default',
               }}
               animate={{
-                borderColor: state === 'listening' ? ['#D4AF3766', '#FFFFFF66', '#D4AF3766'] : '#D4AF3766'
+                borderColor: state === 'listening' ? ['#D4AF3766', '#FFFFFF66', '#D4AF3766'] : '#D4AF3766',
+                scale: state === 'idle' && onTalk ? [1, 1.03, 1] : 1,
               }}
-              transition={{ duration: 1, repeat: Infinity }}
+              transition={{ duration: state === 'idle' ? 3 : 1, repeat: Infinity }}
+              onClick={() => state === 'idle' && onTalk && onTalk()}
+              title={state === 'idle' ? 'Click to speak to Genius' : undefined}
             >
               {/* Inner Rotating Tech Elements */}
               <motion.div 

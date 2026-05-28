@@ -278,6 +278,71 @@ export default function Admin() {
     }
   };
 
+  // ── Voice Talk Flow ─────────────────────────────────────────────────────────
+  const handleTalk = useCallback(async () => {
+    if (!session) return;
+    // Use browser SpeechRecognition API
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      addLog('[ERROR] Speech recognition not supported in this browser. Try Chrome.');
+      return;
+    }
+
+    setHudState('listening');
+    sfx.playBeep(880, 0.08);
+    addLog('[Genius] Listening... speak now.');
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = async (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      addLog(`[YOU] ${transcript}`);
+      setHudState('thinking');
+      sfx.playScan();
+
+      try {
+        // 1) Get Genius text response
+        const chatRes = await fetch('/api/genius-chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + session.access_token,
+          },
+          body: JSON.stringify({ transcript }),
+        });
+
+        if (!chatRes.ok) {
+          addLog('[ERROR] Neural core failed to respond.');
+          setHudState('idle');
+          return;
+        }
+
+        const { reply } = await chatRes.json();
+        addLog(`[Genius] ${reply}`);
+
+        // 2) Speak the response
+        await handleReadAloud(reply);
+      } catch (e: any) {
+        addLog(`[ERROR] ${e?.message ?? 'Voice pipeline failure.'}`);
+        setHudState('idle');
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      addLog(`[ERROR] Mic error: ${event.error}`);
+      setHudState('idle');
+    };
+
+    recognition.onend = () => {
+      if (hudState === 'listening') setHudState('idle');
+    };
+
+    recognition.start();
+  }, [session, hudState]);
+
   const handleReadAloud = async (text: string) => {
     setHudState('speaking');
     addLog(`[Genius] Synthesizing voice output...`);
@@ -410,7 +475,7 @@ export default function Admin() {
           
           {/* Central Genius HUD Component */}
           <div className="bg-[#050505] border border-[#D4AF37]/20 rounded-3xl overflow-hidden shadow-[0_0_100px_rgba(212,175,55,0.05)]">
-            <GeniusHUD state={hudState} isOnline={true} />
+            <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} />
           </div>
 
           {/* Overview Stat Cards */}
