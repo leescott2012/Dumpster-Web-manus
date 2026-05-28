@@ -136,15 +136,15 @@ export default function SystemWidget({
           </div>
 
           <div className="my-2.5">
-            <span className={`text-2xl font-mono font-black text-cyan-400`}>
+            <span className={`text-2xl font-mono font-black text-[#D4AF37]`}>
               {internalMetrics.arcReactorPercent}%
             </span>
-            <div className="text-[8px] font-mono text-slate-600 mt-0.5 font-bold text-cyan-300">CORE DECAY: CALIBRATED</div>
+            <div className="text-[8px] font-mono text-slate-600 mt-0.5 font-bold text-[#D4AF37]/70">CORE DECAY: CALIBRATED</div>
           </div>
 
           <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
             <div 
-              className="h-full bg-cyan-400 transition-all duration-300" 
+              className="h-full bg-[#D4AF37] transition-all duration-300" 
               style={{ width: `${internalMetrics.arcReactorPercent}%` }}
             />
           </div>

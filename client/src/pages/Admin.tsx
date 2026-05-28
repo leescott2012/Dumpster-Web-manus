@@ -588,7 +588,11 @@ export default function Admin() {
                       <td className="px-6 py-4 text-gray-500">{fmtDate(u.created_at)}</td>
                       <td className="px-6 py-4 text-gray-500">{fmtDate(u.last_sign_in_at)}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${u.tier === 'pro' ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-gray-900 text-gray-500'}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                          u.tier === 'pro' ? 'bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/40' :
+                          u.tier === 'lifetime' ? 'bg-[#D4AF37]/30 text-[#D4AF37] border border-[#D4AF37]/60' :
+                          'bg-[#D4AF37]/10 text-[#D4AF37]/60 border border-[#D4AF37]/20'
+                        }`}>
                           {u.tier}
                         </span>
                       </td>
