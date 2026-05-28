@@ -29,8 +29,6 @@ export interface AutoGenFilters {
     on: boolean;
     /** Ignore all filters, just pick randomly from the whole pool. */
     surprise: boolean;
-    /** Skip photos already used in an existing dump. */
-    discovery: boolean;
     /** Shuffle input order each gen so re-pressing Auto Gen varies the pick. */
     shuffle: boolean;
   };
@@ -43,7 +41,7 @@ export var EMPTY_FILTERS: AutoGenFilters = {
   timeFrom: "",
   timeTo: "",
   categories: [],
-  mix: { on: false, surprise: false, discovery: false, shuffle: false },
+  mix: { on: false, surprise: false, shuffle: false },
   vibeNote: "",
 };
 
@@ -202,6 +200,18 @@ export default function AutoGenAdvanced({
           padding: 16,
           display: "flex", flexDirection: "column", gap: 16,
         }}>
+          {/* Permanent hard rule — surfaced so users know why "used" photos
+              never show up in suggestions. */}
+          <div style={{
+            fontSize: 10, color: "#666",
+            background: "rgba(255,255,255,0.02)",
+            border: "1px solid #1e1e1e",
+            borderRadius: 8, padding: "8px 10px",
+            letterSpacing: "0.02em", lineHeight: 1.45,
+          }}>
+            Photos already in a dump are always skipped — Auto Gen only pulls from unused photos.
+          </div>
+
           {/* Mix mode — top, since it can grey out everything below */}
           <div>
             <button
@@ -229,12 +239,6 @@ export default function AutoGenAdvanced({
                   hint="Ignore filters — pick from whole pool"
                   checked={value.mix.surprise}
                   onChange={function(v) { updateMix({ surprise: v }); }}
-                />
-                <CheckboxRow
-                  label="Discovery"
-                  hint="Skip photos already used in a dump"
-                  checked={value.mix.discovery}
-                  onChange={function(v) { updateMix({ discovery: v }); }}
                 />
                 <CheckboxRow
                   label="Shuffle on re-gen"
@@ -398,9 +402,12 @@ function CheckboxRow({
  * of photos that match. Photos without metadata are excluded from date/time
  * filters but pass through if filter is unset.
  *
+ * HARD RULE: photos already used in an existing dump are ALWAYS excluded —
+ * not a user-facing toggle. Even Surprise mode honors this.
+ *
  * @param photos       Source pool
  * @param filters      Filter state from AutoGenAdvanced
- * @param usedIds      Photo IDs already used in existing dumps (for Discovery)
+ * @param usedIds      Photo IDs already used in existing dumps (always excluded)
  */
 export function applyAutoGenFilters<T extends {
   id: string;
@@ -411,12 +418,15 @@ export function applyAutoGenFilters<T extends {
   filters: AutoGenFilters,
   usedIds?: Set<string>
 ): T[] {
-  // Surprise mode bypasses filters entirely
+  // Pre-strip photos already used in dumps — applies to every code path below
+  var pool0 = usedIds && usedIds.size > 0
+    ? photos.filter(function(p) { return !usedIds.has(p.id); })
+    : photos;
+
+  // Surprise mode bypasses the *user-controlled* filters but still respects
+  // the no-reuse hard rule above.
   if (filters.mix.on && filters.mix.surprise) {
-    var pool = photos.slice();
-    if (filters.mix.discovery && usedIds) {
-      pool = pool.filter(function(p) { return !usedIds.has(p.id); });
-    }
+    var pool = pool0.slice();
     if (filters.mix.shuffle) shuffleInPlace(pool);
     return pool;
   }
@@ -431,11 +441,7 @@ export function applyAutoGenFilters<T extends {
   }
   var hasCatFilter = filters.categories.length > 0;
 
-  var out: T[] = photos.filter(function(p) {
-    // Discovery: skip already-used
-    if (filters.mix.on && filters.mix.discovery && usedIds && usedIds.has(p.id)) {
-      return false;
-    }
+  var out: T[] = pool0.filter(function(p) {
     // Date range
     if (dateFromMs !== null || dateToMs !== null) {
       var ta = p.meta?.takenAt;
