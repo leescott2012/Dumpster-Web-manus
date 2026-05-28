@@ -4,16 +4,17 @@
  * An immersive, Iron Man-style holographic dashboard that displays
  * live user activity, revenue, and system telemetry.
  */
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar
 } from "recharts";
 import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ShieldAlert, RefreshCw, Home, LogOut, ChevronUp, ChevronDown, Search
+import { 
+  Terminal, Shield, Zap, 
+  ShieldAlert, RefreshCw, Home, LogOut
 } from "lucide-react";
 
 // Genius Components
@@ -21,7 +22,6 @@ import GeniusHUD from "@/components/genius/GeniusHUD";
 import ConsoleTerminal from "@/components/genius/ConsoleTerminal";
 import SystemWidget from "@/components/genius/SystemWidget";
 import AgentControl from "@/components/genius/AgentControl";
-import UserDrillModal from "@/components/genius/UserDrillModal";
 import { sfx } from "@/lib/geniusAudio";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -41,7 +41,6 @@ interface AdminStats {
   feature_usage: FeatureUsageRow[];
   dau: DauRow[];
   users: UserRow[];
-  range: string;
 }
 
 interface Task {
@@ -53,11 +52,6 @@ interface Task {
   agentType: 'researcher' | 'coder' | 'social' | 'analyst';
   timestamp: string;
 }
-
-type SortKey = 'last_sign_in_at' | 'credits_used' | 'created_at';
-type SortDir = 'asc' | 'desc';
-type TierFilter = 'all' | 'free' | 'pro' | 'lifetime';
-type DateRange = '7d' | '30d' | 'all';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -74,7 +68,7 @@ function fmtAction(action: string): string {
   return map[action] ?? action;
 }
 
-const ACCENT = "#D4AF37";
+const ACCENT = "#D4AF37"; // Gold
 
 // ── Custom tooltip ────────────────────────────────────────────────────────────
 
@@ -93,11 +87,12 @@ function ChartTooltip({ active, payload, label }: any) {
 function SignInScreen({ onGoogle, signingIn, error }: { onGoogle: () => void; signingIn: boolean; error: string | null }) {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-6 text-white font-mono relative overflow-hidden">
+      {/* Background HUD elements */}
       <div className="absolute inset-0 opacity-10 pointer-events-none">
         <div className="absolute top-0 left-0 w-full h-full" style={{ backgroundImage: 'radial-gradient(circle, #D4AF37 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
       </div>
 
-      <motion.div
+      <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md bg-[#0a0a0a] border border-[#D4AF37]/30 rounded-2xl p-10 relative z-10 shadow-[0_0_50px_rgba(212,175,55,0.1)]"
@@ -125,7 +120,7 @@ function SignInScreen({ onGoogle, signingIn, error }: { onGoogle: () => void; si
         </button>
 
         {error && (
-          <motion.div
+          <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 text-center"
@@ -153,25 +148,14 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
-
+  
   // HUD States
   const [hudState, setHudState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
   const [logs, setLogs] = useState<string[]>([]);
   const [isWarmingUp, setIsWarmingUp] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
 
-  // Date range
-  const [dateRange, setDateRange] = useState<DateRange>('30d');
-
-  // Table controls
-  const [sortKey, setSortKey] = useState<SortKey>('last_sign_in_at');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [search, setSearch] = useState('');
-  const [tierFilter, setTierFilter] = useState<TierFilter>('all');
-
-  // User drill-down
-  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
-
+  // Audio setup
   const addLog = (msg: string) => {
     setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
   };
@@ -189,15 +173,14 @@ export default function Admin() {
   }, []);
 
   // Fetch stats
-  const fetchStats = useCallback(async function(range?: DateRange) {
+  const fetchStats = useCallback(async function() {
     if (!session) return;
-    const r = range ?? dateRange;
     setLoading(true);
     setHudState('thinking');
-    addLog(`[SYSTEM] Querying neural database (range: ${r})...`);
-
+    addLog("[SYSTEM] Querying neural database for user telemetry...");
+    
     try {
-      const res = await fetch(`/api/admin-stats?range=${r}`, {
+      const res = await fetch("/api/admin-stats", {
         headers: { Authorization: "Bearer " + session.access_token },
       });
       if (!res.ok) {
@@ -222,11 +205,12 @@ export default function Admin() {
       setLoading(false);
       setHudState('idle');
     }
-  }, [session, dateRange]);
+  }, [session]);
 
   useEffect(function() {
     if (session) {
       fetchStats();
+      // Startup sequence
       setTimeout(() => {
         setIsWarmingUp(false);
         sfx.playStartup();
@@ -234,24 +218,7 @@ export default function Admin() {
         addLog("[INFO] Chamillion Collective secure link established.");
       }, 1500);
     }
-  }, [session]);
-
-  // Handle date range change
-  const handleRangeChange = (r: DateRange) => {
-    setDateRange(r);
-    fetchStats(r);
-    addLog(`[SYSTEM] Date range updated: ${r}`);
-  };
-
-  // Handle sort
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(key);
-      setSortDir('desc');
-    }
-  };
+  }, [session, fetchStats]);
 
   // ── Sign-in flow ───────────────────────────────────────────────────────────
   const handleGoogle = useCallback(async function() {
@@ -280,7 +247,7 @@ export default function Admin() {
     setLoading(true);
     setHudState('thinking');
     addLog(`[AGENT] Deploying ${agentType} node for task: ${taskName}`);
-
+    
     const newTask: Task = {
       id: Math.random().toString(36).substr(2, 9),
       name: taskName,
@@ -292,6 +259,7 @@ export default function Admin() {
     setTasks(prev => [newTask, ...prev]);
 
     try {
+      // Mock agent logic for now - in a real app, this would call an API
       setTimeout(() => {
         setTasks(prev => prev.map(t => t.id === newTask.id ? {
           ...t,
@@ -313,14 +281,14 @@ export default function Admin() {
   const handleReadAloud = async (text: string) => {
     setHudState('speaking');
     addLog(`[Genius] Synthesizing voice output...`);
-
+    
     try {
       const response = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       });
-
+      
       if (response.ok) {
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
@@ -341,7 +309,7 @@ export default function Admin() {
   if (sessionLoading || (session && isWarmingUp)) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-[#D4AF37] font-mono">
-        <motion.div
+        <motion.div 
           animate={{ rotate: 360 }}
           transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
           className="w-12 h-12 border-2 border-t-transparent border-[#D4AF37] rounded-full mb-4"
@@ -353,10 +321,12 @@ export default function Admin() {
     );
   }
 
+  // ── Render: no session → sign-in screen ────────────────────────────────────
   if (!session) {
     return <SignInScreen onGoogle={handleGoogle} signingIn={signingIn} error={error} />;
   }
 
+  // ── Render: signed in but error (likely 403 not authorized) ────────────────
   if (error) {
     const notAuthorized = error.includes("authorized");
     return (
@@ -373,7 +343,7 @@ export default function Admin() {
           </p>
           <div className="flex gap-4">
             <button
-              onClick={() => fetchStats()}
+              onClick={fetchStats}
               className="flex-1 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 rounded-xl font-bold transition-all text-xs uppercase"
             >
               Retry Sync
@@ -404,50 +374,9 @@ export default function Admin() {
     label: fmtAction(f.action),
   }));
 
-  // ── Filtered + sorted users ────────────────────────────────────────────────
-  const filteredUsers = useMemo(() => {
-    let result = [...users];
-
-    // Search filter
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(u =>
-        u.email.toLowerCase().includes(q) || u.id.toLowerCase().includes(q)
-      );
-    }
-
-    // Tier filter
-    if (tierFilter !== 'all') {
-      result = result.filter(u => u.tier === tierFilter);
-    }
-
-    // Sort
-    result.sort((a, b) => {
-      const aVal = (a as any)[sortKey] ?? '';
-      const bVal = (b as any)[sortKey] ?? '';
-      
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-      
-      const sA = String(aVal);
-      const sB = String(bVal);
-      return sortDir === 'asc' ? sA.localeCompare(sB) : sB.localeCompare(sA);
-    });
-
-    return result;
-  }, [users, search, tierFilter, sortKey, sortDir]);
-
-  const SortIcon = ({ col }: { col: SortKey }) => {
-    if (sortKey !== col) return <span className="opacity-20">↕</span>;
-    return sortDir === 'asc' ? <ChevronUp className="w-3 h-3 inline" /> : <ChevronDown className="w-3 h-3 inline" />;
-  };
-
-  const rangeLabel = dateRange === '7d' ? 'Last 7 Days' : dateRange === '30d' ? 'Last 30 Days' : 'All Time';
-
   return (
     <div className="min-h-screen bg-black text-[#D4AF37] font-mono selection:bg-[#D4AF37] selection:text-black overflow-x-hidden">
-
+      
       {/* Top Navigation Bar */}
       <div className="h-16 border-b border-[#D4AF37]/10 flex items-center justify-between px-8 bg-black/50 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-6">
@@ -462,7 +391,7 @@ export default function Admin() {
         </div>
 
         <div className="flex items-center gap-4">
-          <button onClick={() => fetchStats()} className="p-2 hover:bg-[#D4AF37]/10 rounded-lg transition-colors group">
+          <button onClick={fetchStats} className="p-2 hover:bg-[#D4AF37]/10 rounded-lg transition-colors group">
             <RefreshCw className="w-4 h-4 group-active:rotate-180 transition-transform duration-500" />
           </button>
           <a href="/" className="p-2 hover:bg-[#D4AF37]/10 rounded-lg transition-colors">
@@ -475,10 +404,10 @@ export default function Admin() {
       </div>
 
       <div className="max-w-[1600px] mx-auto p-8 grid grid-cols-12 gap-8">
-
+        
         {/* LEFT COLUMN: Main HUD & Stats */}
         <div className="col-span-12 lg:col-span-8 space-y-8">
-
+          
           {/* Central Genius HUD Component */}
           <div className="bg-[#050505] border border-[#D4AF37]/20 rounded-3xl overflow-hidden shadow-[0_0_100px_rgba(212,175,55,0.05)]">
             <GeniusHUD state={hudState} isOnline={true} />
@@ -493,7 +422,7 @@ export default function Admin() {
               { label: "AI Calls", value: overview.ai_calls_today },
               { label: "Credits", value: overview.credits_spent_today },
             ].map((stat, i) => (
-              <motion.div
+              <motion.div 
                 key={i}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -506,58 +435,25 @@ export default function Admin() {
             ))}
           </div>
 
-          {/* Holographic Date Range Selector */}
-          <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-4 flex items-center justify-between">
-            <div className="text-[10px] text-[#D4AF37]/40 uppercase tracking-[0.2em] font-bold">
-              Temporal Range
-            </div>
-            <div className="flex gap-2">
-              {(['7d', '30d', 'all'] as DateRange[]).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => handleRangeChange(r)}
-                  className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                    dateRange === r
-                      ? 'bg-[#D4AF37] text-black shadow-[0_0_20px_rgba(212,175,55,0.4)]'
-                      : 'bg-[#0a0a0a] border border-[#D4AF37]/20 text-[#D4AF37]/60 hover:border-[#D4AF37]/40 hover:text-[#D4AF37]'
-                  }`}
-                >
-                  {r === '7d' ? 'Last 7 Days' : r === '30d' ? 'Last 30 Days' : 'All Time'}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Charts Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* DAU LineChart with gold glow */}
+            {/* DAU Chart */}
             <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Neural Activity (DAU)</div>
-                <div className="text-[10px] text-gray-600 uppercase">{rangeLabel}</div>
+                <div className="text-[10px] text-gray-600 uppercase">Last 14 Days</div>
               </div>
               <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dauLabelled}>
-                    <defs>
-                      <linearGradient id="dauGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={ACCENT} stopOpacity={0.3} />
-                        <stop offset="95%" stopColor={ACCENT} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
+                  <BarChart data={dauLabelled}>
                     <XAxis dataKey="label" hide />
-                    <YAxis hide />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Line
-                      type="monotone"
-                      dataKey="count"
-                      stroke={ACCENT}
-                      strokeWidth={2.5}
-                      dot={false}
-                      activeDot={{ r: 5, fill: ACCENT, stroke: '#000', strokeWidth: 2 }}
-                      style={{ filter: `drop-shadow(0 0 6px ${ACCENT}88)` }}
-                    />
-                  </LineChart>
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(212,175,55,0.05)" }} />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                      {dauLabelled.map((_, i) => (
+                        <Cell key={i} fill={i === dauLabelled.length - 1 ? ACCENT : "#1a1a1a"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -566,19 +462,15 @@ export default function Admin() {
             <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Synaptic Load (Features)</div>
-                <div className="text-[10px] text-gray-600 uppercase">{rangeLabel}</div>
+                <div className="text-[10px] text-gray-600 uppercase">Last 30 Days</div>
               </div>
               <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={featureLabelled}>
+                  <LineChart data={featureLabelled}>
                     <XAxis dataKey="label" hide />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(212,175,55,0.05)" }} />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {featureLabelled.map((_, i) => (
-                        <Cell key={i} fill={i === 0 ? ACCENT : "#1a1a1a"} />
-                      ))}
-                    </Bar>
-                  </BarChart>
+                    <Tooltip content={<ChartTooltip />} />
+                    <Line type="monotone" dataKey="count" stroke={ACCENT} strokeWidth={3} dot={{ fill: ACCENT, r: 4 }} activeDot={{ r: 6, stroke: '#000', strokeWidth: 2 }} />
+                  </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -586,104 +478,36 @@ export default function Admin() {
 
           {/* User Registry Table */}
           <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl overflow-hidden">
-            <div className="p-6 border-b border-[#D4AF37]/10">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">
-                  Neural Registry ({filteredUsers.length} / {users.length} Nodes)
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                  {/* Search */}
-                  <div className="relative">
-                    <Search className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-[#D4AF37]/40" />
-                    <input
-                      type="text"
-                      placeholder="Search email / ID..."
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      className="bg-black border border-[#D4AF37]/20 text-[#D4AF37] placeholder-[#D4AF37]/20 text-[10px] rounded-xl pl-8 pr-4 py-2 focus:outline-none focus:border-[#D4AF37]/50 w-48"
-                    />
-                  </div>
-                  {/* Tier Filter */}
-                  <div className="flex gap-1">
-                    {(['all', 'free', 'pro', 'lifetime'] as TierFilter[]).map(t => (
-                      <button
-                        key={t}
-                        onClick={() => setTierFilter(t)}
-                        className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all ${
-                          tierFilter === t
-                            ? 'bg-[#D4AF37] text-black'
-                            : 'border border-[#D4AF37]/20 text-[#D4AF37]/50 hover:border-[#D4AF37]/40'
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <div className="p-6 border-b border-[#D4AF37]/10 flex items-center justify-between">
+              <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Neural Registry ({users.length} Nodes)</div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[11px] border-collapse">
                 <thead>
                   <tr className="text-[#D4AF37]/40 uppercase tracking-widest border-b border-[#D4AF37]/5">
                     <th className="px-6 py-4 font-bold">Email</th>
-                    <th
-                      className="px-6 py-4 font-bold cursor-pointer hover:text-[#D4AF37]/70 select-none"
-                      onClick={() => handleSort('created_at')}
-                    >
-                      Joined <SortIcon col="created_at" />
-                    </th>
-                    <th
-                      className="px-6 py-4 font-bold cursor-pointer hover:text-[#D4AF37]/70 select-none"
-                      onClick={() => handleSort('last_sign_in_at')}
-                    >
-                      Last Sync <SortIcon col="last_sign_in_at" />
-                    </th>
+                    <th className="px-6 py-4 font-bold">Joined</th>
+                    <th className="px-6 py-4 font-bold">Last Sync</th>
                     <th className="px-6 py-4 font-bold">Tier</th>
                     <th className="px-6 py-4 font-bold">Credits</th>
-                    <th
-                      className="px-6 py-4 font-bold cursor-pointer hover:text-[#D4AF37]/70 select-none"
-                      onClick={() => handleSort('credits_used')}
-                    >
-                      Credits Used <SortIcon col="credits_used" />
-                    </th>
+                    <th className="px-6 py-4 font-bold">Calls</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#D4AF37]/5">
-                  {filteredUsers.map((u) => (
-                    <tr
-                      key={u.id}
-                      className="hover:bg-[#D4AF37]/5 transition-colors cursor-pointer group"
-                      onClick={() => {
-                        setSelectedUser(u);
-                        addLog(`[INTEL] Accessing node profile: ${u.email || u.id}`);
-                      }}
-                    >
-                      <td className="px-6 py-4 text-white font-bold group-hover:text-[#D4AF37] transition-colors">
-                        {u.email || "ANON_NODE"}
-                      </td>
+                  {users.map((u) => (
+                    <tr key={u.id} className="hover:bg-[#D4AF37]/5 transition-colors group">
+                      <td className="px-6 py-4 text-white font-bold">{u.email || "ANON_NODE"}</td>
                       <td className="px-6 py-4 text-gray-500">{fmtDate(u.created_at)}</td>
                       <td className="px-6 py-4 text-gray-500">{fmtDate(u.last_sign_in_at)}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                          u.tier === 'pro' ? 'bg-[#D4AF37]/20 text-[#D4AF37]' :
-                          u.tier === 'lifetime' ? 'bg-purple-500/20 text-purple-400' :
-                          'bg-gray-900 text-gray-500'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${u.tier === 'pro' ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-gray-900 text-gray-500'}`}>
                           {u.tier}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-gray-400">{u.credits}</td>
-                      <td className="px-6 py-4 text-gray-400">{u.credits_used}</td>
+                      <td className="px-6 py-4 text-gray-400">{u.ai_calls}</td>
                     </tr>
                   ))}
-                  {filteredUsers.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-gray-600 text-xs">
-                        No nodes match current filters
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -692,21 +516,21 @@ export default function Admin() {
 
         {/* RIGHT COLUMN: Terminal & Controls */}
         <div className="col-span-12 lg:col-span-4 space-y-8">
-
+          
           {/* Neural Terminal */}
-          <ConsoleTerminal
-            logs={logs}
-            themeColor="reactor-orange"
+          <ConsoleTerminal 
+            logs={logs} 
+            themeColor="reactor-orange" 
             onManualCommand={(cmd) => {
               addLog(`[USER] ${cmd}`);
               if (cmd === "refresh") fetchStats();
               else if (cmd === "clear") setLogs([]);
               else addLog(`[Genius] Command unrecognized. Awaiting valid neural input.`);
-            }}
+            }} 
           />
 
           {/* System Telemetry */}
-          <SystemWidget
+          <SystemWidget 
             themeColor="reactor-orange"
             metrics={{
               coreTemp: 42,
@@ -719,7 +543,7 @@ export default function Admin() {
           />
 
           {/* Agent Workspace */}
-          <AgentControl
+          <AgentControl 
             themeColor="reactor-orange"
             activeDeploying={loading}
             tasks={tasks}
@@ -729,12 +553,6 @@ export default function Admin() {
 
         </div>
       </div>
-
-      {/* User Drill-Down Modal */}
-      <UserDrillModal
-        user={selectedUser}
-        onClose={() => setSelectedUser(null)}
-      />
     </div>
   );
 }

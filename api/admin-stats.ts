@@ -20,7 +20,14 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getUserFromRequest } from "../server/creditGate.js";
-import { supabaseAdmin } from "../server/supabaseAdmin.js";
+import { createClient } from "@supabase/supabase-js";
+
+// Use service_role client directly for admin API access
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -109,7 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ── Parallel data fetches ─────────────────────────────────────────────────
     const [usersResult, profilesResult, txResult, activityResult] = await Promise.all([
-      supabaseAdmin.auth.admin.listUsers({ perPage: 1000 }),
+      supabaseAdmin.auth.admin.listUsers({ perPage: 1000 } as any),
 
       supabaseAdmin
         .from("profiles")
@@ -141,21 +148,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ── Overview ──────────────────────────────────────────────────────────────
     const total_users = authUsers.length;
 
-    const sessionEvents = actRows.filter(r => r.event === "session_start");
+    const sessionEvents = actRows.filter((r: any) => r.event === "session_start");
     const active_today = new Set(
-      sessionEvents.filter(r => r.created_at >= oneDayAgo).map(r => r.user_id)
+      sessionEvents.filter((r: any) => r.created_at >= oneDayAgo).map((r: any) => r.user_id)
     ).size;
     const active_week = new Set(
-      sessionEvents.filter(r => r.created_at >= sevenDaysAgo).map(r => r.user_id)
+      sessionEvents.filter((r: any) => r.created_at >= sevenDaysAgo).map((r: any) => r.user_id)
     ).size;
 
-    const txToday = txRows.filter(r => r.created_at >= oneDayAgo);
+    const txToday = txRows.filter((r: any) => r.created_at >= oneDayAgo);
     const ai_calls_today      = txToday.length;
-    const credits_spent_today = txToday.reduce((s, r) => s + Math.abs(r.amount), 0);
+    const credits_spent_today = txToday.reduce((s: number, r: any) => s + Math.abs(r.amount), 0);
 
     // ── Feature usage ─────────────────────────────────────────────────────────
     const featureMap = new Map<string, { count: number; credits: number }>();
-    for (const tx of txRows) {
+    for (const tx of txRows as any[]) {
       const key = tx.type as string;
       const existing = featureMap.get(key) ?? { count: 0, credits: 0 };
       existing.count++;
@@ -169,7 +176,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ── DAU ───────────────────────────────────────────────────────────────────
     const dauWindowStart = new Date(Date.now() - dauDays * 24 * 60 * 60 * 1000).toISOString();
     const dauMap = new Map<string, Set<string>>();
-    for (const r of sessionEvents) {
+    for (const r of sessionEvents as any[]) {
       if (r.created_at < dauWindowStart) continue;
       const day = r.created_at.slice(0, 10);
       if (!dauMap.has(day)) dauMap.set(day, new Set());
@@ -194,7 +201,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userPhotos  = new Map<string, number>();
     const userExports = new Map<string, number>();
-    for (const r of actRows) {
+    for (const r of actRows as any[]) {
       const uid = r.user_id as string;
       if (r.event === "photo_uploaded") {
         const cnt = (r.metadata as { count?: number })?.count ?? 1;
