@@ -6,16 +6,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { text, voiceId: requestedVoiceId } = req.body;
-  const apiKey = process.env.ELEVENLABS_API_KEY;
+
+  // Support both ELEVENLABS_API_KEY and ELEVENLABS_API_KEY_2 naming conventions
+  const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY_2;
+
+  // Resolve voice IDs from env vars (supports _2 suffix naming convention)
+  const voice1 = process.env.ELEVENLABS_VOICE_ID || process.env.ELEVENLABS_VOICE_ID_1 || '8Ln42OXYupYsag45MAUy';
+  const voice2 = process.env.ELEVENLABS_VOICE_ID_2 || 'bbGtsRRKUfYO634UxSjz';
 
   // Allowed voice IDs (whitelist to prevent abuse)
-  const ALLOWED_VOICES = [
-    '8Ln42OXYupYsag45MAUy', // Voice 1 (default)
-    'bbGtsRRKUfYO634UxSjz', // Voice 2
-  ];
+  const ALLOWED_VOICES = [voice1, voice2];
   const voiceId = ALLOWED_VOICES.includes(requestedVoiceId)
     ? requestedVoiceId
-    : (process.env.ELEVENLABS_VOICE_ID || '8Ln42OXYupYsag45MAUy');
+    : voice1;
 
   if (!apiKey) {
     return res.status(500).json({ error: 'ElevenLabs API key not configured' });
