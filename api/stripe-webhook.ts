@@ -131,8 +131,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     // Handle subscription update (e.g., renewal)
     if (event.type === "invoice.paid") {
       var invoice = event.data.object as Stripe.Invoice;
-      // Stripe v17+: subscription ID moved to invoice.parent.subscription_details.subscription
-      var invoiceSubId = invoice.parent?.subscription_details?.subscription as string | undefined;
+      // Stripe v17+: ID lives at invoice.parent.subscription_details.subscription
+      // Pre-v17 fallback: invoice.subscription (direct field, now deprecated but still sent
+      // by webhooks registered before the v17 API version)
+      var invoiceSubId = (invoice.parent?.subscription_details?.subscription as string | undefined)
+        ?? (invoice as unknown as { subscription?: string }).subscription;
       if (invoiceSubId) {
         // Find user by subscription ID
         var { data: profile } = await supabaseAdmin

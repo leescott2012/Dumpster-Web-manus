@@ -11,7 +11,24 @@ var SK_POOL  = IS_OWNER ? "dumpster_state_pool_owner" : "dumpster_state_pool_gue
 function loadSaved<T>(key: string): T | null {
   try {
     var raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw) as T;
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    // Defensively strip null entries that can appear in corrupted localStorage.
+    // Without this, pool.some(p => p.id...) throws "null is not an object" on Safari.
+    if (Array.isArray(parsed)) {
+      var clean = parsed
+        .filter(function(item) { return item != null; })
+        .map(function(item: unknown) {
+          // Also strip null photos nested inside dump objects
+          if (item && typeof item === "object" && "photos" in (item as object)) {
+            var d = item as { photos: unknown[] };
+            return { ...d, photos: (d.photos || []).filter(function(p) { return p != null; }) };
+          }
+          return item;
+        });
+      return clean as T;
+    }
+    return parsed as T;
   } catch { /* corrupted or missing — fall through */ }
   return null;
 }
