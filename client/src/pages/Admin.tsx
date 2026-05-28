@@ -254,9 +254,8 @@ export default function Admin() {
     }
   }, [session, logsLoaded]);
 
-  const [isInitialized, setIsInitialized] = useState(false);
   useEffect(function() {
-    if (session && !isInitialized) {
+    if (session) {
       fetchStats();
       // Startup sequence
       const timer = setTimeout(() => {
@@ -264,11 +263,10 @@ export default function Admin() {
         sfx.playStartup();
         addLog("[BOOT] Genius Neural HUD v4.2 Online.");
         addLog("[INFO] Chamillion Collective secure link established.");
-        setIsInitialized(true);
-      }, 1500);
+      }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [session, fetchStats, isInitialized]);
+  }, [session, fetchStats]);
 
   // ── Sign-in flow ───────────────────────────────────────────────────────────
   const handleGoogle = useCallback(async function() {
