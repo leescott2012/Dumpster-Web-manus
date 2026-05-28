@@ -39,6 +39,7 @@ import { loadCaptions } from "@/lib/captionPool";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn } from "@/lib/aiProfileSync";
+import { track } from "@/lib/analytics";
 
 function HomeContent() {
   var {
@@ -119,6 +120,7 @@ function HomeContent() {
   // Photos and workspace (dumps + pool) are device-local for beta.
   useEffect(function() {
     if (!user) return;
+    track("session_start");
     syncAIProfileOnSignIn(user.id).catch(function(err) {
       console.warn("[aiProfileSync] sign-in sync failed:", err);
     });
@@ -380,6 +382,7 @@ function HomeContent() {
     Promise.all(tasks).then(function(photos) {
       if (photos.length === 0) return;
       addUploadedPhotos(photos);
+      track("photo_uploaded", { count: photos.length });
       toast("Added " + photos.length + (photos.length === 1 ? " item" : " items") + " to pool");
     }).catch(function(err) {
       console.error("[upload] failed:", err);

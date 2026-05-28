@@ -6,12 +6,14 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import Admin from "./pages/Admin";
 
 function Router() {
   return (
     <Switch>
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
+      <Route path="/admin" component={Admin} />
       <Route path="/" component={Home} />
       <Route component={Home} />
     </Switch>

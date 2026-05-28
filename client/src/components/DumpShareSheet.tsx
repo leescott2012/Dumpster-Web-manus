@@ -10,6 +10,7 @@ import {
   X, Download, Copy, Check, Share2, ExternalLink, Loader2,
 } from "lucide-react";
 import type { Dump } from "@/lib/photoData";
+import { track } from "@/lib/analytics";
 
 interface DumpShareSheetProps {
   dump: Dump | null;
@@ -140,6 +141,7 @@ export default function DumpShareSheet({ dump, open, onClose }: DumpShareSheetPr
       const ok = await sharePhotosBulk(dump.photos.map(p => p.url), prefix);
       if (ok) {
         setDownloadedIds(new Set(dump.photos.map(p => p.id)));
+        track("dump_exported", { photo_count: dump.photos.length });
       }
       setDownloading(false);
       return;
@@ -153,6 +155,7 @@ export default function DumpShareSheet({ dump, open, onClose }: DumpShareSheetPr
       setDownloadedIds(prev => new Set(prev).add(p.id));
       if (i < dump.photos.length - 1) await new Promise(r => setTimeout(r, 300));
     }
+    track("dump_exported", { photo_count: dump.photos.length });
     setDownloading(false);
   }, [dump]);
 
