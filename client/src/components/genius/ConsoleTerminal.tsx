@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Terminal, Send, Shield, Zap } from "lucide-react";
-import { sfx } from "../utils/audioSynth";
+import { sfx } from "../../lib/geniusAudio";
 
 interface ConsoleTerminalProps {
   logs: string[];

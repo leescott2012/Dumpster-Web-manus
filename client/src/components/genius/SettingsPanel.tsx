@@ -1,7 +1,7 @@
 import React from "react";
 import { Sliders, Volume2, VolumeX, Shield, User, SlidersHorizontal, Radio } from "lucide-react";
 import { GeniusSettings } from "../types";
-import { sfx } from "../utils/audioSynth";
+import { sfx } from "../../lib/geniusAudio";
 
 interface SettingsPanelProps {
   settings: GeniusSettings;

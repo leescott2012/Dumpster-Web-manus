@@ -1,6 +1,6 @@
 import { useState, FormEvent } from "react";
 import { Compass, Search, Globe, Link as LinkIcon, Radio } from "lucide-react";
-import { sfx } from "../utils/audioSynth";
+import { sfx } from "../../lib/geniusAudio";
 
 interface MapsWidgetProps {
   themeColor: 'arc-blue' | 'reactor-orange' | 'matrix-green' | 'crimson-alert';

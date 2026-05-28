@@ -1,7 +1,7 @@
 import { useState, FormEvent } from "react";
 import { Play, RotateCw, CheckCircle2, AlertTriangle, Cpu, Terminal, Sparkles, Volume2 } from "lucide-react";
 import { Task } from "../types";
-import { sfx } from "../utils/audioSynth";
+import { sfx } from "../../lib/geniusAudio";
 
 interface AgentControlProps {
   onDeployAgent: (taskName: string, agentType: 'researcher' | 'coder' | 'social' | 'analyst') => Promise<void>;
