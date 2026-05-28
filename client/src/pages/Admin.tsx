@@ -7,16 +7,18 @@
  *   • Feature usage bar chart (AI actions, last 30 days)
  *   • User table (email, joined, last active, tier, credits, AI calls, exports)
  *
- * Access: IS_OWNER only — hard redirect to "/" for everyone else.
- * Data:   fetched from /api/admin-stats with JWT auth.
+ * Access: self-contained sign-in. Visit /admin in any browser → if no
+ *         Supabase session, show a Google sign-in card. After auth, the
+ *         server checks ADMIN_USER_ID; non-admins get a polite 403 screen.
+ *         This makes the dashboard accessible without first logging into
+ *         the main app on the same device.
  */
-import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useState, useCallback } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
-import { IS_OWNER } from "@/lib/photoData";
 import { supabase } from "@/lib/supabase";
+import type { Session } from "@supabase/supabase-js";
 
 // ── Types (mirror api/admin-stats.ts response) ────────────────────────────────
 
@@ -82,51 +84,142 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
+// ── Sign-in screen ────────────────────────────────────────────────────────────
+
+function SignInScreen({ onGoogle, signingIn, error }: { onGoogle: () => void; signingIn: boolean; error: string | null }) {
+  return (
+    <div style={{ minHeight: "100dvh", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, color: "#fff" }}>
+      <div style={{ width: "100%", maxWidth: 360, background: "#111", border: "1px solid #2a2a2a", borderRadius: 16, padding: 32 }}>
+        <div style={{ fontSize: 11, color: ACCENT, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
+          Dumpster
+        </div>
+        <h1 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 700 }}>Admin sign-in</h1>
+        <p style={{ margin: "0 0 24px", color: "#888", fontSize: 13, lineHeight: 1.5 }}>
+          Sign in with the admin Google account to see user activity.
+        </p>
+
+        <button
+          onClick={onGoogle}
+          disabled={signingIn}
+          style={{
+            width: "100%", padding: "12px 16px", background: "#fff", color: "#000",
+            border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600,
+            cursor: signingIn ? "wait" : "pointer", opacity: signingIn ? 0.6 : 1,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+            <path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"/>
+            <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"/>
+          </svg>
+          {signingIn ? "Redirecting…" : "Continue with Google"}
+        </button>
+
+        {error && (
+          <div style={{ marginTop: 16, padding: "10px 14px", background: "rgba(255,80,80,0.08)", border: "1px solid rgba(255,80,80,0.25)", borderRadius: 8, fontSize: 12, color: "#f88" }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ marginTop: 20, fontSize: 11, color: "#444", textAlign: "center" }}>
+          <a href="/" style={{ color: "#666", textDecoration: "none" }}>← Back to app</a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function Admin() {
-  const [, navigate] = useLocation();
+  const [session, setSession] = useState<Session | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [stats, setStats]     = useState<AdminStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
 
-  // Gate: IS_OWNER only
+  // Track Supabase session (handles fresh sign-in via OAuth redirect)
   useEffect(function() {
-    if (!IS_OWNER) navigate("/");
-  }, [navigate]);
+    supabase.auth.getSession().then(function(r) {
+      setSession(r.data.session);
+      setSessionLoading(false);
+    });
+    const sub = supabase.auth.onAuthStateChange(function(_e, s) {
+      setSession(s);
+    });
+    return function() { sub.data.subscription.unsubscribe(); };
+  }, []);
 
-  // Fetch stats
-  async function fetchStats() {
+  // Fetch stats — only when we have a session
+  const fetchStats = useCallback(async function() {
+    if (!session) return;
     setLoading(true);
     setError(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setError("Not signed in."); setLoading(false); return; }
-
       const res = await fetch("/api/admin-stats", {
         headers: { Authorization: "Bearer " + session.access_token },
       });
-
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? "HTTP " + res.status);
-        setLoading(false);
+        const body = await res.json().catch(function() { return {}; });
+        if (res.status === 403) {
+          setError("This account isn't authorized to view the dashboard.");
+        } else {
+          setError(body.error ?? "HTTP " + res.status);
+        }
         return;
       }
-
       setStats(await res.json());
     } catch (e: any) {
       setError(e?.message ?? "Network error");
     } finally {
       setLoading(false);
     }
+  }, [session]);
+
+  useEffect(function() {
+    if (session) fetchStats();
+  }, [session, fetchStats]);
+
+  // ── Sign-in flow ───────────────────────────────────────────────────────────
+  const handleGoogle = useCallback(async function() {
+    setSigningIn(true);
+    setError(null);
+    const { error: oerr } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin + "/admin" },
+    });
+    if (oerr) {
+      setError(oerr.message);
+      setSigningIn(false);
+    }
+    // On success the browser navigates away to Google — no need to clear setSigningIn.
+  }, []);
+
+  const handleSignOut = useCallback(async function() {
+    await supabase.auth.signOut();
+    setSession(null);
+    setStats(null);
+    setError(null);
+  }, []);
+
+  // ── Render: session loading ────────────────────────────────────────────────
+  if (sessionLoading) {
+    return (
+      <div style={{ minHeight: "100dvh", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", color: "#555" }}>
+        Loading…
+      </div>
+    );
   }
 
-  useEffect(function() { if (IS_OWNER) fetchStats(); }, []); // eslint-disable-line
+  // ── Render: no session → sign-in screen ────────────────────────────────────
+  if (!session) {
+    return <SignInScreen onGoogle={handleGoogle} signingIn={signingIn} error={error} />;
+  }
 
-  if (!IS_OWNER) return null;
-
-  // ── Loading / error states ──────────────────────────────────────────────────
+  // ── Render: signed in, loading stats ───────────────────────────────────────
   if (loading) {
     return (
       <div style={{ minHeight: "100dvh", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", color: "#555" }}>
@@ -135,23 +228,40 @@ export default function Admin() {
     );
   }
 
+  // ── Render: signed in but error (likely 403 not authorized) ────────────────
   if (error) {
+    const notAuthorized = error.includes("authorized");
     return (
-      <div style={{ minHeight: "100dvh", background: "#0a0a0a", padding: 32, color: "#f55" }}>
-        <h2 style={{ margin: "0 0 12px", color: "#fff" }}>Admin Dashboard</h2>
-        <p>Error: {error}</p>
-        {error.includes("ADMIN_USER_ID") && (
-          <p style={{ color: "#888", fontSize: 13, marginTop: 8 }}>
-            Add <code style={{ color: ACCENT }}>ADMIN_USER_ID</code> to your Vercel environment variables.
-            Value = your Supabase user UUID (Authentication → Users → copy your UUID).
+      <div style={{ minHeight: "100dvh", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ width: "100%", maxWidth: 380, background: "#111", border: "1px solid #2a2a2a", borderRadius: 16, padding: 32, color: "#fff" }}>
+          <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>
+            {notAuthorized ? "Not authorized" : "Couldn't load dashboard"}
+          </h2>
+          <p style={{ margin: "0 0 16px", color: "#888", fontSize: 13, lineHeight: 1.5 }}>
+            {notAuthorized
+              ? "Signed in as " + (session.user.email || "this account") + ", but this account isn't the admin. Sign out and try the admin account."
+              : error}
           </p>
-        )}
-        <button
-          onClick={fetchStats}
-          style={{ marginTop: 16, padding: "8px 18px", background: ACCENT, color: "#000", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
-        >
-          Retry
-        </button>
+          {error.includes("ADMIN_USER_ID") && (
+            <p style={{ color: "#888", fontSize: 12, marginTop: 8 }}>
+              Add <code style={{ color: ACCENT }}>ADMIN_USER_ID</code> to your Vercel environment variables.
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <button
+              onClick={fetchStats}
+              style={{ flex: 1, padding: "10px 16px", background: ACCENT, color: "#000", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+            >
+              Retry
+            </button>
+            <button
+              onClick={handleSignOut}
+              style={{ flex: 1, padding: "10px 16px", background: "transparent", color: "#888", border: "1px solid #2a2a2a", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -175,15 +285,26 @@ export default function Admin() {
     <div style={{ minHeight: "100dvh", background: "#0a0a0a", padding: "32px 24px", maxWidth: 1100, margin: "0 auto", color: "#fff" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Admin Dashboard</h1>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Admin Dashboard</h1>
+          <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>
+            Signed in as {session.user.email || session.user.id}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{ fontSize: 12, color: "#555" }}>Last 30 days</span>
           <button
             onClick={fetchStats}
             style={{ padding: "6px 14px", background: "transparent", color: ACCENT, border: "1px solid #333", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
           >
             Refresh
+          </button>
+          <button
+            onClick={handleSignOut}
+            style={{ padding: "6px 14px", background: "transparent", color: "#666", border: "1px solid #2a2a2a", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+          >
+            Sign out
           </button>
           <a href="/" style={{ padding: "6px 14px", background: "transparent", color: "#666", border: "1px solid #2a2a2a", borderRadius: 8, fontSize: 13, textDecoration: "none" }}>
             ← App
