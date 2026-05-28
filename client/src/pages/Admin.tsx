@@ -155,31 +155,9 @@ export default function Admin() {
   const [isWarmingUp, setIsWarmingUp] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
 
-  // Voice selection
-  const VOICES = [
-    { id: '8Ln42OXYupYsag45MAUy', label: 'VOICE_01' },
-    { id: 'bbGtsRRKUfYO634UxSjz', label: 'VOICE_02' },
-  ];
-  const [selectedVoice, setSelectedVoice] = useState('8Ln42OXYupYsag45MAUy');
-
   // Audio setup
   const addLog = (msg: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const fullMsg = `[${timestamp}] ${msg}`;
-    setLogs(prev => [...prev.slice(-49), fullMsg]);
-    
-    // Extract log level from message
-    const levelMatch = msg.match(/\[(SYSTEM|SUCCESS|ERROR|BOOT|INFO|CRITICAL|FAIL|USER|GENIUS|AGENT|WARN)\]/);
-    const level = levelMatch ? levelMatch[1] : 'INFO';
-    
-    // Persist to database asynchronously
-    if (session) {
-      supabase.from('system_logs').insert({
-        level,
-        message: msg,
-        metadata: { timestamp, source: 'dashboard' }
-      }).catch(err => console.warn('Log persistence failed:', err));
-    }
+    setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
   };
 
   // Track Supabase session
@@ -229,42 +207,16 @@ export default function Admin() {
     }
   }, [session]);
 
-  // Load previous logs from database on session load (only once per session)
-  const [logsLoaded, setLogsLoaded] = useState(false);
-  useEffect(function() {
-    if (session && !logsLoaded) {
-      supabase
-        .from('system_logs')
-        .select('level, message')
-        .order('created_at', { ascending: false })
-        .limit(50)
-        .then(({ data: logs }) => {
-          if (logs && logs.length > 0) {
-            const previousLogs = logs
-              .reverse()
-              .map((log: any) => `[${log.level}] ${log.message}`);
-            setLogs(previousLogs);
-          }
-          setLogsLoaded(true);
-        })
-        .catch(err => {
-          console.warn('Could not load previous logs:', err);
-          setLogsLoaded(true);
-        });
-    }
-  }, [session, logsLoaded]);
-
   useEffect(function() {
     if (session) {
       fetchStats();
       // Startup sequence
-      const timer = setTimeout(() => {
+      setTimeout(() => {
         setIsWarmingUp(false);
         sfx.playStartup();
         addLog("[BOOT] Genius Neural HUD v4.2 Online.");
         addLog("[INFO] Chamillion Collective secure link established.");
-      }, 2000);
-      return () => clearTimeout(timer);
+      }, 1500);
     }
   }, [session, fetchStats]);
 
@@ -326,71 +278,6 @@ export default function Admin() {
     }
   };
 
-  // ── Voice Talk Flow ─────────────────────────────────────────────────────────
-  const handleTalk = useCallback(async () => {
-    if (!session) return;
-    // Use browser SpeechRecognition API
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      addLog('[ERROR] Speech recognition not supported in this browser. Try Chrome.');
-      return;
-    }
-
-    setHudState('listening');
-    sfx.playBeep(880, 0.08);
-    addLog('[Genius] Listening... speak now.');
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = async (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      addLog(`[YOU] ${transcript}`);
-      setHudState('thinking');
-      sfx.playScan();
-
-      try {
-        // 1) Get Genius text response
-        const chatRes = await fetch('/api/genius-chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + session.access_token,
-          },
-          body: JSON.stringify({ transcript }),
-        });
-
-        if (!chatRes.ok) {
-          addLog('[ERROR] Neural core failed to respond.');
-          setHudState('idle');
-          return;
-        }
-
-        const { reply } = await chatRes.json();
-        addLog(`[Genius] ${reply}`);
-
-        // 2) Speak the response
-        await handleReadAloud(reply);
-      } catch (e: any) {
-        addLog(`[ERROR] ${e?.message ?? 'Voice pipeline failure.'}`);
-        setHudState('idle');
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      addLog(`[ERROR] Mic error: ${event.error}`);
-      setHudState('idle');
-    };
-
-    recognition.onend = () => {
-      if (hudState === 'listening') setHudState('idle');
-    };
-
-    recognition.start();
-  }, [session, hudState]);
-
   const handleReadAloud = async (text: string) => {
     setHudState('speaking');
     addLog(`[Genius] Synthesizing voice output...`);
@@ -399,7 +286,7 @@ export default function Admin() {
       const response = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voiceId: selectedVoice })
+        body: JSON.stringify({ text })
       });
       
       if (response.ok) {
@@ -504,22 +391,6 @@ export default function Admin() {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Voice Selector */}
-          <div className="flex items-center gap-1 border border-[#D4AF37]/20 rounded-lg p-1">
-            {VOICES.map(v => (
-              <button
-                key={v.id}
-                onClick={() => { setSelectedVoice(v.id); sfx.playBeep(660, 0.06); addLog(`[Genius] Voice switched to ${v.label}.`); }}
-                className={`px-3 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${
-                  selectedVoice === v.id
-                    ? 'bg-[#D4AF37] text-black'
-                    : 'text-[#D4AF37]/40 hover:text-[#D4AF37]/80'
-                }`}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
           <button onClick={fetchStats} className="p-2 hover:bg-[#D4AF37]/10 rounded-lg transition-colors group">
             <RefreshCw className="w-4 h-4 group-active:rotate-180 transition-transform duration-500" />
           </button>
@@ -539,7 +410,7 @@ export default function Admin() {
           
           {/* Central Genius HUD Component */}
           <div className="bg-[#050505] border border-[#D4AF37]/20 rounded-3xl overflow-hidden shadow-[0_0_100px_rgba(212,175,55,0.05)]">
-            <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} />
+            <GeniusHUD state={hudState} isOnline={true} />
           </div>
 
           {/* Overview Stat Cards */}
@@ -629,11 +500,7 @@ export default function Admin() {
                       <td className="px-6 py-4 text-gray-500">{fmtDate(u.created_at)}</td>
                       <td className="px-6 py-4 text-gray-500">{fmtDate(u.last_sign_in_at)}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                          u.tier === 'pro' ? 'bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/40' :
-                          u.tier === 'lifetime' ? 'bg-[#D4AF37]/30 text-[#D4AF37] border border-[#D4AF37]/60' :
-                          'bg-[#D4AF37]/10 text-[#D4AF37]/60 border border-[#D4AF37]/20'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${u.tier === 'pro' ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-gray-900 text-gray-500'}`}>
                           {u.tier}
                         </span>
                       </td>
