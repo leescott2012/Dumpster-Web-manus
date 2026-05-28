@@ -151,9 +151,38 @@ function mergeIntoLocal(cloud: CloudAIProfile) {
     if (!cloudById.has(c.id)) merged.push(c);
   });
 
-  // Stable sort: newest first (epoch ms)
-  merged.sort(function(a, b) { return b.createdAt - a.createdAt; });
-  saveCaptions(merged);
+  // ── Second-pass dedup by (style, text) ────────────────────────────────────
+  // Handles legacy rows where the same seed caption ended up with different
+  // random IDs across devices. Without this, every new device adds 12 extra
+  // seed entries to the pool.
+  //
+  // Conflict resolution priority (highest wins):
+  //   1. Tombstoned rows (user explicitly deleted) — keep the deletion
+  //   2. Rows with favorited or banned flag set — preserve user state
+  //   3. Older createdAt — the original, not a duplicate
+  function rank(c: PoolCaption): number {
+    if (c.deleted) return 3;
+    if (c.favorited || c.banned) return 2;
+    return 1;
+  }
+  merged.sort(function(a, b) {
+    var ra = rank(a), rb = rank(b);
+    if (ra !== rb) return rb - ra;
+    return a.createdAt - b.createdAt;
+  });
+  var seen: Record<string, boolean> = {};
+  var deduped: PoolCaption[] = [];
+  for (var k = 0; k < merged.length; k++) {
+    var c = merged[k];
+    var key = c.style + "|" + (c.text || "").trim().toLowerCase();
+    if (seen[key]) continue;
+    seen[key] = true;
+    deduped.push(c);
+  }
+
+  // Final display order: newest first
+  deduped.sort(function(a, b) { return b.createdAt - a.createdAt; });
+  saveCaptions(deduped);
 }
 
 /**

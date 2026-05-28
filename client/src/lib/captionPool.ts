@@ -65,6 +65,25 @@ export function saveCaptions(captions: PoolCaption[]) {
   }
 }
 
+/**
+ * Deterministic ID for a seed caption — hash of style + text.
+ *
+ * Switched from nanoid because every device that signs in for the first time
+ * was generating fresh random "seed-XYZ123" IDs for the same 12 seeds, then
+ * cloud-syncing them as if they were unique. Result: caption pool grew by 12
+ * on every new device. Deterministic IDs mean the merge-by-id step in
+ * aiProfileSync naturally collapses identical seeds across devices.
+ */
+function seedId(style: string, text: string): string {
+  var s = style + "|" + text;
+  // djb2 hash, base36-encoded → short stable string
+  var h = 5381;
+  for (var i = 0; i < s.length; i++) {
+    h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  }
+  return "seed-" + Math.abs(h).toString(36);
+}
+
 // Seed with iOS template banks the first time the user lands.
 function seedCaptions(): PoolCaption[] {
   const now = Date.now();
@@ -83,7 +102,7 @@ function seedCaptions(): PoolCaption[] {
     { style: "numbered",     text: "1/10 of why this week hit different" },
   ];
   const list = seeds.map((s, i) => ({
-    id: "seed-" + nanoid(6),
+    id: seedId(s.style, s.text),
     text: s.text,
     style: s.style,
     favorited: false,
