@@ -4,7 +4,7 @@
  * An immersive, Iron Man-style holographic dashboard that displays
  * live user activity, revenue, and system telemetry.
  */
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   BarChart, Bar
@@ -13,10 +13,8 @@ import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Terminal, Shield, Zap, Activity, Cpu, Gauge, 
-  HardDrive, Wifi, ShieldAlert, Play, RotateCw, 
-  CheckCircle2, AlertTriangle, Sparkles, Volume2,
-  LogOut, RefreshCw, Home
+  Terminal, Shield, Zap, 
+  ShieldAlert, RefreshCw, Home, LogOut
 } from "lucide-react";
 
 // Genius Components
@@ -43,6 +41,16 @@ interface AdminStats {
   feature_usage: FeatureUsageRow[];
   dau: DauRow[];
   users: UserRow[];
+}
+
+interface Task {
+  id: string;
+  name: string;
+  status: 'running' | 'completed' | 'failed';
+  logs: string[];
+  summary?: string;
+  agentType: 'researcher' | 'coder' | 'social' | 'analyst';
+  timestamp: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -145,6 +153,7 @@ export default function Admin() {
   const [hudState, setHudState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
   const [logs, setLogs] = useState<string[]>([]);
   const [isWarmingUp, setIsWarmingUp] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   // Audio setup
   const addLog = (msg: string) => {
@@ -232,6 +241,69 @@ export default function Admin() {
     setStats(null);
     setError(null);
   }, []);
+
+  // ── Agent Control ──────────────────────────────────────────────────────────
+  const handleDeployAgent = async (taskName: string, agentType: 'researcher' | 'coder' | 'social' | 'analyst') => {
+    setLoading(true);
+    setHudState('thinking');
+    addLog(`[AGENT] Deploying ${agentType} node for task: ${taskName}`);
+    
+    const newTask: Task = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: taskName,
+      status: 'running',
+      logs: [`[BOOT] Agent initialized.`, `[INFO] Connecting to neural matrix...`],
+      agentType,
+      timestamp: new Date().toISOString()
+    };
+    setTasks(prev => [newTask, ...prev]);
+
+    try {
+      // Mock agent logic for now - in a real app, this would call an API
+      setTimeout(() => {
+        setTasks(prev => prev.map(t => t.id === newTask.id ? {
+          ...t,
+          status: 'completed',
+          logs: [...t.logs, `[SUCCESS] Task analysis complete.`, `[INFO] Summarizing findings...`],
+          summary: `Genius has analyzed the Dumpster user data. Growth is trending at 12% WoW. Recommended move: Optimize caption generation for the 'Minimalist' aesthetic.`
+        } : t));
+        addLog(`[AGENT] ${agentType} task completed successfully.`);
+        setLoading(false);
+        setHudState('idle');
+      }, 3000);
+    } catch (e) {
+      setTasks(prev => prev.map(t => t.id === newTask.id ? { ...t, status: 'failed', logs: [...t.logs, `[ERROR] Synaptic failure.`] } : t));
+      setLoading(false);
+      setHudState('idle');
+    }
+  };
+
+  const handleReadAloud = async (text: string) => {
+    setHudState('speaking');
+    addLog(`[Genius] Synthesizing voice output...`);
+    
+    try {
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => setHudState('idle');
+        audio.play();
+      } else {
+        addLog(`[ERROR] Voice synthesis failed.`);
+        setHudState('idle');
+      }
+    } catch (e) {
+      addLog(`[ERROR] Audio bridge connection failure.`);
+      setHudState('idle');
+    }
+  };
 
   // ── Render: session loading ────────────────────────────────────────────────
   if (sessionLoading || (session && isWarmingUp)) {
@@ -474,15 +546,9 @@ export default function Admin() {
           <AgentControl 
             themeColor="reactor-orange"
             activeDeploying={loading}
-            tasks={[]}
-            onDeployAgent={async (name) => {
-              addLog(`[AGENT] Deploying node: ${name}`);
-              await fetchStats();
-            }}
-            onReadAloud={(txt) => {
-              addLog(`[Genius] Synthesizing voice output...`);
-              // ElevenLabs logic would go here
-            }}
+            tasks={tasks}
+            onDeployAgent={handleDeployAgent}
+            onReadAloud={handleReadAloud}
           />
 
         </div>
