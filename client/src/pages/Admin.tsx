@@ -278,32 +278,141 @@ export default function Admin() {
     }
   };
 
-  const handleReadAloud = async (text: string) => {
+  // ── Voice synthesis (ElevenLabs → browser TTS fallback) ────────────────────
+  // Returns a Promise that resolves when audio finishes (or fails silently).
+  // Falls back to browser SpeechSynthesis when /api/tts fails (free-tier ElevenLabs
+  // 402, missing key, network error, etc.) so the assistant always speaks.
+  const handleReadAloud = useCallback(async (text: string): Promise<void> => {
     setHudState('speaking');
     addLog(`[Genius] Synthesizing voice output...`);
-    
-    try {
-      const response = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      });
-      
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.onended = () => setHudState('idle');
-        audio.play();
-      } else {
-        addLog(`[ERROR] Voice synthesis failed.`);
+
+    const speakWithBrowser = (): Promise<void> => new Promise((resolve) => {
+      if (!('speechSynthesis' in window)) { resolve(); return; }
+      try {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = 1.05; u.pitch = 1.0; u.volume = 1.0;
+        const voices = window.speechSynthesis.getVoices();
+        const pref = voices.find(v => /Daniel|Alex|Samantha|Karen|Google US English/i.test(v.name));
+        if (pref) u.voice = pref;
+        u.onend = () => resolve();
+        u.onerror = () => resolve();
+        window.speechSynthesis.speak(u);
+      } catch { resolve(); }
+    });
+
+    return new Promise(async (resolve) => {
+      try {
+        const response = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+
+        if (response.ok && (response.headers.get('content-type') || '').startsWith('audio/')) {
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          audio.onended = () => { setHudState('idle'); URL.revokeObjectURL(url); resolve(); };
+          audio.onerror = async () => { URL.revokeObjectURL(url); await speakWithBrowser(); setHudState('idle'); resolve(); };
+          void audio.play().catch(async () => { await speakWithBrowser(); setHudState('idle'); resolve(); });
+          return;
+        }
+
+        // ElevenLabs unavailable (free-tier 402, missing key, etc.) → browser TTS
+        addLog(`[WARN] ElevenLabs unavailable — using local voice.`);
+        await speakWithBrowser();
         setHudState('idle');
+        resolve();
+      } catch {
+        addLog(`[WARN] TTS bridge failure — using local voice.`);
+        await speakWithBrowser();
+        setHudState('idle');
+        resolve();
       }
-    } catch (e) {
-      addLog(`[ERROR] Audio bridge connection failure.`);
+    });
+  }, []);
+
+  // ── Voice conversation (orb click → STT → genius-chat → TTS → loop) ───────
+  // The orb at GeniusHUD.tsx exposes onTalk; clicking it fires this. We start
+  // browser SpeechRecognition, send the transcript to /api/genius-chat with
+  // current stats so it can answer with specifics, then speak the reply via
+  // handleReadAloud (ElevenLabs or browser TTS).
+  const handleTalk = useCallback(() => {
+    if (hudState !== 'idle') return;
+
+    const SR = (window as unknown as {
+      SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any;
+    }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => any }).webkitSpeechRecognition;
+    if (!SR) {
+      addLog("[ERROR] Voice input unsupported on this browser. Use Chrome or Safari.");
+      return;
+    }
+
+    setHudState('listening');
+    addLog("[Genius] Listening. Speak now.");
+    sfx.playBeep?.(880, 0.08);
+
+    const rec = new SR();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = "en-US";
+
+    let finished = false;
+    const finish = (transcript: string | null) => {
+      if (finished) return; finished = true;
+      try { rec.stop(); } catch { /* noop */ }
+
+      if (!transcript) { setHudState('idle'); return; }
+
+      addLog(`[USER] ${transcript}`);
+      setHudState('thinking');
+
+      void (async () => {
+        try {
+          if (!session) { addLog("[ERROR] Session expired."); setHudState('idle'); return; }
+          const res = await fetch("/api/genius-chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + session.access_token,
+            },
+            body: JSON.stringify({ transcript, stats }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            addLog(`[ERROR] ${body.error || res.status}`);
+            setHudState('idle');
+            return;
+          }
+          const reply: string = body.reply || "(no reply)";
+          addLog(`[GENIUS] ${reply}`);
+          await handleReadAloud(reply);
+        } catch (e: any) {
+          addLog(`[ERROR] Neural bridge: ${e?.message || e}`);
+          setHudState('idle');
+        }
+      })();
+    };
+
+    rec.onresult = (e: any) => {
+      const t = e?.results?.[0]?.[0]?.transcript?.trim?.() || "";
+      finish(t || null);
+    };
+    rec.onerror = (e: any) => {
+      const err = e?.error;
+      if (err && err !== "no-speech" && err !== "aborted") {
+        addLog(`[ERROR] Mic: ${err}`);
+      }
+      finish(null);
+    };
+    rec.onend = () => { if (!finished) finish(null); };
+
+    try { rec.start(); } catch (e: any) {
+      addLog(`[ERROR] Mic start failed: ${e?.message || e}`);
       setHudState('idle');
     }
-  };
+  }, [hudState, session, stats, handleReadAloud]);
 
   // ── Render: session loading ────────────────────────────────────────────────
   if (sessionLoading || (session && isWarmingUp)) {
@@ -410,7 +519,7 @@ export default function Admin() {
           
           {/* Central Genius HUD Component */}
           <div className="bg-[#050505] border border-[#D4AF37]/20 rounded-3xl overflow-hidden shadow-[0_0_100px_rgba(212,175,55,0.05)]">
-            <GeniusHUD state={hudState} isOnline={true} />
+            <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} />
           </div>
 
           {/* Overview Stat Cards */}

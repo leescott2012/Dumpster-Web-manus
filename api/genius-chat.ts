@@ -23,13 +23,54 @@ Address the user as "sir" occasionally, in the style of a sophisticated AI assis
 
 You have access to recent conversation history and system activity. Use this context to provide more personalized and relevant responses.`;
 
+interface AdminStatsLite {
+  overview?: { total_users?: number; active_today?: number; active_week?: number; ai_calls_today?: number; credits_spent_today?: number };
+  feature_usage?: { action: string; count: number; credits: number }[];
+  dau?: { date: string; count: number }[];
+  users?: { email: string; tier: string; credits: number; ai_calls: number; photos_uploaded: number; exports: number; last_sign_in_at: string | null }[];
+}
+
+function statsBlock(stats: AdminStatsLite | undefined): string {
+  if (!stats) return "";
+  const lines: string[] = ["", "LIVE DASHBOARD STATS (right now):"];
+  if (stats.overview) {
+    lines.push(
+      `- Total users: ${stats.overview.total_users ?? "?"}`,
+      `- Active today: ${stats.overview.active_today ?? "?"}`,
+      `- Active this week: ${stats.overview.active_week ?? "?"}`,
+      `- AI calls today: ${stats.overview.ai_calls_today ?? "?"}`,
+      `- Credits spent today: ${stats.overview.credits_spent_today ?? "?"}`,
+    );
+  }
+  if (stats.feature_usage?.length) {
+    lines.push("- Feature usage (last 30d): " + stats.feature_usage.map(f => `${f.action} ${f.count}`).join(", "));
+  }
+  if (stats.dau?.length) {
+    lines.push("- DAU last 7 days: " + stats.dau.slice(-7).map(d => d.count).join(", "));
+  }
+  if (stats.users?.length) {
+    lines.push("", "USERS:");
+    for (const u of stats.users.slice(0, 20)) {
+      lines.push(`- ${u.email || "(no email)"} | tier=${u.tier} | credits=${u.credits} | ai_calls=${u.ai_calls} | photos=${u.photos_uploaded} | exports=${u.exports} | last_seen=${u.last_sign_in_at?.slice(0, 10) ?? "never"}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
+  // Admin-only — same gate as /api/admin-stats. Previously this was open to
+  // any signed-in Dumpster user, which means any beta tester could rack up
+  // OpenAI / Anthropic / ElevenLabs bills by talking to the assistant.
   const userId = await getUserFromRequest(req);
   if (!userId) return res.status(401).json({ error: "Sign in required." });
 
-  const { transcript } = req.body as { transcript: string };
+  const adminId = process.env.ADMIN_USER_ID;
+  if (!adminId) return res.status(503).json({ error: "ADMIN_USER_ID env var not set." });
+  if (userId !== adminId) return res.status(403).json({ error: "Forbidden." });
+
+  const { transcript, stats } = req.body as { transcript: string; stats?: AdminStatsLite };
   if (!transcript?.trim()) {
     return res.status(400).json({ error: "No transcript provided." });
   }
@@ -78,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           model: "gpt-4o-mini",
           max_tokens: 150,
           messages: [
-            { role: "system", content: GENIUS_SYSTEM_PROMPT + recentContext },
+            { role: "system", content: GENIUS_SYSTEM_PROMPT + statsBlock(stats) + recentContext },
             { role: "user", content: transcript },
           ],
         }),
@@ -93,7 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: GENIUS_SYSTEM_PROMPT }] },
+            system_instruction: { parts: [{ text: GENIUS_SYSTEM_PROMPT + statsBlock(stats) + recentContext }] },
             contents: [{ parts: [{ text: transcript }] }],
             generationConfig: { maxOutputTokens: 150 },
           }),
@@ -112,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body: JSON.stringify({
           model: "claude-3-haiku-20240307",
           max_tokens: 150,
-          system: GENIUS_SYSTEM_PROMPT,
+          system: GENIUS_SYSTEM_PROMPT + statsBlock(stats) + recentContext,
           messages: [{ role: "user", content: transcript }],
         }),
       });
