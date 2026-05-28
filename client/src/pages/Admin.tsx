@@ -28,6 +28,11 @@ import { sfx } from "@/lib/geniusAudio";
 
 interface FeatureUsageRow { action: string; count: number; credits: number; }
 interface DauRow          { date: string;   count: number; }
+interface RevenueDay      { date: string;   amount_cents: number; }
+interface RevenueSummary {
+  today_cents: number; week_cents: number; month_cents: number; total_cents: number;
+  daily: RevenueDay[]; currency: string; source: "stripe" | "unavailable";
+}
 interface UserRow {
   id: string; email: string; created_at: string;
   last_sign_in_at: string | null; tier: string; credits: number;
@@ -41,6 +46,7 @@ interface AdminStats {
   feature_usage: FeatureUsageRow[];
   dau: DauRow[];
   users: UserRow[];
+  revenue: RevenueSummary;
 }
 
 interface Task {
@@ -471,7 +477,7 @@ export default function Admin() {
 
   if (!stats) return null;
 
-  const { overview, feature_usage, dau, users } = stats;
+  const { overview, feature_usage, dau, users, revenue } = stats;
 
   const dauLabelled = dau.map(d => ({
     ...d,
@@ -482,6 +488,24 @@ export default function Admin() {
     ...f,
     label: fmtAction(f.action),
   }));
+
+  // Revenue chart data — same x-axis cadence as DAU so they line up visually.
+  const revenueLabelled = (revenue?.daily ?? []).map(d => ({
+    ...d,
+    label: new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    amount: d.amount_cents / 100, // chart wants a "natural" axis, not cents
+  }));
+
+  // Currency formatter — handles cents → "$X.XX" / "$X,XXX"
+  const fmtMoney = (cents: number) => {
+    const dollars = (cents || 0) / 100;
+    const code = (revenue?.currency ?? "usd").toUpperCase();
+    try {
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: code, maximumFractionDigits: dollars >= 100 ? 0 : 2 }).format(dollars);
+    } catch {
+      return "$" + dollars.toFixed(2);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-black text-[#D4AF37] font-mono selection:bg-[#D4AF37] selection:text-black overflow-x-hidden">
@@ -523,13 +547,14 @@ export default function Admin() {
           </div>
 
           {/* Overview Stat Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             {[
-              { label: "Total Users", value: overview.total_users },
-              { label: "Active Today", value: overview.active_today },
-              { label: "Active Week", value: overview.active_week },
-              { label: "AI Calls", value: overview.ai_calls_today },
-              { label: "Credits", value: overview.credits_spent_today },
+              { label: "Total Users", value: String(overview.total_users) },
+              { label: "Active Today", value: String(overview.active_today) },
+              { label: "Active Week", value: String(overview.active_week) },
+              { label: "AI Calls", value: String(overview.ai_calls_today) },
+              { label: "Credits", value: String(overview.credits_spent_today) },
+              { label: "Revenue Today", value: fmtMoney(revenue?.today_cents ?? 0) },
             ].map((stat, i) => (
               <motion.div 
                 key={i}
@@ -542,6 +567,40 @@ export default function Admin() {
                 <div className="text-2xl font-bold text-white tracking-tight">{stat.value}</div>
               </motion.div>
             ))}
+          </div>
+
+          {/* Revenue Chart — full-width row above the DAU/Feature pair */}
+          <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">
+                Revenue Stream {revenue?.source === "unavailable" && (
+                  <span className="ml-2 text-gray-600 normal-case tracking-normal">— Stripe key missing or offline</span>
+                )}
+              </div>
+              <div className="flex items-center gap-4 text-[10px] uppercase">
+                <span className="text-gray-600">Week: <span className="text-white">{fmtMoney(revenue?.week_cents ?? 0)}</span></span>
+                <span className="text-gray-600">Month: <span className="text-white">{fmtMoney(revenue?.month_cents ?? 0)}</span></span>
+                <span className="text-gray-600">All-time: <span className="text-white">{fmtMoney(revenue?.total_cents ?? 0)}</span></span>
+              </div>
+            </div>
+            <div className="h-[180px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={revenueLabelled} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
+                  <XAxis dataKey="label" tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(v) => "$" + Math.round(Number(v))} width={50} />
+                  <Tooltip
+                    content={<ChartTooltip />}
+                    cursor={{ fill: "rgba(212,175,55,0.05)" }}
+                    formatter={(value: number) => fmtMoney(Math.round(Number(value) * 100))}
+                  />
+                  <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                    {revenueLabelled.map((d, i) => (
+                      <Cell key={i} fill={d.amount > 0 ? ACCENT : "#1a1a1a"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           {/* Charts Section */}

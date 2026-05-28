@@ -19,6 +19,7 @@
  * Find it: Supabase → Authentication → Users → your row → copy UUID.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import Stripe from "stripe";
 import { getUserFromRequest } from "../server/creditGate.js";
 import { createClient } from "@supabase/supabase-js";
 
@@ -40,6 +41,21 @@ interface FeatureUsageRow {
 interface DauRow {
   date: string;
   count: number;
+}
+
+interface RevenueDay {
+  date: string;
+  amount_cents: number;
+}
+
+interface RevenueSummary {
+  today_cents:  number;
+  week_cents:   number;
+  month_cents:  number;
+  total_cents:  number;
+  daily:        RevenueDay[];   // last `dauDays` days, oldest first
+  currency:     string;          // ISO 4217, e.g. "usd"
+  source:       "stripe" | "unavailable";
 }
 
 interface UserRow {
@@ -66,7 +82,94 @@ interface AdminStats {
   feature_usage: FeatureUsageRow[];
   dau: DauRow[];
   users: UserRow[];
+  revenue: RevenueSummary;
   range: string;
+}
+
+/**
+ * Fetch revenue stats from Stripe — daily buckets + today/week/month sums.
+ * Uses balance_transactions so we get NET amounts (after Stripe fees) and
+ * naturally net out refunds. Pages through up to 500 transactions which is
+ * plenty for a friends beta and most early production volume.
+ *
+ * Returns a zeroed `unavailable` summary if STRIPE_SECRET_KEY isn't set or
+ * the API call fails — the rest of the dashboard keeps working.
+ */
+async function fetchRevenue(rangeStartIso: string, dauDays: number): Promise<RevenueSummary> {
+  const empty = (source: "stripe" | "unavailable" = "unavailable"): RevenueSummary => {
+    const daily: RevenueDay[] = [];
+    for (let d = 0; d < dauDays; d++) {
+      const dt = new Date(Date.now() - (dauDays - 1 - d) * 24 * 60 * 60 * 1000);
+      daily.push({ date: dt.toISOString().slice(0, 10), amount_cents: 0 });
+    }
+    return { today_cents: 0, week_cents: 0, month_cents: 0, total_cents: 0, daily, currency: "usd", source };
+  };
+
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return empty("unavailable");
+
+  try {
+    const stripe = new Stripe(key);
+    const sinceSec = Math.floor(new Date(rangeStartIso).getTime() / 1000);
+
+    let currency = "usd";
+    let totalNetCents = 0;
+    const dayMap = new Map<string, number>();
+    const nowSec = Math.floor(Date.now() / 1000);
+    const oneDaySec   = 24 * 60 * 60;
+    const sevenDaySec =  7 * oneDaySec;
+    const thirtyDaySec = 30 * oneDaySec;
+    let todayCents = 0, weekCents = 0, monthCents = 0;
+
+    // Page up to 5 pages × 100 = 500 records, defensive cap.
+    let startingAfter: string | undefined = undefined;
+    for (let page = 0; page < 5; page++) {
+      const list: Stripe.ApiList<Stripe.BalanceTransaction> = await stripe.balanceTransactions.list({
+        limit: 100,
+        created: { gte: sinceSec },
+        starting_after: startingAfter,
+      });
+
+      for (const bt of list.data) {
+        // Keep "charge" (sale) and "refund" — refund.net is negative which subtracts naturally.
+        if (bt.type !== "charge" && bt.type !== "refund" && bt.type !== "payment") continue;
+        currency = bt.currency || currency;
+        totalNetCents += bt.net;
+
+        const ageSec = nowSec - bt.created;
+        if (ageSec <= oneDaySec)   todayCents += bt.net;
+        if (ageSec <= sevenDaySec) weekCents  += bt.net;
+        if (ageSec <= thirtyDaySec) monthCents += bt.net;
+
+        const dayKey = new Date(bt.created * 1000).toISOString().slice(0, 10);
+        dayMap.set(dayKey, (dayMap.get(dayKey) ?? 0) + bt.net);
+      }
+
+      if (!list.has_more || list.data.length === 0) break;
+      startingAfter = list.data[list.data.length - 1].id;
+    }
+
+    // Fill daily buckets oldest-first (parity with DAU chart x-axis).
+    const daily: RevenueDay[] = [];
+    for (let d = 0; d < dauDays; d++) {
+      const dt = new Date(Date.now() - (dauDays - 1 - d) * 24 * 60 * 60 * 1000);
+      const key = dt.toISOString().slice(0, 10);
+      daily.push({ date: key, amount_cents: dayMap.get(key) ?? 0 });
+    }
+
+    return {
+      today_cents:  todayCents,
+      week_cents:   weekCents,
+      month_cents:  monthCents,
+      total_cents:  totalNetCents,
+      daily,
+      currency,
+      source: "stripe",
+    };
+  } catch (err) {
+    console.error("[admin-stats] stripe revenue fetch failed:", err);
+    return empty("unavailable");
+  }
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -115,7 +218,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sevenDaysAgo = new Date(Date.now() -  7 * 24 * 60 * 60 * 1000).toISOString();
 
     // ── Parallel data fetches ─────────────────────────────────────────────────
-    const [usersResult, profilesResult, txResult, activityResult] = await Promise.all([
+    const [usersResult, profilesResult, txResult, activityResult, revenue] = await Promise.all([
       supabaseAdmin.auth.admin.listUsers({ perPage: 1000 } as any),
 
       supabaseAdmin
@@ -132,6 +235,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .from("activity_log")
         .select("user_id, event, metadata, created_at")
         .gte("created_at", rangeStart),
+
+      // Stripe revenue (daily + sums). Independent of Supabase, so we parallelise.
+      fetchRevenue(rangeStart, dauDays),
     ]);
 
     const authUsers  = usersResult.data?.users ?? [];
@@ -238,6 +344,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       feature_usage,
       dau,
       users,
+      revenue,
       range,
     };
 
