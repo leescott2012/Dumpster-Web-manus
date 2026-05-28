@@ -24,6 +24,7 @@ import SystemWidget from "@/components/genius/SystemWidget";
 import AgentControl from "@/components/genius/AgentControl";
 import { sfx } from "@/lib/geniusAudio";
 import { isMuted, setMuted, onMuteChange } from "@/utils/audioSynth";
+import { logBug } from "@/lib/bugLogger";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -173,6 +174,50 @@ export default function Admin() {
     setMuted(!isMuted());
   }, []);
 
+  // ── Bug Reports ──────────────────────────────────────────────────────────
+  // Tracks recent bugs logged via /api/bug-report. Polls on initial load and
+  // after errors so the admin always sees fresh entries.
+  interface BugReportRow {
+    id: string; user_id: string | null; email: string | null;
+    source: string; message: string; error_code: string | null; stack: string | null;
+    url: string | null; user_agent: string | null; viewport: string | null;
+    status: string; admin_note: string | null;
+    context: unknown;
+    created_at: string;
+  }
+  const [bugs, setBugs] = useState<BugReportRow[]>([]);
+  const [bugFilter, setBugFilter] = useState<"all" | "new" | "seen" | "fixed">("new");
+
+  const fetchBugs = useCallback(async function() {
+    if (!session) return;
+    try {
+      const q = bugFilter === "all" ? "" : `?status=${bugFilter}`;
+      const res = await fetch("/api/bug-report" + q, {
+        headers: { Authorization: "Bearer " + session.access_token },
+      });
+      if (!res.ok) return;
+      const body = await res.json();
+      setBugs(body.reports || []);
+    } catch {
+      // Silent — we don't want bug-fetch errors to spawn more bug reports.
+    }
+  }, [session, bugFilter]);
+
+  useEffect(() => { if (session) fetchBugs(); }, [session, fetchBugs]);
+
+  const markBug = useCallback(async function(id: string, status: "seen" | "fixed" | "new") {
+    if (!session) return;
+    await fetch("/api/bug-report", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + session.access_token,
+      },
+      body: JSON.stringify({ id, status }),
+    });
+    fetchBugs();
+  }, [session, fetchBugs]);
+
   // Audio setup
   const addLog = (msg: string) => {
     setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -207,8 +252,10 @@ export default function Admin() {
           setError("This account isn't authorized to view the dashboard.");
           addLog("[CRITICAL] Access denied. Unauthorized signature detected.");
         } else {
-          setError(body.error ?? "HTTP " + res.status);
+          const msg = body.error ?? "HTTP " + res.status;
+          setError(msg);
           addLog(`[FAIL] Data retrieval failed: ${res.status}`);
+          logBug({ source: "admin-stats", message: msg, errorCode: String(res.status) });
         }
         return;
       }
@@ -217,8 +264,10 @@ export default function Admin() {
       addLog(`[SUCCESS] Synchronized data for ${data.overview.total_users} active nodes.`);
       sfx.playBeep(600, 0.1);
     } catch (e: any) {
-      setError(e?.message ?? "Network error");
+      const msg = e?.message ?? "Network error";
+      setError(msg);
       addLog(`[ERROR] Connection timeout in neural bridge.`);
+      logBug({ source: "admin-stats", message: msg, error: e });
     } finally {
       setLoading(false);
       setHudState('idle');
@@ -395,7 +444,11 @@ export default function Admin() {
 
       void (async () => {
         try {
-          if (!session) { addLog("[ERROR] Session expired."); setHudState('idle'); return; }
+          if (!session) {
+            addLog("[ERROR] Session expired.");
+            logBug({ source: "orb-chat", message: "Session expired before sending to genius-chat", errorCode: "no-session", context: { transcript } });
+            setHudState('idle'); return;
+          }
           const res = await fetch("/api/genius-chat", {
             method: "POST",
             headers: {
@@ -406,7 +459,9 @@ export default function Admin() {
           });
           const body = await res.json().catch(() => ({}));
           if (!res.ok) {
-            addLog(`[ERROR] ${body.error || res.status}`);
+            const msg = body.error || ("HTTP " + res.status);
+            addLog(`[ERROR] ${msg}`);
+            logBug({ source: "orb-chat", message: msg, errorCode: String(res.status), context: { transcript } });
             setHudState('idle');
             return;
           }
@@ -414,7 +469,9 @@ export default function Admin() {
           addLog(`[GENIUS] ${reply}`);
           await handleReadAloud(reply);
         } catch (e: any) {
-          addLog(`[ERROR] Neural bridge: ${e?.message || e}`);
+          const msg = e?.message || String(e);
+          addLog(`[ERROR] Neural bridge: ${msg}`);
+          logBug({ source: "orb-chat", message: "Neural bridge: " + msg, error: e, context: { transcript } });
           setHudState('idle');
         }
       })();
@@ -428,13 +485,16 @@ export default function Admin() {
       const err = e?.error;
       if (err && err !== "no-speech" && err !== "aborted") {
         addLog(`[ERROR] Mic: ${err}`);
+        logBug({ source: "orb-stt", message: "SpeechRecognition error: " + err, errorCode: err });
       }
       finish(null);
     };
     rec.onend = () => { if (!finished) finish(null); };
 
     try { rec.start(); } catch (e: any) {
-      addLog(`[ERROR] Mic start failed: ${e?.message || e}`);
+      const msg = e?.message || String(e);
+      addLog(`[ERROR] Mic start failed: ${msg}`);
+      logBug({ source: "orb-stt", message: "Mic start failed: " + msg, error: e });
       setHudState('idle');
     }
   }, [hudState, session, stats, handleReadAloud]);
@@ -705,6 +765,97 @@ export default function Admin() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* ── Bug Inventory ─────────────────────────────────────────── */}
+          <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl overflow-hidden">
+            <div className="p-6 border-b border-[#D4AF37]/10 flex items-center justify-between flex-wrap gap-3">
+              <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">
+                Bug Inventory ({bugs.length})
+              </div>
+              <div className="flex items-center gap-2">
+                {(["new", "seen", "fixed", "all"] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setBugFilter(f)}
+                    className={`text-[10px] uppercase tracking-widest px-2 py-1 rounded ${
+                      bugFilter === f
+                        ? "bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/40"
+                        : "text-gray-500 border border-transparent hover:text-[#D4AF37]"
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+                <button
+                  onClick={fetchBugs}
+                  className="text-[10px] uppercase tracking-widest px-2 py-1 rounded text-gray-500 hover:text-[#D4AF37]"
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {bugs.length === 0 ? (
+              <div className="p-8 text-center text-gray-600 text-xs">
+                No bugs in this filter. The system is quiet.
+              </div>
+            ) : (
+              <div className="divide-y divide-[#D4AF37]/5">
+                {bugs.map(b => (
+                  <div key={b.id} className="p-4 hover:bg-[#D4AF37]/5 transition-colors">
+                    <div className="flex items-start justify-between gap-4 mb-1.5">
+                      <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest min-w-0 flex-1">
+                        <span className={
+                          b.status === "fixed"   ? "text-green-500/70 border border-green-500/30 px-1.5 rounded" :
+                          b.status === "seen"    ? "text-yellow-500/70 border border-yellow-500/30 px-1.5 rounded" :
+                          b.status === "wontfix" ? "text-gray-500 border border-gray-700 px-1.5 rounded" :
+                                                   "text-red-500 border border-red-500/40 px-1.5 rounded"
+                        }>{b.status}</span>
+                        <span className="text-[#D4AF37]/70 truncate">{b.source}</span>
+                        {b.error_code && (
+                          <span className="text-gray-500 font-mono normal-case truncate">{b.error_code}</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-gray-600 whitespace-nowrap">
+                        {new Date(b.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                      </div>
+                    </div>
+                    <div className="text-xs text-white break-words mb-2">{b.message}</div>
+                    {(b.email || b.url) && (
+                      <div className="text-[10px] text-gray-600 mb-2 truncate">
+                        {b.email && <>by {b.email}</>}
+                        {b.email && b.url && <> · </>}
+                        {b.url && <span className="font-mono">{b.url}</span>}
+                      </div>
+                    )}
+                    {b.stack && (
+                      <details className="text-[10px] text-gray-600 mb-2">
+                        <summary className="cursor-pointer hover:text-[#D4AF37]">Stack</summary>
+                        <pre className="mt-2 p-2 bg-black border border-[#D4AF37]/10 rounded text-[9px] overflow-x-auto font-mono whitespace-pre">{b.stack.slice(0, 1500)}</pre>
+                      </details>
+                    )}
+                    <div className="flex gap-2 mt-2">
+                      {b.status !== "seen" && (
+                        <button onClick={() => markBug(b.id, "seen")} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-[#D4AF37]/20 text-[#D4AF37]/70 hover:bg-[#D4AF37]/10 rounded">
+                          Mark Seen
+                        </button>
+                      )}
+                      {b.status !== "fixed" && (
+                        <button onClick={() => markBug(b.id, "fixed")} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-green-500/30 text-green-500/80 hover:bg-green-500/10 rounded">
+                          Mark Fixed
+                        </button>
+                      )}
+                      {b.status === "fixed" && (
+                        <button onClick={() => markBug(b.id, "new")} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-gray-700 text-gray-500 hover:bg-gray-800 rounded">
+                          Reopen
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

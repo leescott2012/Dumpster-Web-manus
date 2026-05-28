@@ -12,6 +12,7 @@ import { Bug, X, Send } from "lucide-react";
 import * as Sentry from "@sentry/react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { logBug } from "@/lib/bugLogger";
 
 export default function BugReportButton() {
   var { user } = useAuth();
@@ -49,6 +50,14 @@ export default function BugReportButton() {
           },
         }
       );
+      // Also mirror to Supabase bug_reports so it shows on /admin's Bug Inventory.
+      // Silent: bug button already has its own confirmation UI.
+      logBug({
+        source: "user-bug-button",
+        message: trimmed,
+        context: { reporter_email: email.trim() || user?.email || null, name: user?.user_metadata?.full_name || null },
+        silent: true,
+      });
       toast.success("Thanks — we'll take a look.");
       setMessage("");
       setEmail("");
