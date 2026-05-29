@@ -127,6 +127,19 @@ function HomeContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // ── Clear demo/stock content on sign-in.
+  // All users share the same localStorage keys (IS_OWNER is build-time, not
+  // per-user), so demo content from browsing as a guest persists into the
+  // signed-in session. Clear it once per user ID so a new user starts fresh
+  // but keeps any photos they uploaded before signing in.
+  var clearedForUserRef = useRef<string | null>(null);
+  useEffect(function() {
+    if (!user) return;
+    if (clearedForUserRef.current === user.id) return;
+    clearedForUserRef.current = user.id;
+    clearDemoContent();
+  }, [user, clearDemoContent]);
+
   // ── Always keep at least one empty dump visible so users have a target for
   // the "From Pool" / "Add More" twin cards. Without this, a freshly cleared
   // workspace renders as a wall of stats with no upload affordance — beta
@@ -476,14 +489,16 @@ function HomeContent() {
   var originalDumpIds = ["dump-1", "dump-2", "dump-3"];
 
   return (
-    <div style={{ minHeight: "100vh", paddingTop: "52px" }} onClick={handleBackgroundClick} onTouchEnd={handleBackgroundTouch}>
-      {/* Fixed top navbar */}
+    <div style={{ minHeight: "100vh", paddingTop: "calc(52px + env(safe-area-inset-top, 0px))" }} onClick={handleBackgroundClick} onTouchEnd={handleBackgroundTouch}>
+      {/* Fixed top navbar — paddingTop reserves the iOS status-bar / notch safe
+          area so content doesn't render under the clock/battery when launched
+          as a standalone home-screen PWA (status bar is black-translucent). */}
       <nav style={{
         position: "fixed", top: 0, left: 0, right: 0, height: 52, zIndex: 300,
         background: "rgba(5,5,5,0.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
         borderBottom: "1px solid #1a1a1a",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 20px",
+        padding: "env(safe-area-inset-top, 0px) 20px 0",
       }}>
         <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.3em", color: "var(--accent)", textTransform: "uppercase" as const }}>
           DUMPSTER

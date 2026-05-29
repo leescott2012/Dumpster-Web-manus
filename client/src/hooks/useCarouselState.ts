@@ -44,7 +44,7 @@ function persist(key: string, value: unknown) {
     // Only show one toast per session so it doesn't spam on every keystroke
     if (!_storageWarnedThisSession) {
       _storageWarnedThisSession = true;
-      toast("Storage full — photos may not save. Sign in to save to cloud.", { duration: 8000 });
+      toast("Storage full — couldn't save all photos. Remove some to free space.", { duration: 8000 });
     }
   }
 }
