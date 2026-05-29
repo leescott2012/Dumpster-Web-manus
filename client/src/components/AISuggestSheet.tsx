@@ -116,7 +116,10 @@ export default function AISuggestSheet({
       const res = await fetch("/api/ai-suggest", {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, authH),
-        signal: AbortSignal.timeout(58000),
+        // Server function effectively times out around 15s; give it a little
+        // headroom to return its own error, then abort so the offline fallback
+        // (in the catch below) kicks in instead of spinning forever.
+        signal: AbortSignal.timeout(20000),
         body: JSON.stringify({
           photos: compressedPhotos,
           variation,

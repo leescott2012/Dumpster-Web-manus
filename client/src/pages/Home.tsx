@@ -476,14 +476,16 @@ function HomeContent() {
   var originalDumpIds = ["dump-1", "dump-2", "dump-3"];
 
   return (
-    <div style={{ minHeight: "100vh", paddingTop: "52px" }} onClick={handleBackgroundClick} onTouchEnd={handleBackgroundTouch}>
-      {/* Fixed top navbar */}
+    <div style={{ minHeight: "100vh", paddingTop: "calc(52px + env(safe-area-inset-top, 0px))" }} onClick={handleBackgroundClick} onTouchEnd={handleBackgroundTouch}>
+      {/* Fixed top navbar — paddingTop reserves the iOS status-bar / notch safe
+          area so content doesn't render under the clock/battery when launched
+          as a standalone home-screen PWA (status bar is black-translucent). */}
       <nav style={{
         position: "fixed", top: 0, left: 0, right: 0, height: 52, zIndex: 300,
         background: "rgba(5,5,5,0.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
         borderBottom: "1px solid #1a1a1a",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 20px",
+        padding: "env(safe-area-inset-top, 0px) 20px 0",
       }}>
         <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.3em", color: "var(--accent)", textTransform: "uppercase" as const }}>
           DUMPSTER
