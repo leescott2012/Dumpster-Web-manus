@@ -9,7 +9,7 @@ import { useRef, useEffect, useState } from "react";
 import PhotoCard from "./PhotoCard";
 import { useDrag } from "@/contexts/DragContext";
 import type { Dump, Photo } from "@/lib/photoData";
-import { Plus, Play } from "lucide-react";
+import { Plus, Play, Trash2 } from "lucide-react";
 
 type FilterMode = "all" | "starred" | "used" | "videos";
 
@@ -28,12 +28,19 @@ interface PhotoPoolProps {
   onCancelSelection: () => void;
   targetDumpId: string | null;
   selectedPhotoId: string | null;
+  deleteMode: boolean;
+  selectedDeleteIds: string[];
+  onEnterDeleteMode: () => void;
+  onToggleDeleteSelection: (photo: Photo) => void;
+  onConfirmDelete: () => void;
+  onCancelDeleteMode: () => void;
 }
 
 export default function PhotoPool({
   photos, dumps = [], onSelectPhoto, onDotsClick, onDoubleTapPhoto, onDropToPool, onUploadPhotos,
   selectionMode, selectedIds, onTogglePoolSelection, onConfirmSelection, onCancelSelection,
   targetDumpId, selectedPhotoId,
+  deleteMode, selectedDeleteIds, onEnterDeleteMode, onToggleDeleteSelection, onConfirmDelete, onCancelDeleteMode,
 }: PhotoPoolProps) {
   var poolRef = useRef<HTMLDivElement>(null);
   var fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,9 +151,29 @@ export default function PhotoPool({
         </div>
       )}
 
-      {/* Sort/Filter bar — only when NOT in selection mode */}
-      {!selectionMode && (
-        <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" as const }}>
+      {/* Delete-mode banner */}
+      {deleteMode && (
+        <div style={{ marginBottom: "20px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "#ef4444", marginBottom: "6px" }}>
+            DELETE PHOTOS
+          </div>
+          <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: "4px" }}>
+            Tap photos to select for deletion
+          </h3>
+          <div style={{ fontSize: "13px", color: "#666", fontStyle: "italic" }}>
+            {selectedDeleteIds.length + " selected · Tap to select/deselect · Confirm to delete permanently"}
+          </div>
+          <button onClick={onCancelDeleteMode}
+            style={{ marginTop: "12px", background: "transparent", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "6px 16px", color: "#999", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Sort/Filter bar — only when NOT in selection or delete mode */}
+      {!selectionMode && !deleteMode && (
+        <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" as const, alignItems: "center" }}>
           <button onClick={function() { setFilter("all"); }} style={filterBtnStyle(filter === "all")}>All</button>
           <button onClick={function() { setFilter("starred"); }} style={filterBtnStyle(filter === "starred")}>
             <span style={{ marginRight: "4px" }}>{"★"}</span>Starred
@@ -170,6 +197,21 @@ export default function PhotoPool({
               <span style={{ marginLeft: "5px", background: filter === "videos" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
                 {videoCount}
               </span>
+            </button>
+          )}
+          {photos.length > 0 && (
+            <button
+              onClick={onEnterDeleteMode}
+              style={{
+                marginLeft: "auto", background: "transparent", border: "1px solid #2a2a2a",
+                borderRadius: "100px", padding: "5px 12px", fontSize: "11px", color: "#666",
+                cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
+                display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
+              }}
+              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
+            >
+              <Trash2 size={11} />Select to Delete
             </button>
           )}
         </div>
@@ -216,22 +258,26 @@ export default function PhotoPool({
         }}>
           {displayPhotos.map(function(photo, i) {
             var selIdx = selectedIds.indexOf(photo.id);
+            var delIdx = selectedDeleteIds.indexOf(photo.id);
+            var anyMode = selectionMode || deleteMode;
             return (
               <PhotoCard key={photo.id} photo={photo} index={i}
                 source={{ type: "pool" }}
-                isSelected={selectionMode ? selIdx >= 0 : selectedPhotoId === photo.id}
-                onSelect={selectionMode ? onTogglePoolSelection : onSelectPhoto}
-                onDotsClick={selectionMode ? undefined : onDotsClick}
-                onDoubleTap={selectionMode ? undefined : onDoubleTapPhoto}
+                isSelected={selectionMode ? selIdx >= 0 : deleteMode ? delIdx >= 0 : selectedPhotoId === photo.id}
+                onSelect={selectionMode ? onTogglePoolSelection : deleteMode ? onToggleDeleteSelection : onSelectPhoto}
+                onDotsClick={anyMode ? undefined : onDotsClick}
+                onDoubleTap={anyMode ? undefined : onDoubleTapPhoto}
                 width={140} height={180}
-                selectionMode={selectionMode}
-                selectionIndex={selIdx >= 0 ? selIdx : undefined}
+                selectionMode={anyMode}
+                selectionIndex={selectionMode && selIdx >= 0 ? selIdx : undefined}
+                deleteMode={deleteMode}
+                isDeleteSelected={delIdx >= 0}
               />
             );
           })}
 
           {/* Upload "+" card at end of pool */}
-          {!selectionMode && (
+          {!selectionMode && !deleteMode && (
             <div data-tour="upload-card" onClick={handleUploadClick}
               style={{
                 width: "140px", height: "184px", flexShrink: 0,
@@ -309,7 +355,7 @@ export default function PhotoPool({
         style={{ display: "none" }} onChange={handleFileChange}
       />
 
-      {/* Floating Confirm Button — selection mode */}
+      {/* Floating Confirm Button — add-to-dump selection mode */}
       {selectionMode && selectedIds.length > 0 && (
         <div style={{ position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)", zIndex: 5000, display: "flex", gap: "12px" }}>
           <button onClick={onConfirmSelection}
@@ -321,6 +367,23 @@ export default function PhotoPool({
             }}
           >
             {"Confirm (" + selectedIds.length + ")"}
+          </button>
+        </div>
+      )}
+
+      {/* Floating Delete Button — delete mode */}
+      {deleteMode && selectedDeleteIds.length > 0 && (
+        <div style={{ position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)", zIndex: 5000, display: "flex", gap: "12px" }}>
+          <button onClick={onConfirmDelete}
+            style={{
+              background: "#ef4444", color: "#fff", border: "none", borderRadius: "12px",
+              padding: "14px 32px", fontSize: "15px", fontWeight: 700, cursor: "pointer",
+              fontFamily: "inherit", letterSpacing: "0.04em",
+              boxShadow: "0 8px 32px rgba(239,68,68,0.4)", transition: "all 0.2s",
+              display: "flex", alignItems: "center", gap: "8px",
+            }}
+          >
+            <Trash2 size={16} />{"Delete (" + selectedDeleteIds.length + ")"}
           </button>
         </div>
       )}
