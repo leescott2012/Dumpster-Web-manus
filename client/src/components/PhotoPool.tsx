@@ -23,6 +23,7 @@ interface PhotoPoolProps {
   onUploadPhotos: (files: FileList) => void;
   selectionMode: boolean;
   selectedIds: string[];
+  selectionAvailable?: number;
   onTogglePoolSelection: (photo: Photo) => void;
   onConfirmSelection: () => void;
   onCancelSelection: () => void;
@@ -40,7 +41,7 @@ interface PhotoPoolProps {
 
 export default function PhotoPool({
   photos, dumps = [], onSelectPhoto, onDotsClick, onDoubleTapPhoto, onDropToPool, onUploadPhotos,
-  selectionMode, selectedIds, onTogglePoolSelection, onConfirmSelection, onCancelSelection,
+  selectionMode, selectedIds, selectionAvailable, onTogglePoolSelection, onConfirmSelection, onCancelSelection,
   targetDumpId, selectedPhotoId,
   deleteMode, selectedDeleteIds, onEnterDeleteMode, onToggleDeleteSelection, onConfirmDelete, onCancelDeleteMode,
   photoCapUsed, photoCap,
@@ -144,8 +145,16 @@ export default function PhotoPool({
             Tap photos to add them
           </h3>
           <div style={{ fontSize: "13px", color: "#666", fontStyle: "italic" }}>
-            {selectedIds.length + " selected · Tap to select/deselect · Confirm when ready"}
+            {selectionAvailable !== undefined
+              ? selectedIds.length + " / " + selectionAvailable + " selected · Confirm when ready"
+              : selectedIds.length + " selected · Tap to select/deselect · Confirm when ready"
+            }
           </div>
+          {selectionAvailable === 0 && (
+            <div style={{ marginTop: "6px", fontSize: "12px", color: "#ef4444" }}>
+              Dump is full (20/20) — remove a photo first
+            </div>
+          )}
           <button onClick={onCancelSelection}
             style={{ marginTop: "12px", background: "transparent", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "6px 16px", color: "#999", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}
           >

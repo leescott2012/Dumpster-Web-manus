@@ -284,14 +284,24 @@ function HomeContent() {
     scrollBackRef.current = dumpId;
   }, []);
 
-  // Toggle pool photo selection
+  // How many more photos the target dump can accept
+  var selectionAvailable = useMemo(function() {
+    if (!selectionTargetDumpId) return 20;
+    for (var i = 0; i < dumps.length; i++) {
+      if (dumps[i].id === selectionTargetDumpId) return Math.max(0, 20 - dumps[i].photos.length);
+    }
+    return 20;
+  }, [selectionTargetDumpId, dumps]);
+
+  // Toggle pool photo selection — capped at how many slots the target dump has
   var handleTogglePoolSelection = useCallback(function(photo: Photo) {
     setSelectedPoolPhotoIds(function(prev) {
       var idx = prev.indexOf(photo.id);
       if (idx >= 0) return prev.filter(function(id) { return id !== photo.id; });
+      if (prev.length >= selectionAvailable) return prev; // dump is full — ignore tap
       return prev.concat([photo.id]);
     });
-  }, []);
+  }, [selectionAvailable]);
 
   // Confirm pool selection
   var handleConfirmSelection = useCallback(function() {
@@ -740,6 +750,7 @@ function HomeContent() {
             onUploadPhotos={handleUploadPhotos}
             selectionMode={selectionMode}
             selectedIds={selectedPoolPhotoIds}
+            selectionAvailable={selectionAvailable}
             onTogglePoolSelection={handleTogglePoolSelection}
             onConfirmSelection={handleConfirmSelection}
             onCancelSelection={handleCancelSelection}
