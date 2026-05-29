@@ -309,7 +309,7 @@ export default function DumpChatSheet({
 
         {/* Messages */}
         <div ref={scrollRef} style={{
-          flex: 1, overflowY: "auto", padding: "16px 24px",
+          flex: 1, overflowY: "auto", padding: "16px 24px calc(16px + env(safe-area-inset-bottom, 0px))",
           display: "flex", flexDirection: "column", gap: 14,
         }}>
           {messages.length === 0 && (

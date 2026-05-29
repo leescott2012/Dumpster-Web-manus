@@ -256,6 +256,20 @@ export function scheduleAIProfileSave(userId: string | null) {
   }, 2000);
 }
 
+// Flush any pending AI profile save immediately — called on beforeunload so
+// closing the tab within the 2s debounce window doesn't lose caption/taste edits.
+export function flushAIProfileSave() {
+  if (!saveTimer || !pendingUserId) return;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  var uid = pendingUserId;
+  pendingUserId = null;
+  // navigator.sendBeacon can't handle auth-gated POSTs; use fetch with keepalive
+  saveCloudAIProfile(uid).catch(function(e) {
+    console.warn("[aiProfileSync] flush save failed:", e);
+  });
+}
+
 // Wire up the pub/sub so captionPool mutations trigger debounced cloud saves
 // without captionPool needing to import this module directly.
 //

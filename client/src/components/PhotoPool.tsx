@@ -357,7 +357,7 @@ export default function PhotoPool({
 
       {/* Floating Confirm Button — add-to-dump selection mode */}
       {selectionMode && selectedIds.length > 0 && (
-        <div style={{ position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)", zIndex: 5000, display: "flex", gap: "12px" }}>
+        <div style={{ position: "fixed", bottom: "calc(24px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 5000, display: "flex", gap: "12px" }}>
           <button onClick={onConfirmSelection}
             style={{
               background: "#22c55e", color: "#fff", border: "none", borderRadius: "12px",
@@ -373,7 +373,7 @@ export default function PhotoPool({
 
       {/* Floating Delete Button — delete mode */}
       {deleteMode && selectedDeleteIds.length > 0 && (
-        <div style={{ position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)", zIndex: 5000, display: "flex", gap: "12px" }}>
+        <div style={{ position: "fixed", bottom: "calc(24px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 5000, display: "flex", gap: "12px" }}>
           <button onClick={onConfirmDelete}
             style={{
               background: "#ef4444", color: "#fff", border: "none", borderRadius: "12px",
