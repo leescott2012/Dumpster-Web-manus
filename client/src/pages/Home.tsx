@@ -631,7 +631,7 @@ function HomeContent() {
 
       {/* ── Right column: Pool ── */}
       <aside className="dumpster-pool">
-      <div id="photo-pool" style={{ position: "relative", zIndex: selectionMode ? 200 : "auto", paddingTop: 16 }}>
+      <div id="photo-pool" style={{ position: "relative", zIndex: (selectionMode || deleteMode) ? 200 : "auto", paddingTop: 16 }}>
         {/* Centered POOL divider — visible only on mobile (hidden on desktop via CSS) */}
         <div className="pool-divider-mobile" style={{
           maxWidth: 1100, margin: "0 auto 18px", padding: "0 32px",
