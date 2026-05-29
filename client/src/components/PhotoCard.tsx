@@ -23,6 +23,8 @@ interface PhotoCardProps {
   height?: number;
   selectionMode?: boolean;
   selectionIndex?: number;
+  deleteMode?: boolean;
+  isDeleteSelected?: boolean;
 }
 
 export default function PhotoCard({
@@ -30,6 +32,7 @@ export default function PhotoCard({
   isSelected = false, onSelect, onDotsClick, onDoubleTap,
   isDragOver = false, width = 200, height = 260,
   selectionMode = false, selectionIndex,
+  deleteMode = false, isDeleteSelected = false,
 }: PhotoCardProps) {
   var { startDrag, dragState } = useDrag();
 
@@ -170,7 +173,9 @@ export default function PhotoCard({
   // ── STYLES ───────────────────────────────────────────────────────────────
 
   var borderColor: string;
-  if (selectionMode && isSelected) {
+  if (deleteMode && isDeleteSelected) {
+    borderColor = "#ef4444";
+  } else if (selectionMode && isSelected) {
     borderColor = "#22c55e";
   } else if (isSelected) {
     borderColor = "var(--accent)";
@@ -290,6 +295,19 @@ export default function PhotoCard({
           pointerEvents: "none",
         }}>
           {selectionIndex + 1}
+        </div>
+      )}
+
+      {/* Red checkmark badge — delete mode selected */}
+      {deleteMode && isDeleteSelected && (
+        <div style={{
+          position: "absolute", top: "8px", right: "8px",
+          width: "24px", height: "24px", borderRadius: "50%",
+          background: "#ef4444", color: "#fff", fontSize: "14px", fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          pointerEvents: "none",
+        }}>
+          ✕
         </div>
       )}
 

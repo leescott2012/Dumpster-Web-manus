@@ -46,7 +46,7 @@ function HomeContent() {
     dumps, pool, resetAll, clearDemoContent, replaceState,
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
-    removePhotoFromPool, createNewDump, deleteDump,
+    removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,
     toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto, setDumpChatHistory,
@@ -154,6 +154,42 @@ function HomeContent() {
   var [selectionTargetDumpId, setSelectionTargetDumpId] = useState<string | null>(null);
   var [selectedPoolPhotoIds, setSelectedPoolPhotoIds] = useState<string[]>([]);
   var scrollBackRef = useRef<string | null>(null);
+
+  var [deleteMode, setDeleteMode] = useState(false);
+  var [selectedDeleteIds, setSelectedDeleteIds] = useState<string[]>([]);
+
+  var handleEnterDeleteMode = useCallback(function() {
+    setDeleteMode(true);
+    setSelectedDeleteIds([]);
+    setSelectedPhotoId(null);
+    setContextMenu(null);
+    setTimeout(function() {
+      var poolEl = document.getElementById("photo-pool");
+      if (poolEl) poolEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  }, []);
+
+  var handleToggleDeleteSelection = useCallback(function(photo: Photo) {
+    setSelectedDeleteIds(function(prev) {
+      var idx = prev.indexOf(photo.id);
+      if (idx >= 0) return prev.filter(function(id) { return id !== photo.id; });
+      return prev.concat([photo.id]);
+    });
+  }, []);
+
+  var handleConfirmDelete = useCallback(function() {
+    var count = selectedDeleteIds.length;
+    if (count === 0) return;
+    removeMultiplePhotosFromPool(selectedDeleteIds);
+    setDeleteMode(false);
+    setSelectedDeleteIds([]);
+    toast("Deleted " + count + " photo" + (count !== 1 ? "s" : ""));
+  }, [selectedDeleteIds, removeMultiplePhotosFromPool]);
+
+  var handleCancelDeleteMode = useCallback(function() {
+    setDeleteMode(false);
+    setSelectedDeleteIds([]);
+  }, []);
 
   // Init accent color from localStorage on mount
   useEffect(function() { initAccent(); }, []);
@@ -472,8 +508,8 @@ function HomeContent() {
           </button>
         </div>
       </nav>
-      {/* Dimming overlay when in selection mode */}
-      {selectionMode && (
+      {/* Dimming overlay when in selection or delete mode */}
+      {(selectionMode || deleteMode) && (
         <div id="selection-dimmer" style={{
           position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
           background: "rgba(0,0,0,0.7)", zIndex: 100, pointerEvents: "none",
@@ -488,9 +524,9 @@ function HomeContent() {
       <header style={{
         maxWidth: "1100px", margin: "0 auto", padding: "32px 32px 24px",
         borderBottom: "1px solid #1e1e1e", position: "relative",
-        zIndex: selectionMode ? 50 : "auto",
-        opacity: selectionMode ? 0.3 : 1, transition: "opacity 0.3s",
-        pointerEvents: selectionMode ? "none" : "auto",
+        zIndex: (selectionMode || deleteMode) ? 50 : "auto",
+        opacity: (selectionMode || deleteMode) ? 0.3 : 1, transition: "opacity 0.3s",
+        pointerEvents: (selectionMode || deleteMode) ? "none" : "auto",
       }}>
         <div style={{ fontSize: "11px", letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "var(--accent)", marginBottom: "16px", fontWeight: 500 }}>
           Dumpster
@@ -525,10 +561,10 @@ function HomeContent() {
         return (
           <div key={dump.id} style={{
             position: "relative",
-            zIndex: selectionMode ? 50 : "auto",
-            opacity: selectionMode ? 0.3 : 1,
+            zIndex: (selectionMode || deleteMode) ? 50 : "auto",
+            opacity: (selectionMode || deleteMode) ? 0.3 : 1,
             transition: "opacity 0.3s",
-            pointerEvents: selectionMode ? "none" : "auto",
+            pointerEvents: (selectionMode || deleteMode) ? "none" : "auto",
           }}>
             <DumpStrip
               dump={dump} selectedPhotoId={selectedPhotoId}
@@ -549,9 +585,9 @@ function HomeContent() {
       <div style={{
         maxWidth: "1100px", margin: "0 auto", padding: "0 32px",
         display: "flex", gap: "12px", flexWrap: "wrap", position: "relative",
-        zIndex: selectionMode ? 50 : "auto",
-        opacity: selectionMode ? 0.3 : 1, transition: "opacity 0.3s",
-        pointerEvents: selectionMode ? "none" : "auto",
+        zIndex: (selectionMode || deleteMode) ? 50 : "auto",
+        opacity: (selectionMode || deleteMode) ? 0.3 : 1, transition: "opacity 0.3s",
+        pointerEvents: (selectionMode || deleteMode) ? "none" : "auto",
       }}>
         <button
           data-tour="ai-suggest"
@@ -651,6 +687,12 @@ function HomeContent() {
             onConfirmSelection={handleConfirmSelection}
             onCancelSelection={handleCancelSelection}
             targetDumpId={selectionTargetDumpId}
+            deleteMode={deleteMode}
+            selectedDeleteIds={selectedDeleteIds}
+            onEnterDeleteMode={handleEnterDeleteMode}
+            onToggleDeleteSelection={handleToggleDeleteSelection}
+            onConfirmDelete={handleConfirmDelete}
+            onCancelDeleteMode={handleCancelDeleteMode}
           />
         ) : (
           <CaptionPool />

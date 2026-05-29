@@ -260,6 +260,11 @@ export function useCarouselState() {
     setPool(function(prev) { return prev.filter(function(p) { return p.id !== photoId; }); });
   }, []);
 
+  var removeMultiplePhotosFromPool = useCallback(function(photoIds: string[]) {
+    var idSet = new Set(photoIds);
+    setPool(function(prev) { return prev.filter(function(p) { return !idSet.has(p.id); }); });
+  }, []);
+
   var createNewDump = useCallback(function() {
     setDumps(function(prev) {
       var newNum = prev.length + 1;
@@ -497,7 +502,7 @@ export function useCarouselState() {
     dumps, pool, resetAll, clearDemoContent, replaceState,
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
-    removePhotoFromPool, createNewDump, deleteDump,
+    removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,
     toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto,
