@@ -116,6 +116,7 @@ export default function AISuggestSheet({
       const res = await fetch("/api/ai-suggest", {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, authH),
+        signal: AbortSignal.timeout(58000),
         body: JSON.stringify({
           photos: compressedPhotos,
           variation,
