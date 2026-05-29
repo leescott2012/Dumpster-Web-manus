@@ -191,7 +191,7 @@ export default function DumpActionSheet({
         </div>
 
         {/* Action rows */}
-        <div style={{ padding: "8px 0 40px" }}>
+        <div style={{ padding: "8px 0 calc(40px + env(safe-area-inset-bottom, 0px))" }}>
           {actions.map(function(action, i) {
             return (
               <button

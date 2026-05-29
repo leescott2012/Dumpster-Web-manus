@@ -212,7 +212,7 @@ export default function CaptionSheet({
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 32px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px calc(32px + env(safe-area-inset-bottom, 0px))" }}>
           {dumps.length === 0 && (
             <div style={{ padding: "32px 18px", textAlign: "center", color: "#666", fontSize: 13 }}>
               Create a dump first, then come back to caption it.

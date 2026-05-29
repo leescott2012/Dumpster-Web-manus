@@ -273,7 +273,7 @@ export default function AISuggestSheet({
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 32px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px calc(32px + env(safe-area-inset-bottom, 0px))" }}>
 
           {/* ── IDLE ── */}
           {phase === "idle" && (

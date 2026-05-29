@@ -43,7 +43,7 @@ export default function DemoBanner({ hasUserPhotos, onUploadClick }: DemoBannerP
 
   return (
     <div style={{
-      position: "fixed", top: 60, left: "50%", transform: "translateX(-50%)",
+      position: "fixed", top: "calc(60px + env(safe-area-inset-top, 0px))", left: "50%", transform: "translateX(-50%)",
       zIndex: 250,
       display: "flex", alignItems: "center", gap: 10,
       background: "rgba(14,14,14,0.92)",

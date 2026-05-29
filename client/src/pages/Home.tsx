@@ -38,7 +38,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions } from "@/lib/captionPool";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
-import { syncAIProfileOnSignIn } from "@/lib/aiProfileSync";
+import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
 import { track } from "@/lib/analytics";
 
 function HomeContent() {
@@ -124,6 +124,11 @@ function HomeContent() {
     syncAIProfileOnSignIn(user.id).catch(function(err) {
       console.warn("[aiProfileSync] sign-in sync failed:", err);
     });
+    // Flush any pending debounced AI-profile save before the tab closes so
+    // caption/taste edits made within the 2s window aren't lost.
+    var handleUnload = function() { flushAIProfileSave(); };
+    window.addEventListener("beforeunload", handleUnload);
+    return function() { window.removeEventListener("beforeunload", handleUnload); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -428,14 +433,20 @@ function HomeContent() {
       })(files[i]);
     }
 
-    Promise.all(tasks).then(function(photos) {
-      if (photos.length === 0) return;
-      addUploadedPhotos(photos);
-      track("photo_uploaded", { count: photos.length });
-      toast("Added " + photos.length + (photos.length === 1 ? " item" : " items") + " to pool");
-    }).catch(function(err) {
-      console.error("[upload] failed:", err);
-      toast("Couldn't process some files — try again");
+    Promise.allSettled(tasks).then(function(results) {
+      var photos = results
+        .filter(function(r): r is PromiseFulfilledResult<Photo> { return r.status === "fulfilled"; })
+        .map(function(r) { return r.value; });
+      var failCount = results.length - photos.length;
+      if (photos.length > 0) {
+        addUploadedPhotos(photos);
+        track("photo_uploaded", { count: photos.length });
+        var msg = "Added " + photos.length + (photos.length === 1 ? " item" : " items") + " to pool";
+        if (failCount > 0) msg += " (" + failCount + " couldn't be processed)";
+        toast(msg);
+      } else {
+        toast("Couldn't process " + (failCount === 1 ? "that file" : "those files") + " — try again");
+      }
     });
   }, [addUploadedPhotos, user]);
 
