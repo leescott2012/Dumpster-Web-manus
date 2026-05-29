@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { INITIAL_DUMPS, INITIAL_POOL, IS_OWNER, type Dump, type Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
 import type { SuggestedCluster } from "@/components/AISuggestSheet";
+import { toast } from "sonner";
 
 // ── localStorage persistence ───────────────────────────────────────────────
 
@@ -33,11 +34,18 @@ function loadSaved<T>(key: string): T | null {
   return null;
 }
 
+var _storageWarnedThisSession = false;
+
 function persist(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
     console.warn("[Dumpster] localStorage write failed for " + key + ":", e);
+    // Only show one toast per session so it doesn't spam on every keystroke
+    if (!_storageWarnedThisSession) {
+      _storageWarnedThisSession = true;
+      toast("Storage full — photos may not save. Sign in to save to cloud.", { duration: 8000 });
+    }
   }
 }
 
