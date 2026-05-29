@@ -127,6 +127,19 @@ function HomeContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // ── Clear demo/stock content on sign-in.
+  // All users share the same localStorage keys (IS_OWNER is build-time, not
+  // per-user), so demo content from browsing as a guest persists into the
+  // signed-in session. Clear it once per user ID so a new user starts fresh
+  // but keeps any photos they uploaded before signing in.
+  var clearedForUserRef = useRef<string | null>(null);
+  useEffect(function() {
+    if (!user) return;
+    if (clearedForUserRef.current === user.id) return;
+    clearedForUserRef.current = user.id;
+    clearDemoContent();
+  }, [user, clearDemoContent]);
+
   // ── Always keep at least one empty dump visible so users have a target for
   // the "From Pool" / "Add More" twin cards. Without this, a freshly cleared
   // workspace renders as a wall of stats with no upload affordance — beta
