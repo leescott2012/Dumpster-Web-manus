@@ -1,9 +1,16 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { getUserFromRequest } from '../server/creditGate.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  // TTS is admin-only — verify the caller is the configured admin user.
+  const userId = await getUserFromRequest(req);
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+  const adminId = process.env.ADMIN_USER_ID;
+  if (!adminId || userId !== adminId) return res.status(403).json({ error: 'Forbidden' });
 
   const { text, voiceId: requestedVoiceId } = req.body;
 

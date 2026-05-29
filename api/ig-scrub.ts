@@ -96,9 +96,12 @@ interface ApifyPost {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
+  // Fail fast if Apify isn't configured — don't charge credits for a broken call.
+  if (!process.env.APIFY_TOKEN) {
+    return res.status(503).json({ error: "IG Scrub is not configured on this server." });
+  }
+
   // Auth + rate limit + daily budget + credit gate.
-  // Previously this endpoint was open and any caller could trigger paid
-  // Apify scraping ($ per call). Discovered during the 2026-05-27 bug audit.
   const gate = await checkCredits(req, res, "ig_scrub");
   if (!gate.proceed) return;
 
