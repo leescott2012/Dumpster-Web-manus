@@ -156,6 +156,16 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
+
+  // ── API Wallet ────────────────────────────────────────────────────────────
+  interface ServiceBalances {
+    anthropic:  { connected: boolean; model_count?: number; error?: string; };
+    apify:      { connected: boolean; plan?: string; compute_units_limit?: number; compute_units_used?: number; error?: string; };
+    elevenlabs: { connected: boolean; tier?: string; chars_used?: number; chars_limit?: number; reset_unix?: number; status?: string; error?: string; };
+    stripe:     { connected: boolean; available_cents?: number; pending_cents?: number; currency?: string; error?: string; };
+  }
+  const [balances, setBalances] = useState<ServiceBalances | null>(null);
+  const [balancesLoading, setBalancesLoading] = useState(false);
   
   // HUD States
   const [hudState, setHudState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
@@ -217,6 +227,21 @@ export default function Admin() {
     });
     fetchBugs();
   }, [session, fetchBugs]);
+
+  const fetchBalances = useCallback(async function() {
+    if (!session) return;
+    setBalancesLoading(true);
+    try {
+      const res = await fetch("/api/service-balances", {
+        headers: { Authorization: "Bearer " + session.access_token },
+      });
+      if (res.ok) setBalances(await res.json());
+    } catch { /* silent */ } finally {
+      setBalancesLoading(false);
+    }
+  }, [session]);
+
+  useEffect(function() { if (session) fetchBalances(); }, [session, fetchBalances]);
 
   // Audio setup
   const addLog = (msg: string) => {
@@ -861,7 +886,124 @@ export default function Admin() {
 
         {/* RIGHT COLUMN: Terminal & Controls */}
         <div className="col-span-12 lg:col-span-4 space-y-8">
-          
+
+          {/* API Wallet */}
+          <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">API Wallet</div>
+              <button
+                onClick={fetchBalances}
+                disabled={balancesLoading}
+                className="text-[9px] uppercase tracking-widest text-[#D4AF37]/40 hover:text-[#D4AF37] transition-colors disabled:opacity-30"
+              >
+                {balancesLoading ? "syncing…" : "↻ refresh"}
+              </button>
+            </div>
+            {!balances && balancesLoading && (
+              <div className="text-[10px] text-gray-600 animate-pulse">Fetching service data…</div>
+            )}
+            {balances && (function() {
+              const fmtCents = (c: number, cur = "usd") => {
+                try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur.toUpperCase(), maximumFractionDigits: 2 }).format(c / 100); }
+                catch { return "$" + (c / 100).toFixed(2); }
+              };
+              const fmtNum = (n: number) =>
+                n >= 1000000 ? (n / 1000000).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
+
+              const services = [
+                {
+                  name: "Anthropic",
+                  dot: balances.anthropic.connected ? "#22c55e" : "#ef4444",
+                  lines: balances.anthropic.connected
+                    ? ["Connected · " + (balances.anthropic.model_count ?? "?") + " models available",
+                       "Balance: check console.anthropic.com"]
+                    : ["⚠ " + (balances.anthropic.error ?? "unreachable")],
+                  link: "https://console.anthropic.com/settings/billing",
+                },
+                {
+                  name: "Apify",
+                  dot: balances.apify.connected ? "#22c55e" : "#ef4444",
+                  lines: balances.apify.connected
+                    ? [
+                        "Plan: " + (balances.apify.plan ?? "?"),
+                        balances.apify.compute_units_limit != null
+                          ? "Compute units: " + (balances.apify.compute_units_used != null ? fmtNum(balances.apify.compute_units_used) + " / " : "") + fmtNum(balances.apify.compute_units_limit) + " mo"
+                          : "Balance: check console.apify.com",
+                      ]
+                    : ["⚠ " + (balances.apify.error ?? "unreachable")],
+                  link: "https://console.apify.com/billing",
+                },
+                {
+                  name: "ElevenLabs",
+                  dot: balances.elevenlabs.connected ? "#22c55e" : "#ef4444",
+                  lines: balances.elevenlabs.connected
+                    ? (function() {
+                        const used = balances.elevenlabs.chars_used ?? 0;
+                        const limit = balances.elevenlabs.chars_limit ?? 0;
+                        const pct = limit > 0 ? Math.round((used / limit) * 100) : 0;
+                        const resetDate = balances.elevenlabs.reset_unix
+                          ? new Date(balances.elevenlabs.reset_unix * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                          : null;
+                        return [
+                          "Tier: " + (balances.elevenlabs.tier ?? "?") + " · " + (balances.elevenlabs.status ?? ""),
+                          fmtNum(used) + " / " + fmtNum(limit) + " chars (" + pct + "%) " + (resetDate ? "· resets " + resetDate : ""),
+                        ];
+                      })()
+                    : ["⚠ " + (balances.elevenlabs.error ?? "unreachable")],
+                  link: "https://elevenlabs.io/subscription",
+                  bar: balances.elevenlabs.connected && (balances.elevenlabs.chars_limit ?? 0) > 0
+                    ? Math.round(((balances.elevenlabs.chars_used ?? 0) / (balances.elevenlabs.chars_limit ?? 1)) * 100)
+                    : null,
+                },
+                {
+                  name: "Stripe",
+                  dot: balances.stripe.connected ? "#22c55e" : "#ef4444",
+                  lines: balances.stripe.connected
+                    ? [
+                        "Available: " + fmtCents(balances.stripe.available_cents ?? 0, balances.stripe.currency),
+                        "Pending: " + fmtCents(balances.stripe.pending_cents ?? 0, balances.stripe.currency),
+                      ]
+                    : ["⚠ " + (balances.stripe.error ?? "unreachable")],
+                  link: "https://dashboard.stripe.com/balance",
+                },
+              ];
+
+              return (
+                <div className="space-y-4">
+                  {services.map(function(svc) {
+                    return (
+                      <a key={svc.name} href={svc.link} target="_blank" rel="noopener noreferrer"
+                        className="block p-3 rounded-xl border border-[#D4AF37]/08 hover:border-[#D4AF37]/25 hover:bg-[#D4AF37]/03 transition-all group"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: svc.dot }} />
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-[#D4AF37]/70 group-hover:text-[#D4AF37] transition-colors">{svc.name}</span>
+                          <span className="ml-auto text-[8px] text-gray-700 group-hover:text-gray-500">↗</span>
+                        </div>
+                        {svc.lines.map(function(line, i) {
+                          return <div key={i} className="text-[10px] text-gray-500 pl-3.5">{line}</div>;
+                        })}
+                        {svc.bar != null && (
+                          <div className="mt-2 pl-3.5">
+                            <div className="h-0.5 bg-[#1a1a1a] rounded-full overflow-hidden w-full">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: svc.bar + "%",
+                                  background: svc.bar > 80 ? "#ef4444" : svc.bar > 60 ? "#f59e0b" : "#22c55e",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </a>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
           {/* Neural Terminal */}
           <ConsoleTerminal 
             logs={logs} 
