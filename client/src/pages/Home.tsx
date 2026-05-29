@@ -39,6 +39,7 @@ import { loadCaptions } from "@/lib/captionPool";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn } from "@/lib/aiProfileSync";
+import { uploadPhotoToStorage, deletePhotoFromStorage, countUserPhotos, isStorageUrl, PHOTO_CAP } from "@/lib/photoStorage";
 import { track } from "@/lib/analytics";
 
 function HomeContent() {
@@ -193,11 +194,20 @@ function HomeContent() {
   var handleConfirmDelete = useCallback(function() {
     var count = selectedDeleteIds.length;
     if (count === 0) return;
+    // Delete cloud-stored photos from Supabase Storage
+    if (user) {
+      var idsToDelete = new Set(selectedDeleteIds);
+      pool.forEach(function(p) {
+        if (idsToDelete.has(p.id) && isStorageUrl(p.url)) {
+          deletePhotoFromStorage(user.id, p.id);
+        }
+      });
+    }
     removeMultiplePhotosFromPool(selectedDeleteIds);
     setDeleteMode(false);
     setSelectedDeleteIds([]);
     toast("Deleted " + count + " photo" + (count !== 1 ? "s" : ""));
-  }, [selectedDeleteIds, removeMultiplePhotosFromPool]);
+  }, [selectedDeleteIds, removeMultiplePhotosFromPool, user, pool]);
 
   var handleCancelDeleteMode = useCallback(function() {
     setDeleteMode(false);
@@ -372,6 +382,10 @@ function HomeContent() {
       }
     } else {
       // Photo is in pool — remove entirely
+      // Delete from Supabase Storage if it was uploaded there
+      if (user && isStorageUrl(contextMenu.photo.url)) {
+        deletePhotoFromStorage(user.id, photoId);
+      }
       removePhotoFromPool(photoId);
       toast("Photo removed");
     }
@@ -388,56 +402,84 @@ function HomeContent() {
     var total = files.length;
     if (total === 0) return;
 
-    var hadAnyHeavy = Array.from(files).some(function(f) { return f.size > 1_500_000; });
-    if (hadAnyHeavy) {
-      toast("Processing " + total + (total === 1 ? " photo" : " photos") + "...");
+    // Count existing user-uploaded images to enforce the cap (photos only, not videos).
+    var currentPhotoCount = pool.filter(function(p) {
+      return p.id.startsWith("upload-") && p.category !== "Video";
+    }).length;
+    var dumps_photos_count = dumps.reduce(function(n, d) {
+      return n + d.photos.filter(function(p) {
+        return p.id.startsWith("upload-") && p.category !== "Video";
+      }).length;
+    }, 0);
+    var totalUploaded = currentPhotoCount + dumps_photos_count;
+
+    var imageFiles = Array.from(files).filter(function(f) { return !f.type.startsWith("video/"); });
+    var videoFiles = Array.from(files).filter(function(f) { return f.type.startsWith("video/"); });
+    var slotsLeft = PHOTO_CAP - totalUploaded;
+
+    if (imageFiles.length > 0 && slotsLeft <= 0) {
+      toast("Photo cap reached (" + PHOTO_CAP + " photos). Delete some to upload more.");
+      if (videoFiles.length === 0) return;
     }
+
+    var allowedImages = imageFiles.slice(0, Math.max(0, slotsLeft));
+    var skippedCount = imageFiles.length - allowedImages.length;
+
+    toast("Processing " + (allowedImages.length + videoFiles.length) + " item" + ((allowedImages.length + videoFiles.length) !== 1 ? "s" : "") + "...");
 
     var tasks: Promise<Photo>[] = [];
-    for (var i = 0; i < total; i++) {
-      (function(file: File) {
-        var isVideo = file.type.startsWith("video/");
-        var photoId = "upload-" + nanoid(8);
 
-        if (isVideo) {
-          tasks.push(Promise.resolve({
-            id: photoId,
-            url: URL.createObjectURL(file),
-            alt: file.name,
-            isFavorite: false,
-            category: "Video",
-          }));
-        } else {
-          // Extract EXIF from the ORIGINAL file in parallel with the downscale
-          // (downscale strips EXIF, so we have to read it before reencoding).
-          tasks.push(
-            Promise.all([
-              extractPhotoMeta(file),
-              downscaleImageToDataUrl(file),
-            ]).then(function(results) {
-              var meta = results[0];
-              var dataUrl = results[1];
-              return {
-                id: photoId, url: dataUrl, alt: file.name,
-                isFavorite: false, category: "Uploaded",
-                meta: meta,
-              } as Photo;
-            })
-          );
-        }
-      })(files[i]);
+    // Videos — blob URL (not stored in cloud, not counted against cap)
+    for (var vi = 0; vi < videoFiles.length; vi++) {
+      (function(file: File) {
+        var photoId = "upload-" + nanoid(8);
+        tasks.push(Promise.resolve({
+          id: photoId, url: URL.createObjectURL(file),
+          alt: file.name, isFavorite: false, category: "Video",
+        } as Photo));
+      })(videoFiles[vi]);
     }
 
-    Promise.all(tasks).then(function(photos) {
-      if (photos.length === 0) return;
-      addUploadedPhotos(photos);
-      track("photo_uploaded", { count: photos.length });
-      toast("Added " + photos.length + (photos.length === 1 ? " item" : " items") + " to pool");
-    }).catch(function(err) {
-      console.error("[upload] failed:", err);
-      toast("Couldn't process some files — try again");
+    // Images — downscale then upload to Supabase Storage if signed in
+    for (var ii = 0; ii < allowedImages.length; ii++) {
+      (function(file: File) {
+        var photoId = "upload-" + nanoid(8);
+        tasks.push(
+          Promise.all([extractPhotoMeta(file), downscaleImageToDataUrl(file)])
+            .then(async function(results) {
+              var meta = results[0];
+              var dataUrl = results[1];
+              var url = dataUrl;
+              // For signed-in users, upload to Supabase Storage and use the
+              // persistent HTTPS URL instead of the base64 data URL.
+              if (user) {
+                var cloudUrl = await uploadPhotoToStorage(user.id, photoId, dataUrl);
+                if (cloudUrl) url = cloudUrl;
+                // If upload fails, fall back to data URL (still works this session)
+              }
+              return { id: photoId, url, alt: file.name, isFavorite: false, category: "Uploaded", meta } as Photo;
+            })
+        );
+      })(allowedImages[ii]);
+    }
+
+    Promise.allSettled(tasks).then(function(results) {
+      var photos = results
+        .filter(function(r): r is PromiseFulfilledResult<Photo> { return r.status === "fulfilled"; })
+        .map(function(r) { return r.value; });
+      var failCount = results.length - photos.length;
+      if (photos.length > 0) {
+        addUploadedPhotos(photos);
+        track("photo_uploaded", { count: photos.length });
+        var msg = "Added " + photos.length + " item" + (photos.length !== 1 ? "s" : "") + " to pool";
+        if (skippedCount > 0) msg += " · " + skippedCount + " skipped (cap reached)";
+        if (failCount > 0) msg += " · " + failCount + " failed";
+        toast(msg);
+      } else {
+        toast("Couldn't process those files — try again");
+      }
     });
-  }, [addUploadedPhotos, user]);
+  }, [addUploadedPhotos, user, pool, dumps]);
 
   var handleAICreateDumps = useCallback(function(clusters: SuggestedCluster[]) {
     createDumpsFromSuggestions(clusters);
@@ -708,6 +750,13 @@ function HomeContent() {
             onToggleDeleteSelection={handleToggleDeleteSelection}
             onConfirmDelete={handleConfirmDelete}
             onCancelDeleteMode={handleCancelDeleteMode}
+            photoCapUsed={user ? (
+              pool.filter(function(p) { return p.id.startsWith("upload-") && p.category !== "Video"; }).length +
+              dumps.reduce(function(n, d) {
+                return n + d.photos.filter(function(p) { return p.id.startsWith("upload-") && p.category !== "Video"; }).length;
+              }, 0)
+            ) : undefined}
+            photoCap={PHOTO_CAP}
           />
         ) : (
           <CaptionPool />

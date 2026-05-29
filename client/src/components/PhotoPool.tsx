@@ -34,6 +34,8 @@ interface PhotoPoolProps {
   onToggleDeleteSelection: (photo: Photo) => void;
   onConfirmDelete: () => void;
   onCancelDeleteMode: () => void;
+  photoCapUsed?: number;
+  photoCap?: number;
 }
 
 export default function PhotoPool({
@@ -41,6 +43,7 @@ export default function PhotoPool({
   selectionMode, selectedIds, onTogglePoolSelection, onConfirmSelection, onCancelSelection,
   targetDumpId, selectedPhotoId,
   deleteMode, selectedDeleteIds, onEnterDeleteMode, onToggleDeleteSelection, onConfirmDelete, onCancelDeleteMode,
+  photoCapUsed, photoCap,
 }: PhotoPoolProps) {
   var poolRef = useRef<HTMLDivElement>(null);
   var fileInputRef = useRef<HTMLInputElement>(null);
@@ -199,21 +202,31 @@ export default function PhotoPool({
               </span>
             </button>
           )}
-          {photos.length > 0 && (
-            <button
-              onClick={onEnterDeleteMode}
-              style={{
-                marginLeft: "auto", background: "transparent", border: "1px solid #2a2a2a",
-                borderRadius: "100px", padding: "5px 12px", fontSize: "11px", color: "#666",
-                cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
-                display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
-              }}
-              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
-              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
-            >
-              <Trash2 size={11} />Select to Delete
-            </button>
-          )}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
+            {photoCapUsed !== undefined && photoCap !== undefined && (
+              <span style={{
+                fontSize: "11px", color: photoCapUsed >= photoCap ? "#ef4444" : "#555",
+                letterSpacing: "0.04em", fontVariantNumeric: "tabular-nums",
+              }}>
+                {photoCapUsed} / {photoCap}
+              </span>
+            )}
+            {photos.length > 0 && (
+              <button
+                onClick={onEnterDeleteMode}
+                style={{
+                  background: "transparent", border: "1px solid #2a2a2a",
+                  borderRadius: "100px", padding: "5px 12px", fontSize: "11px", color: "#666",
+                  cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
+                  display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
+                }}
+                onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+                onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
+              >
+                <Trash2 size={11} />Select to Delete
+              </button>
+            )}
+          </div>
         </div>
       )}
 
