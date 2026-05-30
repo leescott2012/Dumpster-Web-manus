@@ -169,25 +169,25 @@ export function useCarouselState() {
     // on sign-in. The owner's CloudFront photos aren't "upload-" prefixed, so
     // without this guard the cleanup wipes them and leaves an empty pool.
     if (IS_OWNER) return;
+    // Remove ONLY the seeded demo/sample photos (id starts with "stock-").
+    // Everything a user actually brought in — uploads, IG scrapes, any
+    // non-stock photo — is kept, so signing in NEVER deletes real content.
+    function isDemoSeed(id: string) { return id.startsWith("stock-"); }
     rawSetDumps(function(prev) {
-      // Keep only dumps that have at least one user-uploaded photo
-      var kept = prev.filter(function(d) {
-        return d.photos.some(function(p) { return p.id.startsWith("upload-"); });
-      }).map(function(d) {
-        // Strip any stock photos from kept dumps
+      var kept = prev.map(function(d) {
         return {
           id: d.id, number: d.number, title: d.title, subtitle: d.subtitle,
-          photos: d.photos.filter(function(p) { return p.id.startsWith("upload-"); }),
+          photos: d.photos.filter(function(p) { return !isDemoSeed(p.id); }),
           captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating,
           chatHistory: d.chatHistory,
         };
-      });
+      }).filter(function(d) { return d.photos.length > 0; });
       persist(SK_DUMPS, kept);
       dumpsRef.current = kept;
       return kept;
     });
     rawSetPool(function(prev) {
-      var kept = prev.filter(function(p) { return p.id.startsWith("upload-"); });
+      var kept = prev.filter(function(p) { return !isDemoSeed(p.id); });
       persist(SK_POOL, kept);
       poolRef.current = kept;
       return kept;
