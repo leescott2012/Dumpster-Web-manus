@@ -165,6 +165,10 @@ export function useCarouselState() {
   // Clear demo/stock content — gives authenticated users a clean slate.
   // Keeps any user-uploaded photos (id starts with "upload-"), removes stock ones.
   var clearDemoContent = useCallback(function() {
+    // Owner mode's seeded content IS the owner's real content — never strip it
+    // on sign-in. The owner's CloudFront photos aren't "upload-" prefixed, so
+    // without this guard the cleanup wipes them and leaves an empty pool.
+    if (IS_OWNER) return;
     rawSetDumps(function(prev) {
       // Keep only dumps that have at least one user-uploaded photo
       var kept = prev.filter(function(d) {
