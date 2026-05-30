@@ -347,6 +347,48 @@ export default function PhotoPool({
               </div>
             </div>
           )}
+
+          {/* Selection-mode empty state — pool is empty while adding to a dump.
+              Without this, "add photos" lands on a blank screen with no way out
+              but Cancel. Give an upload affordance instead. */}
+          {displayPhotos.length === 0 && selectionMode && (
+            <div
+              onClick={handleUploadClick}
+              style={{
+                gridColumn: "1 / -1",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                padding: "48px 32px", borderRadius: "14px",
+                border: "1.5px dashed rgba(var(--accent-rgb),0.35)",
+                background: "rgba(var(--accent-rgb),0.04)",
+                cursor: "pointer", textAlign: "center",
+              }}
+            >
+              <div style={{
+                width: 52, height: 52, borderRadius: 14,
+                background: "rgba(var(--accent-rgb),0.12)",
+                border: "1px solid rgba(var(--accent-rgb),0.3)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                marginBottom: 16, color: "var(--accent)",
+              }}>
+                <Plus size={26} strokeWidth={1.8} />
+              </div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: "0 0 6px" }}>
+                No photos left in your pool
+              </h3>
+              <p style={{ fontSize: 13, color: "#888", lineHeight: 1.5, maxWidth: 320, marginBottom: 18 }}>
+                Upload more, then tap them to add to this dump.
+              </p>
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                background: "var(--accent)", color: "#000",
+                padding: "11px 22px", borderRadius: 10,
+                fontSize: 13, fontWeight: 800, letterSpacing: "0.04em",
+              }}>
+                <Plus size={15} strokeWidth={2.5} />
+                Upload Photos
+              </div>
+            </div>
+          )}
         </div>
       )}
 

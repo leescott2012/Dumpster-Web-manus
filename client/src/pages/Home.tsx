@@ -617,7 +617,7 @@ function HomeContent() {
       }}>
         <button
           data-tour="ai-suggest"
-          onClick={function() { if (creditGate("ai_suggest")) setAiSheetOpen(true); }}
+          onClick={function() { setAiSheetOpen(true); }}
           style={{
             display: "flex", alignItems: "center", gap: "8px",
             background: "rgba(var(--accent-rgb),0.1)", border: "1px solid rgba(var(--accent-rgb),0.3)", borderRadius: "10px",
@@ -754,7 +754,7 @@ function HomeContent() {
       <MainMenu
         open={menuOpen}
         onClose={function() { setMenuOpen(false); }}
-        onAISuggest={function() { if (creditGate("ai_suggest")) setAiSheetOpen(true); }}
+        onAISuggest={function() { setAiSheetOpen(true); }}
         onCaptions={function() { if (creditGate("ai_caption")) { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); } }}
         onIGScrub={function() { setIGScrubOpen(true); }}
         onReset={handleReset}
