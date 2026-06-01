@@ -132,27 +132,27 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
       icon: <Sparkles size={18} strokeWidth={1.5} />,
     },
     {
-      id: "dumps", title: "MY DUMPS", tabColor: "#A8C8A0",
+      id: "dumps", title: "MY DUMPS", tabColor: "var(--accent)",
       subtitle: dumpCount + " dump" + (dumpCount !== 1 ? "s" : "") + " · Drag & sequence",
       icon: <Archive size={18} strokeWidth={1.5} />,
     },
     {
-      id: "pool", title: "PHOTO POOL", tabColor: "#A0B8C8",
+      id: "pool", title: "PHOTO POOL", tabColor: "var(--accent)",
       subtitle: poolCount + " photos available",
       icon: <Image size={18} strokeWidth={1.5} />,
     },
     {
-      id: "appearance", title: "APPEARANCE", tabColor: "#C8A0C0",
+      id: "appearance", title: "APPEARANCE", tabColor: "var(--accent)",
       subtitle: "Accent color",
       icon: <Paintbrush size={18} strokeWidth={1.5} />,
     },
     {
-      id: "social", title: "SOCIAL MEDIA", tabColor: "#C8B0A0",
+      id: "social", title: "SOCIAL MEDIA", tabColor: "var(--accent)",
       subtitle: "Connect & export",
       icon: <Share2 size={18} strokeWidth={1.5} />,
     },
     {
-      id: "about", title: "ABOUT / HELP", tabColor: "#C8B8A0",
+      id: "about", title: "ABOUT / HELP", tabColor: "var(--accent)",
       subtitle: "Dumpster · Version 1.0",
       icon: <Info size={18} strokeWidth={1.5} />,
     },
@@ -392,24 +392,17 @@ function FolderRow({ folder, index, visible, onClick }: {
 
   return (
     <div style={{ paddingTop: 24, position: "relative" }}>
-      {/* Tab sticking up */}
+      {/* Tab sticking up — icon only to stay within viewport */}
       <div style={{
         position: "absolute", top: 0, left: tabLeft,
         background: folder.tabColor,
         borderRadius: "6px 6px 0 0",
-        padding: "4px 12px",
-        display: "flex", alignItems: "center", gap: 5,
+        padding: "5px 10px",
+        display: "flex", alignItems: "center",
         pointerEvents: "none", zIndex: 1,
       }}>
-        <span style={{ color: "#000", opacity: 0.7, display: "flex", alignItems: "center" }}>
+        <span style={{ color: "#000", opacity: 0.65, display: "flex", alignItems: "center" }}>
           {folder.icon}
-        </span>
-        <span style={{
-          fontSize: 8, fontWeight: 800, letterSpacing: "0.15em",
-          color: "#000", opacity: 0.75, textTransform: "uppercase" as const,
-          whiteSpace: "nowrap" as const,
-        }}>
-          {folder.title}
         </span>
       </div>
 

@@ -12,6 +12,14 @@ import type { Dump, Photo } from "@/lib/photoData";
 import { Plus, Play, Trash2 } from "lucide-react";
 
 type FilterMode = "all" | "starred" | "used" | "videos";
+type PoolSize = "S" | "M" | "L";
+
+var POOL_SIZE_KEY = "dumpster_pool_size_v1";
+var SIZE_CONFIG: Record<PoolSize, { cols: string; w: number; h: number }> = {
+  S: { cols: "repeat(auto-fill, minmax(100px, 1fr))", w: 100, h: 130 },
+  M: { cols: "repeat(auto-fill, minmax(140px, 1fr))", w: 140, h: 180 },
+  L: { cols: "repeat(auto-fill, minmax(180px, 1fr))", w: 180, h: 230 },
+};
 
 interface PhotoPoolProps {
   photos: Photo[];
@@ -48,6 +56,17 @@ export default function PhotoPool({
   var [isOver, setIsOver] = useState(false);
   var isOverRef = useRef(false);
   var [filter, setFilter] = useState<FilterMode>("all");
+  var [poolSize, setPoolSize] = useState<PoolSize>(function() {
+    var saved = localStorage.getItem(POOL_SIZE_KEY);
+    return saved === "S" || saved === "M" || saved === "L" ? saved : "M";
+  });
+
+  var size = SIZE_CONFIG[poolSize];
+
+  var changeSize = function(s: PoolSize) {
+    setPoolSize(s);
+    try { localStorage.setItem(POOL_SIZE_KEY, s); } catch { /* private mode */ }
+  };
 
   useEffect(function() { isOverRef.current = isOver; }, [isOver]);
 
@@ -199,11 +218,36 @@ export default function PhotoPool({
               </span>
             </button>
           )}
+          {/* S/M/L grid-size toggle — segmented control, pushed to the right */}
+          {photos.length > 0 && (
+            <div style={{
+              marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "2px",
+              background: "rgba(255,255,255,0.04)", border: "1px solid #2a2a2a",
+              borderRadius: "100px", padding: "2px",
+            }}>
+              {(["S", "M", "L"] as PoolSize[]).map(function(s) {
+                var active = poolSize === s;
+                return (
+                  <button key={s} onClick={function() { changeSize(s); }}
+                    aria-label={"Photo size " + s} title={"Photo size " + s}
+                    style={{
+                      width: "26px", height: "22px", borderRadius: "100px", border: "none",
+                      background: active ? "var(--accent)" : "transparent",
+                      color: active ? "#000" : "#888", fontSize: "10px", fontWeight: 700,
+                      cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                    }}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {photos.length > 0 && (
             <button
               onClick={onEnterDeleteMode}
               style={{
-                marginLeft: "auto", background: "transparent", border: "1px solid #2a2a2a",
+                background: "transparent", border: "1px solid #2a2a2a",
                 borderRadius: "100px", padding: "5px 12px", fontSize: "11px", color: "#666",
                 cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
                 display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
@@ -219,7 +263,7 @@ export default function PhotoPool({
 
       {/* Used filter — read-only grid of photos already placed in dumps */}
       {filter === "used" && !selectionMode && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: size.cols, gap: "12px" }}>
           {usedPhotos.map(function(photo, i) {
             return (
               <div key={photo.id + "-used-" + i} style={{ position: "relative" }}>
@@ -227,7 +271,7 @@ export default function PhotoPool({
                   source={{ type: "pool" }}
                   isSelected={false}
                   onSelect={function() {}}
-                  width={140} height={180}
+                  width={size.w} height={size.h}
                 />
                 <div style={{
                   position: "absolute", top: "6px", left: "6px",
@@ -251,7 +295,7 @@ export default function PhotoPool({
       {/* Photo Grid — all / starred / videos */}
       {filter !== "used" && (
         <div style={{
-          display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "12px",
+          display: "grid", gridTemplateColumns: size.cols, gap: "12px",
           outline: isOver ? "2px dashed rgba(var(--accent-rgb),0.5)" : "none", outlineOffset: "8px",
           borderRadius: "12px", transition: "all 0.2s",
           padding: isOver ? "8px" : "0", background: isOver ? "rgba(var(--accent-rgb),0.03)" : "transparent",
@@ -267,7 +311,7 @@ export default function PhotoPool({
                 onSelect={selectionMode ? onTogglePoolSelection : deleteMode ? onToggleDeleteSelection : onSelectPhoto}
                 onDotsClick={anyMode ? undefined : onDotsClick}
                 onDoubleTap={anyMode ? undefined : onDoubleTapPhoto}
-                width={140} height={180}
+                width={size.w} height={size.h}
                 selectionMode={anyMode}
                 selectionIndex={selectionMode && selIdx >= 0 ? selIdx : undefined}
                 deleteMode={deleteMode}

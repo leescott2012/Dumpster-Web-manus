@@ -114,6 +114,7 @@ function HomeContent() {
   var [authSheetOpen, setAuthSheetOpen] = useState(false);
   var [creditsSheetOpen, setCreditsSheetOpen] = useState(false);
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
+  var [demoBannerVisible, setDemoBannerVisible] = useState(false);
   var { user, canAfford } = useAuth();
 
   // ── AI profile sync — merge captions/taste/rules from cloud on sign-in.
@@ -548,7 +549,7 @@ function HomeContent() {
 
       {/* Header */}
       <header style={{
-        maxWidth: "1100px", margin: "0 auto", padding: "32px 32px 24px",
+        maxWidth: "1100px", margin: "0 auto", padding: (demoBannerVisible ? "56px" : "32px") + " 32px 24px",
         borderBottom: "1px solid #1e1e1e", position: "relative",
         zIndex: (selectionMode || deleteMode) ? 50 : "auto",
         opacity: (selectionMode || deleteMode) ? 0.3 : 1, transition: "opacity 0.3s",
@@ -847,7 +848,7 @@ function HomeContent() {
         onSwap={function(dumpId, oldPhotoId, newPhotoId) { swapPhoto(dumpId, oldPhotoId, newPhotoId); toast("Photo swapped"); }}
       />
       <WelcomeOverlay onUploadClick={scrollToPoolUpload} onTourClick={startTour} />
-      <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} />
+      <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} onVisibilityChange={setDemoBannerVisible} />
       <GuidedTour active={tourActive} onEnd={endTour} />
       <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} />
       <CreditsSheet

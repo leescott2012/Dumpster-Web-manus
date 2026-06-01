@@ -12,9 +12,10 @@ var DISMISSED_KEY = "dumpster_demo_banner_dismissed_v1";
 interface DemoBannerProps {
   hasUserPhotos: boolean;
   onUploadClick: () => void;
+  onVisibilityChange?: (visible: boolean) => void;
 }
 
-export default function DemoBanner({ hasUserPhotos, onUploadClick }: DemoBannerProps) {
+export default function DemoBanner({ hasUserPhotos, onUploadClick, onVisibilityChange }: DemoBannerProps) {
   var [visible, setVisible] = useState(false);
 
   useEffect(function() {
@@ -32,6 +33,11 @@ export default function DemoBanner({ hasUserPhotos, onUploadClick }: DemoBannerP
   useEffect(function() {
     if (hasUserPhotos) setVisible(false);
   }, [hasUserPhotos]);
+
+  // Notify parent so it can offset content below the banner
+  useEffect(function() {
+    onVisibilityChange?.(visible);
+  }, [visible, onVisibilityChange]);
 
   var handleDismiss = function(e: React.MouseEvent) {
     e.stopPropagation();
