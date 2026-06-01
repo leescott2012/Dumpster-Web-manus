@@ -99,7 +99,7 @@ export function friendlyError(raw: unknown, action?: string): FriendlyMessage {
   if (lower.includes("authentication_error") || lower.includes("invalid api key")) {
     return {
       message: "AI service is misconfigured.",
-      hint: "Email leescott2019@gmail.com — this is a server issue, not your fault.",
+      hint: "Email axiomonellc@outlook.com — this is a server issue, not your fault.",
       retryable: false,
     };
   }
@@ -136,7 +136,7 @@ export function friendlyError(raw: unknown, action?: string): FriendlyMessage {
   // debugging only.
   return {
     message: "Something went wrong.",
-    hint: "Try again — if it keeps failing, email leescott2019@gmail.com.",
+    hint: "Try again — if it keeps failing, email axiomonellc@outlook.com.",
     retryable: true,
   };
 }

@@ -727,7 +727,7 @@ function HomeContent() {
       </aside>{/* end .dumpster-pool */}
       </div>{/* end .dumpster-layout */}
 
-      {/* Footer \u2014 Privacy/Terms links here are visible on every page load so
+      {/* Footer \u2014 Privacy/Terms links stay visible on every page load so
           Google's OAuth brand-verification crawler can find them. Without a
           top-level link the verification fails ("homepage doesn't link to
           your privacy policy"). */}
@@ -736,17 +736,22 @@ function HomeContent() {
         textAlign: "center", color: "#666", fontSize: "12px", borderTop: "1px solid #1e1e1e",
         display: "flex", flexDirection: "column", gap: 10, alignItems: "center",
       }}>
-        <div>Dumpster \u00B7 Carousel Dump Builder</div>
-        <div style={{ display: "flex", gap: 16, color: "#555" }}>
+        <div style={{ color: "#888", letterSpacing: "0.02em" }}>
+          Dumpster &middot; Carousel Dump Builder
+        </div>
+        <nav style={{ display: "flex", gap: 16, color: "#555" }}>
           <a href="/privacy" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
             Privacy
           </a>
           <a href="/terms" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
             Terms
           </a>
-          <a href="mailto:leescott2019@gmail.com" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
+          <a href="mailto:axiomonellc@outlook.com" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
             Contact
           </a>
+        </nav>
+        <div style={{ color: "#444", fontSize: "11px" }}>
+          &copy; {new Date().getFullYear()} Dumpster. All rights reserved.
         </div>
       </footer>
 
