@@ -7,13 +7,6 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getUserFromRequest } from "../server/creditGate.js";
-import { createClient } from "@supabase/supabase-js";
-
-// Supabase client for logging
-const supabase = createClient(
-  process.env.SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
 
 const GENIUS_SYSTEM_PROMPT = `You are Genius, the AI core of the Chamillion Collective — a hyper-intelligent, 
 calm, and slightly sardonic AI assistant built into the admin dashboard. You speak with precision and confidence. 
