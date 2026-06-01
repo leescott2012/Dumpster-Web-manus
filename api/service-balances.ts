@@ -133,8 +133,8 @@ async function fetchStripeBalance(): Promise<{
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
-  const user = await getUserFromRequest(req).catch(() => null);
-  if (!user || !isAdmin(user.id)) return res.status(403).json({ error: "Forbidden" });
+  const userId = await getUserFromRequest(req).catch(() => null);
+  if (!userId || !isAdmin(userId)) return res.status(403).json({ error: "Forbidden" });
 
   const [anthropic, apify, elevenlabs, stripe] = await Promise.allSettled([
     fetchAnthropicStatus(),
