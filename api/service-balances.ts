@@ -116,7 +116,7 @@ async function fetchStripeBalance(): Promise<{
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) return { connected: false, error: "STRIPE_SECRET_KEY not set" };
   try {
-    const stripe = new Stripe(key, { apiVersion: "2025-02-24.acacia" });
+    const stripe = new Stripe(key);
     const bal = await stripe.balance.retrieve();
     // Sum across all currencies (most accounts are single-currency)
     const available = bal.available.reduce((s, b) => s + b.amount, 0);
