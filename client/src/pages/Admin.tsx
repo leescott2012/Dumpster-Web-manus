@@ -22,6 +22,7 @@ import GeniusHUD from "@/components/genius/GeniusHUD";
 import ConsoleTerminal from "@/components/genius/ConsoleTerminal";
 import SystemWidget from "@/components/genius/SystemWidget";
 import AgentControl from "@/components/genius/AgentControl";
+import UserDrillModal from "@/components/genius/UserDrillModal";
 import { sfx } from "@/lib/geniusAudio";
 import { isMuted, setMuted, onMuteChange } from "@/utils/audioSynth";
 import { logBug } from "@/lib/bugLogger";
@@ -162,6 +163,7 @@ export default function Admin() {
   const [logs, setLogs] = useState<string[]>([]);
   const [isWarmingUp, setIsWarmingUp] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
 
   // Global mute — persists in localStorage. Silences SFX + TTS (ElevenLabs
   // and browser SpeechSynthesis). Mirror state into React so the button icon
@@ -689,45 +691,93 @@ export default function Admin() {
             </div>
           </div>
 
-          {/* Charts Section */}
+          {/* Charts Section ────────────────────────────────────────────────
+              Both charts: visible X axis labels, Y axis tick counts, and
+              summary stats in the header (total / peak / avg / top feature)
+              so you can read the numbers without hovering. */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* DAU Chart */}
-            <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Neural Activity (DAU)</div>
-                <div className="text-[10px] text-gray-600 uppercase">Last 14 Days</div>
-              </div>
-              <div className="h-[200px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dauLabelled}>
-                    <XAxis dataKey="label" hide />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(212,175,55,0.05)" }} />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {dauLabelled.map((_, i) => (
-                        <Cell key={i} fill={i === dauLabelled.length - 1 ? ACCENT : "#1a1a1a"} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            {(() => {
+              const dauTotal = dauLabelled.reduce((s, d) => s + d.count, 0);
+              const dauPeak  = dauLabelled.reduce((m, d) => Math.max(m, d.count), 0);
+              const dauAvg   = dauLabelled.length ? Math.round((dauTotal / dauLabelled.length) * 10) / 10 : 0;
+              // Trend: most recent 7 days vs prior 7 days
+              const half = Math.floor(dauLabelled.length / 2);
+              const recent7 = dauLabelled.slice(half).reduce((s, d) => s + d.count, 0);
+              const prior7  = dauLabelled.slice(0, half).reduce((s, d) => s + d.count, 0);
+              const trend = prior7 === 0 ? (recent7 > 0 ? 100 : 0) : Math.round(((recent7 - prior7) / prior7) * 100);
+              return (
+                <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Daily Active Users</div>
+                    <div className="text-[10px] text-gray-600 uppercase">Last 14 Days</div>
+                  </div>
+                  <div className="flex items-center gap-5 text-[10px] mb-4">
+                    <span className="text-gray-600">Total unique-days: <span className="text-white font-bold">{dauTotal}</span></span>
+                    <span className="text-gray-600">Peak: <span className="text-white font-bold">{dauPeak}</span></span>
+                    <span className="text-gray-600">Avg: <span className="text-white font-bold">{dauAvg}/day</span></span>
+                    <span className={trend > 0 ? "text-green-500" : trend < 0 ? "text-red-500" : "text-gray-500"}>
+                      {trend > 0 ? "▲" : trend < 0 ? "▼" : "—"} {Math.abs(trend)}% vs prior 7d
+                    </span>
+                  </div>
+                  <div className="h-[200px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dauLabelled} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
+                        <XAxis dataKey="label" tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                        <YAxis tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
+                        <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(212,175,55,0.05)" }} formatter={(v: number) => v + " user" + (v === 1 ? "" : "s")} />
+                        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                          {dauLabelled.map((_, i) => (
+                            <Cell key={i} fill={i === dauLabelled.length - 1 ? ACCENT : "#1a1a1a"} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Feature Usage Chart */}
-            <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Synaptic Load (Features)</div>
-                <div className="text-[10px] text-gray-600 uppercase">Last 30 Days</div>
-              </div>
-              <div className="h-[200px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={featureLabelled}>
-                    <XAxis dataKey="label" hide />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Line type="monotone" dataKey="count" stroke={ACCENT} strokeWidth={3} dot={{ fill: ACCENT, r: 4 }} activeDot={{ r: 6, stroke: '#000', strokeWidth: 2 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            {(() => {
+              const ftotal = featureLabelled.reduce((s, f) => s + f.count, 0);
+              const top = [...featureLabelled].sort((a, b) => b.count - a.count)[0];
+              const totalCredits = featureLabelled.reduce((s, f) => s + (f.credits || 0), 0);
+              return (
+                <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">AI Feature Usage</div>
+                    <div className="text-[10px] text-gray-600 uppercase">Last 30 Days</div>
+                  </div>
+                  <div className="flex items-center gap-5 text-[10px] mb-4">
+                    <span className="text-gray-600">Total calls: <span className="text-white font-bold">{ftotal}</span></span>
+                    {top && <span className="text-gray-600">Top: <span className="text-white font-bold">{top.label} ({top.count})</span></span>}
+                    <span className="text-gray-600">Credits spent: <span className="text-white font-bold">{totalCredits}</span></span>
+                  </div>
+                  <div className="h-[200px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={featureLabelled} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
+                        <XAxis dataKey="label" tick={{ fill: "#888", fontSize: 9 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
+                        <Tooltip
+                          content={<ChartTooltip />}
+                          cursor={{ fill: "rgba(212,175,55,0.05)" }}
+                          formatter={(v: number, _name, item: { payload?: { credits?: number } }) => {
+                            const creds = item?.payload?.credits;
+                            return v + " call" + (v === 1 ? "" : "s") + (creds != null ? ` · ${creds} credits` : "");
+                          }}
+                        />
+                        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                          {featureLabelled.map((_, i) => (
+                            <Cell key={i} fill={i === 0 ? ACCENT : `${ACCENT}66`} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* User Registry Table */}
@@ -749,8 +799,16 @@ export default function Admin() {
                 </thead>
                 <tbody className="divide-y divide-[#D4AF37]/5">
                   {users.map((u) => (
-                    <tr key={u.id} className="hover:bg-[#D4AF37]/5 transition-colors group">
-                      <td className="px-6 py-4 text-white font-bold">{u.email || "ANON_NODE"}</td>
+                    <tr
+                      key={u.id}
+                      onClick={() => setSelectedUser(u)}
+                      className="hover:bg-[#D4AF37]/10 transition-colors group cursor-pointer"
+                      title="Click for full user detail"
+                    >
+                      <td className="px-6 py-4 text-white font-bold">
+                        {u.email || "ANON_NODE"}
+                        <span className="ml-2 text-[9px] text-[#D4AF37]/0 group-hover:text-[#D4AF37]/60 transition-opacity">→</span>
+                      </td>
                       <td className="px-6 py-4 text-gray-500">{fmtDate(u.created_at)}</td>
                       <td className="px-6 py-4 text-gray-500">{fmtDate(u.last_sign_in_at)}</td>
                       <td className="px-6 py-4">
@@ -898,6 +956,13 @@ export default function Admin() {
 
         </div>
       </div>
+
+      {/* Per-user drill-down — opens when a Neural Registry row is clicked.
+          Renders a right-side panel with stats + activity tab + credits tab. */}
+      <UserDrillModal
+        user={selectedUser}
+        onClose={() => setSelectedUser(null)}
+      />
     </div>
   );
 }
