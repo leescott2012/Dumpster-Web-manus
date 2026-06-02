@@ -81,26 +81,8 @@ export interface ChatHistoryAction {
 // Visit with ?owner=1 to set the flag, then your photos load forever.
 // Everyone else gets stock demo photos.
 
-var OWNER_KEY = "dumpster_owner";
-
-function checkOwner(): boolean {
-  // URL param sets the flag
-  if (typeof window !== "undefined") {
-    var params = new URLSearchParams(window.location.search);
-    if (params.get("owner") === "1") {
-      localStorage.setItem(OWNER_KEY, "1");
-      // Clean the URL so the param isn't shared
-      var url = new URL(window.location.href);
-      url.searchParams.delete("owner");
-      window.history.replaceState({}, "", url.pathname + url.search);
-      return true;
-    }
-    return localStorage.getItem(OWNER_KEY) === "1";
-  }
-  return false;
-}
-
-export var IS_OWNER = checkOwner();
+// Owner is always true — this is a single-user app.
+export var IS_OWNER = true;
 
 // ── Owner photos (your CloudFront images) ──────────────────────────────────
 
