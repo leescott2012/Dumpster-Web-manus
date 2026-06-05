@@ -16,6 +16,7 @@ var stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
 // Stripe Price IDs — set these in Vercel env vars after creating products in Stripe
 var PRICE_MAP: Record<string, string> = {
+  credits_30: process.env.STRIPE_PRICE_CREDITS_30 || "",
   credits_100: process.env.STRIPE_PRICE_CREDITS_100 || "",
   credits_500: process.env.STRIPE_PRICE_CREDITS_500 || "",
   credits_1500: process.env.STRIPE_PRICE_CREDITS_1500 || "",

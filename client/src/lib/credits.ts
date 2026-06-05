@@ -9,19 +9,21 @@
 // sync — same key, same cost — or the local affordability check will lie.
 // Entries marked "(planned)" don't have a server endpoint yet but are kept
 // here so future UI work has the cost ready.
+// 1 credit = ~1¢ of real AI cost. Costs mirror server/dailyBudget.ts COST_CENTS
+// so we never charge a user fewer credits than the call costs us.
 export var CREDIT_COSTS: Record<string, number> = {
   // Captions
-  ai_caption: 1,             // Claude Haiku vision — generates 3 captions
+  ai_caption: 3,             // Claude Haiku vision — generates 3 captions (~3¢)
 
   // Dump building
-  ai_suggest: 15,            // Claude Haiku vision — clusters pool into a dump
+  ai_suggest: 25,            // Claude Haiku vision — clusters pool into a dump (~25¢)
 
   // Chat
-  ai_chat: 2,                // Valet — chat to reorder / swap / set vibe
+  ai_chat: 1,                // Valet — chat to reorder / swap / set vibe (~1¢)
 
-  // Planned — costs reserved for future endpoints
-  ai_caption_pro: 3,         // (planned) Sonnet caption upgrade
-  ai_recycle: 5,             // (planned) AI pick replacement photo
+  // Planned — costs reserved for future endpoints (also ~1¢/credit)
+  ai_caption_pro: 6,         // (planned) Sonnet caption upgrade
+  ai_recycle: 3,             // (planned) AI pick replacement photo (~3¢)
   ai_vibe: 5,                // (planned) Vibe analysis
   ai_rescan_batch: 20,       // (planned) Batch rescan 10 photos
 };
@@ -38,6 +40,7 @@ export var CREDIT_LABELS: Record<string, string> = {
 
 /** Credit packs available for purchase */
 export var CREDIT_PACKS = [
+  { id: "credits_30",   credits: 30,   price: 100,  label: "30 Credits",   tag: "Try it",      priceLabel: "$1.00" },
   { id: "credits_100",  credits: 100,  price: 199,  label: "100 Credits",  tag: "Quick fix",   priceLabel: "$1.99" },
   { id: "credits_500",  credits: 500,  price: 499,  label: "500 Credits",  tag: "Power user",  priceLabel: "$4.99" },
   { id: "credits_1500", credits: 1500, price: 999,  label: "1,500 Credits", tag: "Best value", priceLabel: "$9.99" },
