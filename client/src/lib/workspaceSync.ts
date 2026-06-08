@@ -19,10 +19,14 @@
  * device-local state. Nothing here can break the live app.
  */
 import { supabase } from "./supabase";
-import { IS_OWNER, type Dump, type Photo } from "./photoData";
+import { type Dump, type Photo } from "./photoData";
 
+// Sync runs for ANY signed-in user. RLS scopes every query to the user's own
+// rows, so a user only ever loads their own workspace. Users without a cloud
+// workspace get an empty result and keep their device-local state. No special
+// "?owner=1" link is required — logging in is enough.
 function syncEnabled(userId: string | null): userId is string {
-  return IS_OWNER && !!userId;
+  return !!userId;
 }
 
 interface PhotoRow { id: string; url: string; category: string | null; order: number | null; }

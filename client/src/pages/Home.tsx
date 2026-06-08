@@ -40,7 +40,6 @@ import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
 import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave } from "@/lib/workspaceSync";
-import { IS_OWNER } from "@/lib/photoData";
 import { track } from "@/lib/analytics";
 
 function HomeContent() {
@@ -135,13 +134,14 @@ function HomeContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // ── Owner-only cloud photo sync (beta) ─────────────────────────────────────
-  // Pull the owner's workspace from the cloud on sign-in so every device shows
-  // the same photos. No-op for non-owner users and when the backend isn't
-  // provisioned (loadWorkspace returns null on any error). Runs once per user.
+  // ── Cloud photo sync (beta) ────────────────────────────────────────────────
+  // On sign-in, pull THIS user's workspace from the DB (RLS scopes to their own
+  // rows) so the same photos/dumps show on every device — no special URL needed,
+  // just log in. Users with no cloud workspace get null and keep device-local
+  // state. Runs once per user; fully fail-safe.
   var workspaceLoadedRef = useRef<string | null>(null);
   useEffect(function () {
-    if (!IS_OWNER || !user) return;
+    if (!user) return;
     if (workspaceLoadedRef.current === user.id) return;
     workspaceLoadedRef.current = user.id;
     loadWorkspace(user.id).then(function (ws) {
@@ -151,7 +151,7 @@ function HomeContent() {
 
   // Push workspace changes to the cloud (debounced) + flush on tab close.
   useEffect(function () {
-    if (!IS_OWNER || !user) return;
+    if (!user) return;
     // Skip the very first run so we don't immediately re-save what we just
     // loaded; only edits after mount schedule a save.
     if (workspaceLoadedRef.current !== user.id) return;
