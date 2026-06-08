@@ -272,6 +272,8 @@ export default function PhotoCard({
       {/* "..." dots button — appears when selected (not in pool selection mode) */}
       {isSelected && !selectionMode && (
         <div
+          onTouchStart={function(e) { e.stopPropagation(); }}
+          onMouseDown={function(e) { e.stopPropagation(); }}
           onTouchEnd={handleDotsTouch}
           onClick={handleDotsClick}
           style={{
