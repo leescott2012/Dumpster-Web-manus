@@ -78,11 +78,14 @@ export interface ChatHistoryAction {
 }
 
 // ── Owner detection ────────────────────────────────────────────────────────
-// Visit with ?owner=1 to set the flag, then your photos load forever.
-// Everyone else gets stock demo photos.
-
-// Owner is always true — this is a single-user app.
-export var IS_OWNER = true;
+// Everyone sees generic demo photos by default (IS_OWNER = false). The owner's
+// real workspace loads from the database on sign-in (see workspaceSync),
+// identified by account id — so visitors never see the owner's personal photos.
+export var OWNER_USER_ID = "77517979-e0c7-4427-8afd-cc006e906df5";
+export function isOwnerId(id: string | null | undefined): boolean {
+  return !!id && id === OWNER_USER_ID;
+}
+export var IS_OWNER = false;
 
 // ── Owner photos (your CloudFront images) ──────────────────────────────────
 

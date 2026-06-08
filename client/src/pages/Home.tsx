@@ -82,9 +82,12 @@ function HomeContent() {
       window.scrollTo(0, parseInt(scrollY || "0") * -1);
     }
   }, [menuOpen]);
-  // Detect if user has uploaded any of their own photos (not stock)
-  var hasUserPhotos = pool.some(function(p) { return p.id.startsWith("upload-"); })
-    || dumps.some(function(d) { return d.photos.some(function(p) { return p.id.startsWith("upload-"); }); });
+  // Detect if the user has any real (non-stock) photos — uploads OR cloud-synced
+  // owner photos (which have UUID ids, not the "upload-" prefix). Used to hide
+  // the "Demo photos" banner once real content is present.
+  var isRealPhoto = function(p: Photo) { return !p.id.startsWith("stock-"); };
+  var hasUserPhotos = pool.some(isRealPhoto)
+    || dumps.some(function(d) { return d.photos.some(isRealPhoto); });
 
   // Scroll to pool and focus the upload area
   var scrollToPoolUpload = useCallback(function() {

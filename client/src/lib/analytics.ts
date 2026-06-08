@@ -12,7 +12,7 @@
  * Admin reads via /api/admin-stats (service_role — bypasses RLS).
  */
 import { supabase } from "./supabase";
-import { IS_OWNER } from "./photoData";
+import { isOwnerId } from "./photoData";
 import { getCurrentUserId } from "./currentUser";
 
 export type AnalyticsEvent =
@@ -29,10 +29,9 @@ export function track(
   event: AnalyticsEvent,
   metadata?: Record<string, unknown>
 ): void {
-  if (IS_OWNER) return;
-
   var userId = getCurrentUserId();
   if (!userId) return;
+  if (isOwnerId(userId)) return; // keep the owner's own usage out of analytics
 
   supabase
     .from("activity_log")
