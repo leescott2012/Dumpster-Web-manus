@@ -115,20 +115,68 @@ export async function loadWorkspace(
   }
 }
 
-// ── Phase 2: write-back (NOT YET IMPLEMENTED) ───────────────────────────────
-// Pushing local edits (reorders, uploads, new dumps) back into the normalized
-// photos/dumps/dump_photos tables — plus uploading new photo bytes to the
-// `workspace-uploads` bucket — is deliberately deferred. Until then, edits stay
-// device-local; the seeded workspace still loads cross-device via loadWorkspace.
-// These remain as no-ops so the Home.tsx wiring is stable.
+// ── Phase 2: write-back ─────────────────────────────────────────────────────
+// Local edits (reorder, move, rename, create/delete dump, new uploads) are
+// pushed to /api/workspace, which reconciles them into the normalized tables
+// and uploads any new photo bytes to Storage (service role, server-side).
+// Saves are debounced; the server has a wipe-guard against empty payloads.
+
+import { getAuthHeaders } from "./supabase";
+
+function serialize(dumps: Dump[], pool: Photo[]) {
+  return {
+    dumps: dumps.map(function (d) {
+      return {
+        id: d.id, title: d.title, subtitle: d.subtitle,
+        photos: d.photos.map(function (p) { return { id: p.id, url: p.url, category: p.category }; }),
+      };
+    }),
+    pool: pool.map(function (p) { return { id: p.id, url: p.url, category: p.category }; }),
+  };
+}
+
+export async function saveWorkspaceNow(
+  userId: string | null,
+  dumps: Dump[],
+  pool: Photo[]
+): Promise<void> {
+  if (!syncEnabled(userId)) return;
+  // Client-side wipe guard mirrors the server's — never push an empty workspace.
+  if (dumps.length === 0 && pool.length === 0) return;
+  try {
+    var headers = await getAuthHeaders();
+    if (!headers.Authorization) return; // not signed in → nothing to sync
+    await fetch("/api/workspace", {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json" }, headers),
+      body: JSON.stringify(serialize(dumps, pool)),
+      keepalive: true,
+    });
+  } catch (e) {
+    console.warn("[workspaceSync] save failed:", e);
+  }
+}
+
+var _timer: ReturnType<typeof setTimeout> | null = null;
+var _pending: { userId: string; dumps: Dump[]; pool: Photo[] } | null = null;
+
 export function scheduleWorkspaceSave(
-  _userId: string | null,
-  _dumps: Dump[],
-  _pool: Photo[]
+  userId: string | null,
+  dumps: Dump[],
+  pool: Photo[]
 ): void {
-  /* Phase 2 — intentionally a no-op for now. */
+  if (!syncEnabled(userId)) return;
+  _pending = { userId: userId, dumps: dumps, pool: pool };
+  if (_timer) clearTimeout(_timer);
+  _timer = setTimeout(function () {
+    _timer = null;
+    var p = _pending; _pending = null;
+    if (p) saveWorkspaceNow(p.userId, p.dumps, p.pool);
+  }, 4000);
 }
 
 export function flushWorkspaceSave(): void {
-  /* Phase 2 — intentionally a no-op for now. */
+  if (_timer) { clearTimeout(_timer); _timer = null; }
+  var p = _pending; _pending = null;
+  if (p) saveWorkspaceNow(p.userId, p.dumps, p.pool);
 }
