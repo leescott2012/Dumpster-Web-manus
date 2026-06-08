@@ -63,12 +63,12 @@ export function useAuth(): AuthState {
 // risk via supabase). Keep these in sync with credits.ts AND with
 // server/creditGate.ts COSTS.
 var COSTS: Record<string, number> = {
-  ai_caption: 1,
-  ai_suggest: 15,
-  ai_chat: 2,
+  ai_caption: 3,
+  ai_suggest: 25,
+  ai_chat: 1,
   // planned, no server endpoint yet:
-  ai_caption_pro: 3,
-  ai_recycle: 5,
+  ai_caption_pro: 6,
+  ai_recycle: 3,
   ai_vibe: 5,
   ai_rescan_batch: 20,
 };

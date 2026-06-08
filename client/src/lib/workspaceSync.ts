@@ -1,0 +1,134 @@
+/**
+ * Workspace cloud sync — OWNER ACCOUNT ONLY (beta).
+ *
+ * Reads the owner's dumps + photos from the EXISTING normalized Supabase
+ * schema so the same content shows on every device:
+ *
+ *   photos(id, user_id, url, category, "order")
+ *   dumps(id, user_id, title, subtitle, description)
+ *   dump_photos(id, dump_id, photo_id, "order")   -- junction, ordered
+ *
+ * Pool = the user's photos that aren't attached to any dump.
+ *
+ * SCOPE: read-only for now (Phase 1). This makes already-synced content appear
+ * cross-device without any risk to the seeded data. Writing local edits back to
+ * the normalized tables is Phase 2 (see scheduleWorkspaceSave stub below).
+ *
+ * SAFETY: every call is wrapped. If RLS blocks the read, the tables are empty,
+ * or anything errors, loadWorkspace returns null and the app keeps its existing
+ * device-local state. Nothing here can break the live app.
+ */
+import { supabase } from "./supabase";
+import { type Dump, type Photo } from "./photoData";
+
+// Sync runs for ANY signed-in user. RLS scopes every query to the user's own
+// rows, so a user only ever loads their own workspace. Users without a cloud
+// workspace get an empty result and keep their device-local state. No special
+// "?owner=1" link is required — logging in is enough.
+function syncEnabled(userId: string | null): userId is string {
+  return !!userId;
+}
+
+interface PhotoRow { id: string; url: string; category: string | null; order: number | null; }
+interface DumpRow { id: string; title: string | null; subtitle: string | null; description: string | null; }
+interface DumpPhotoRow { dump_id: string; photo_id: string; order: number | null; }
+
+function toPhoto(r: PhotoRow): Photo {
+  return { id: r.id, url: r.url, alt: "", isFavorite: false, category: r.category || "" };
+}
+
+/**
+ * Load the owner's workspace from the existing tables. Returns null when sync
+ * is disabled, nothing is found, or on any error — caller keeps device-local.
+ */
+export async function loadWorkspace(
+  userId: string | null
+): Promise<{ dumps: Dump[]; pool: Photo[] } | null> {
+  if (!syncEnabled(userId)) return null;
+  try {
+    var photosRes = await supabase
+      .from("photos")
+      .select("id, url, category, order")
+      .eq("user_id", userId);
+    if (photosRes.error) return null;
+    var photoRows = (photosRes.data || []) as PhotoRow[];
+    if (photoRows.length === 0) return null; // nothing seeded → don't wipe local
+
+    var dumpsRes = await supabase
+      .from("dumps")
+      .select("id, title, subtitle, description")
+      .eq("user_id", userId);
+    if (dumpsRes.error) return null;
+    var dumpRows = (dumpsRes.data || []) as DumpRow[];
+
+    // Junction rows for this user's dumps (filter client-side by known dump ids).
+    var dumpIds = dumpRows.map(function (d) { return d.id; });
+    var links: DumpPhotoRow[] = [];
+    if (dumpIds.length > 0) {
+      var linkRes = await supabase
+        .from("dump_photos")
+        .select("dump_id, photo_id, order")
+        .in("dump_id", dumpIds);
+      if (linkRes.error) return null;
+      links = (linkRes.data || []) as DumpPhotoRow[];
+    }
+
+    var photoById: Record<string, PhotoRow> = {};
+    for (var i = 0; i < photoRows.length; i++) photoById[photoRows[i].id] = photoRows[i];
+
+    var usedPhotoIds = new Set<string>();
+    var linksByDump: Record<string, DumpPhotoRow[]> = {};
+    for (var j = 0; j < links.length; j++) {
+      var ln = links[j];
+      if (!linksByDump[ln.dump_id]) linksByDump[ln.dump_id] = [];
+      linksByDump[ln.dump_id].push(ln);
+      usedPhotoIds.add(ln.photo_id);
+    }
+
+    var dumps: Dump[] = dumpRows.map(function (d, idx): Dump {
+      var dl = (linksByDump[d.id] || []).slice().sort(function (a, b) {
+        return (a.order || 0) - (b.order || 0);
+      });
+      var photos: Photo[] = [];
+      for (var k = 0; k < dl.length; k++) {
+        var pr = photoById[dl[k].photo_id];
+        if (pr) photos.push(toPhoto(pr));
+      }
+      return {
+        id: d.id,
+        number: idx + 1,
+        title: d.title || "Untitled",
+        subtitle: d.subtitle || d.description || "",
+        photos: photos,
+      };
+    });
+
+    // Pool = photos not attached to any dump, ordered by their "order".
+    var pool: Photo[] = photoRows
+      .filter(function (p) { return !usedPhotoIds.has(p.id); })
+      .sort(function (a, b) { return (a.order || 0) - (b.order || 0); })
+      .map(toPhoto);
+
+    return { dumps: dumps, pool: pool };
+  } catch {
+    return null;
+  }
+}
+
+// ── Phase 2: write-back (NOT YET IMPLEMENTED) ───────────────────────────────
+// Pushing local edits (reorders, uploads, new dumps) back into the normalized
+// photos/dumps/dump_photos tables — plus uploading new photo bytes to the
+// `workspace-uploads` bucket — is deliberately deferred. Until then, edits stay
+// device-local; the seeded workspace still loads cross-device via loadWorkspace.
+// These remain as no-ops so the Home.tsx wiring is stable.
+export function scheduleWorkspaceSave(
+  _userId: string | null,
+  _dumps: Dump[],
+  _pool: Photo[]
+): void {
+  /* Phase 2 — intentionally a no-op for now. */
+}
+
+export function flushWorkspaceSave(): void {
+  /* Phase 2 — intentionally a no-op for now. */
+}

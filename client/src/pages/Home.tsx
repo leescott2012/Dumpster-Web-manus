@@ -39,6 +39,7 @@ import { loadCaptions } from "@/lib/captionPool";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
+import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave } from "@/lib/workspaceSync";
 import { track } from "@/lib/analytics";
 
 function HomeContent() {
@@ -132,6 +133,33 @@ function HomeContent() {
     return function() { window.removeEventListener("beforeunload", handleUnload); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // ── Cloud photo sync (beta) ────────────────────────────────────────────────
+  // On sign-in, pull THIS user's workspace from the DB (RLS scopes to their own
+  // rows) so the same photos/dumps show on every device — no special URL needed,
+  // just log in. Users with no cloud workspace get null and keep device-local
+  // state. Runs once per user; fully fail-safe.
+  var workspaceLoadedRef = useRef<string | null>(null);
+  useEffect(function () {
+    if (!user) return;
+    if (workspaceLoadedRef.current === user.id) return;
+    workspaceLoadedRef.current = user.id;
+    loadWorkspace(user.id).then(function (ws) {
+      if (ws) replaceState(ws.dumps, ws.pool);
+    }).catch(function () { /* stay device-local */ });
+  }, [user, replaceState]);
+
+  // Push workspace changes to the cloud (debounced) + flush on tab close.
+  useEffect(function () {
+    if (!user) return;
+    // Skip the very first run so we don't immediately re-save what we just
+    // loaded; only edits after mount schedule a save.
+    if (workspaceLoadedRef.current !== user.id) return;
+    scheduleWorkspaceSave(user.id, dumps, pool);
+    var onUnload = function () { flushWorkspaceSave(); };
+    window.addEventListener("beforeunload", onUnload);
+    return function () { window.removeEventListener("beforeunload", onUnload); };
+  }, [user, dumps, pool]);
 
   // ── Clear demo/stock content on sign-in.
   // All users share the same localStorage keys (IS_OWNER is build-time, not
