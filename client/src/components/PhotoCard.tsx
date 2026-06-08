@@ -21,6 +21,10 @@ interface PhotoCardProps {
   isDragOver?: boolean;
   width?: number;
   height?: number;
+  /** When true, the card fills its grid cell (width 100%) and keeps the
+   *  width:height aspect ratio. Used by the responsive Photo Pool grid so
+   *  cards sit flush instead of left-aligned at a fixed pixel width. */
+  fill?: boolean;
   selectionMode?: boolean;
   selectionIndex?: number;
   deleteMode?: boolean;
@@ -30,7 +34,7 @@ interface PhotoCardProps {
 export default function PhotoCard({
   photo, index, source,
   isSelected = false, onSelect, onDotsClick, onDoubleTap,
-  isDragOver = false, width = 200, height = 260,
+  isDragOver = false, width = 200, height = 260, fill = false,
   selectionMode = false, selectionIndex,
   deleteMode = false, isDeleteSelected = false,
 }: PhotoCardProps) {
@@ -201,7 +205,7 @@ export default function PhotoCard({
       data-index={index}
       className="relative flex-shrink-0 overflow-hidden select-none"
       style={{
-        width: widthPx, borderRadius: "10px", border: borderVal,
+        width: fill ? "100%" : widthPx, borderRadius: "10px", border: borderVal,
         transition: "border-color 0.2s, transform 0.15s, opacity 0.15s, box-shadow 0.15s",
         transform: cardTransform, scrollSnapAlign: "start",
         boxShadow: cardShadow,
@@ -219,7 +223,9 @@ export default function PhotoCard({
     >
       <img
         src={photo.url} alt={photo.alt} draggable={false} loading="lazy"
-        style={{ width: widthPx, height: heightPx, objectFit: "cover", display: "block", pointerEvents: "none" }}
+        style={fill
+          ? { width: "100%", aspectRatio: width + " / " + height, height: "auto", objectFit: "cover", display: "block", pointerEvents: "none" }
+          : { width: widthPx, height: heightPx, objectFit: "cover", display: "block", pointerEvents: "none" }}
       />
 
       {/* Video play icon overlay */}

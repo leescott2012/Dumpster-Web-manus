@@ -190,73 +190,79 @@ export default function PhotoPool({
         </div>
       )}
 
-      {/* Sort/Filter bar — only when NOT in selection or delete mode */}
+      {/* Sort/Filter bar — only when NOT in selection or delete mode.
+          Two flush rows: filter chips on top, size toggle + delete below
+          (space-between) so everything aligns to the container edges on mobile. */}
       {!selectionMode && !deleteMode && (
-        <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" as const, alignItems: "center" }}>
-          <button onClick={function() { setFilter("all"); }} style={filterBtnStyle(filter === "all")}>All</button>
-          <button onClick={function() { setFilter("starred"); }} style={filterBtnStyle(filter === "starred")}>
-            <span style={{ marginRight: "4px" }}>{"★"}</span>Starred
-            {starredCount > 0 && (
-              <span style={{ marginLeft: "5px", background: "rgba(var(--accent-rgb),0.2)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
-                {starredCount}
-              </span>
-            )}
-          </button>
-          <button onClick={function() { setFilter("used"); }} style={filterBtnStyle(filter === "used")}>
-            <span style={{ marginRight: "4px" }}>{"✓"}</span>Used
-            {usedCount > 0 && (
-              <span style={{ marginLeft: "5px", background: filter === "used" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
-                {usedCount}
-              </span>
-            )}
-          </button>
-          {videoCount > 0 && (
-            <button onClick={function() { setFilter("videos"); }} style={filterBtnStyle(filter === "videos")}>
-              <Play size={10} style={{ marginRight: "4px" }} />Videos
-              <span style={{ marginLeft: "5px", background: filter === "videos" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
-                {videoCount}
-              </span>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
+          {/* Row 1 — filter chips, flush left */}
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "center" }}>
+            <button onClick={function() { setFilter("all"); }} style={filterBtnStyle(filter === "all")}>All</button>
+            <button onClick={function() { setFilter("starred"); }} style={filterBtnStyle(filter === "starred")}>
+              <span style={{ marginRight: "4px" }}>{"★"}</span>Starred
+              {starredCount > 0 && (
+                <span style={{ marginLeft: "5px", background: "rgba(var(--accent-rgb),0.2)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
+                  {starredCount}
+                </span>
+              )}
             </button>
-          )}
-          {/* S/M/L grid-size toggle — segmented control, pushed to the right */}
+            <button onClick={function() { setFilter("used"); }} style={filterBtnStyle(filter === "used")}>
+              <span style={{ marginRight: "4px" }}>{"✓"}</span>Used
+              {usedCount > 0 && (
+                <span style={{ marginLeft: "5px", background: filter === "used" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
+                  {usedCount}
+                </span>
+              )}
+            </button>
+            {videoCount > 0 && (
+              <button onClick={function() { setFilter("videos"); }} style={filterBtnStyle(filter === "videos")}>
+                <Play size={10} style={{ marginRight: "4px" }} />Videos
+                <span style={{ marginLeft: "5px", background: filter === "videos" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
+                  {videoCount}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {/* Row 2 — size toggle (left) + delete (right), both flush to edges */}
           {photos.length > 0 && (
-            <div style={{
-              marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "2px",
-              background: "rgba(255,255,255,0.04)", border: "1px solid #2a2a2a",
-              borderRadius: "100px", padding: "2px",
-            }}>
-              {(["S", "M", "L"] as PoolSize[]).map(function(s) {
-                var active = poolSize === s;
-                return (
-                  <button key={s} onClick={function() { changeSize(s); }}
-                    aria-label={"Photo size " + s} title={"Photo size " + s}
-                    style={{
-                      width: "26px", height: "22px", borderRadius: "100px", border: "none",
-                      background: active ? "var(--accent)" : "transparent",
-                      color: active ? "#000" : "#888", fontSize: "10px", fontWeight: 700,
-                      cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
-                    }}
-                  >
-                    {s}
-                  </button>
-                );
-              })}
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: "2px",
+                background: "rgba(255,255,255,0.04)", border: "1px solid #2a2a2a",
+                borderRadius: "100px", padding: "2px",
+              }}>
+                {(["S", "M", "L"] as PoolSize[]).map(function(s) {
+                  var active = poolSize === s;
+                  return (
+                    <button key={s} onClick={function() { changeSize(s); }}
+                      aria-label={"Photo size " + s} title={"Photo size " + s}
+                      style={{
+                        width: "30px", height: "24px", borderRadius: "100px", border: "none",
+                        background: active ? "var(--accent)" : "transparent",
+                        color: active ? "#000" : "#888", fontSize: "10px", fontWeight: 700,
+                        cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                      }}
+                    >
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                onClick={onEnterDeleteMode}
+                style={{
+                  background: "transparent", border: "1px solid #2a2a2a",
+                  borderRadius: "100px", padding: "6px 14px", fontSize: "11px", color: "#666",
+                  cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
+                  display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
+                }}
+                onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+                onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
+              >
+                <Trash2 size={11} />Select to Delete
+              </button>
             </div>
-          )}
-          {photos.length > 0 && (
-            <button
-              onClick={onEnterDeleteMode}
-              style={{
-                background: "transparent", border: "1px solid #2a2a2a",
-                borderRadius: "100px", padding: "5px 12px", fontSize: "11px", color: "#666",
-                cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
-                display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
-              }}
-              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
-              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
-            >
-              <Trash2 size={11} />Select to Delete
-            </button>
           )}
         </div>
       )}
@@ -271,7 +277,7 @@ export default function PhotoPool({
                   source={{ type: "pool" }}
                   isSelected={false}
                   onSelect={function() {}}
-                  width={size.w} height={size.h}
+                  width={size.w} height={size.h} fill
                 />
                 <div style={{
                   position: "absolute", top: "6px", left: "6px",
@@ -311,7 +317,7 @@ export default function PhotoPool({
                 onSelect={selectionMode ? onTogglePoolSelection : deleteMode ? onToggleDeleteSelection : onSelectPhoto}
                 onDotsClick={anyMode ? undefined : onDotsClick}
                 onDoubleTap={anyMode ? undefined : onDoubleTapPhoto}
-                width={size.w} height={size.h}
+                width={size.w} height={size.h} fill
                 selectionMode={anyMode}
                 selectionIndex={selectionMode && selIdx >= 0 ? selIdx : undefined}
                 deleteMode={deleteMode}
@@ -324,7 +330,7 @@ export default function PhotoPool({
           {!selectionMode && !deleteMode && (
             <div data-tour="upload-card" onClick={handleUploadClick}
               style={{
-                width: "140px", height: "184px", flexShrink: 0,
+                width: "100%", aspectRatio: size.w + " / " + size.h,
                 borderRadius: "10px", border: "2px dashed #2a2a2a",
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
                 color: "#666", fontSize: "13px", textAlign: "center", cursor: "pointer",
