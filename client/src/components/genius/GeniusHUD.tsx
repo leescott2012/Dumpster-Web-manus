@@ -1,22 +1,46 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface HUDProps {
   state: 'idle' | 'listening' | 'thinking' | 'speaking';
   isOnline: boolean;
   onTalk?: () => void;
+  /** Live 0..1 mic amplitude that deforms the morphing core (optional). */
+  levelRef?: React.MutableRefObject<number>;
 }
 
-const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk }) => {
-  const [rotation, setRotation] = useState(0);
+// Smooth closed blob path (Catmull-Rom -> cubic bezier) through control points.
+function closedSpline(pts: [number, number][]): string {
+  const n = pts.length;
+  if (n < 3) return '';
+  let d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} `;
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n];
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % n];
+    const p3 = pts[(i + 2) % n];
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += `C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2[0].toFixed(2)} ${p2[1].toFixed(2)} `;
+  }
+  return d + 'Z';
+}
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setRotation(prev => (prev + 0.5) % 360);
-    }, 50);
-    return () => clearInterval(interval);
-  }, []);
+// Synthetic "breathing" so the core stays alive even without live mic input.
+function stateBaseline(state: string, t: number): number {
+  switch (state) {
+    case 'listening': return 0.08 + 0.05 * Math.sin(t * 3);
+    case 'thinking': return 0.28 + 0.16 * Math.abs(Math.sin(t * 4));
+    case 'speaking': return 0.38 + 0.32 * Math.abs(Math.sin(t * 7.5));
+    default: return 0.05 + 0.04 * Math.sin(t * 1.4);
+  }
+}
 
+const BLOB_SEEDS = [0, 1.7, 3.4, 5.1, 6.8, 8.5, 10.2, 11.9, 13.6];
+
+const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef }) => {
   const getStatusColor = () => {
     switch (state) {
       case 'listening': return '#D4AF37'; // Gold
@@ -27,6 +51,44 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk }) => {
   };
 
   const statusColor = getStatusColor();
+
+  // Refs read directly by the animation loop (no React re-renders per frame).
+  const blobRef = useRef<SVGPathElement | null>(null);
+  const auraRef = useRef<SVGPathElement | null>(null);
+  const centerRef = useRef<SVGCircleElement | null>(null);
+  const coreWrapRef = useRef<HTMLDivElement | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const colorRef = useRef(statusColor);
+  colorRef.current = statusColor;
+
+  useEffect(() => {
+    let raf = 0;
+    let t = 0;
+    const N = BLOB_SEEDS.length;
+    const build = (R: number, level: number, time: number, amp: number, phase: number): string => {
+      const pts: [number, number][] = [];
+      for (let i = 0; i < N; i++) {
+        const ang = (i / N) * Math.PI * 2;
+        const wobble = 0.17 * Math.sin(time * 1.3 + BLOB_SEEDS[i] + phase) + 0.1 * Math.cos(time * 0.9 + BLOB_SEEDS[i] * 1.7);
+        const r = R * (1 + wobble + level * amp * (0.55 + 0.45 * Math.sin(BLOB_SEEDS[i] + time * 2)));
+        pts.push([Math.cos(ang) * r, Math.sin(ang) * r]);
+      }
+      return closedSpline(pts);
+    };
+    const loop = () => {
+      t += 0.016;
+      const live = levelRef?.current ?? 0;
+      const level = Math.max(live, stateBaseline(stateRef.current, t));
+      if (blobRef.current) blobRef.current.setAttribute('d', build(50, level, t, 0.6, 0));
+      if (auraRef.current) auraRef.current.setAttribute('d', build(64, level, t * 0.85, 0.7, 1.6));
+      if (centerRef.current) centerRef.current.setAttribute('r', (4 + level * 11).toFixed(2));
+      if (coreWrapRef.current) coreWrapRef.current.style.filter = `drop-shadow(0 0 ${(12 + level * 46).toFixed(0)}px ${colorRef.current})`;
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [levelRef]);
 
   return (
     <div className="relative w-full h-[600px] overflow-hidden bg-black flex items-center justify-center font-mono text-[#D4AF37]">
@@ -99,78 +161,59 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk }) => {
             ))}
           </motion.div>
 
-          {/* Central Arc Reactor Core */}
-          <div className="relative z-10 flex items-center justify-center">
-            {/* Pulsing Core Glow — layered, intensifies when active */}
+          {/* Central morphing reactor core — deforms to live mic volume */}
+          <div
+            ref={coreWrapRef}
+            className="relative z-10 flex items-center justify-center"
+            style={{ cursor: onTalk && state === 'idle' ? 'pointer' : 'default' }}
+            onClick={() => state === 'idle' && onTalk && onTalk()}
+            title={state === 'idle' ? 'Click to speak to GENIUSS' : undefined}
+          >
+            {/* Ambient bloom behind the blob */}
             <motion.div
-              className="absolute w-56 h-56 rounded-full blur-3xl"
+              className="absolute w-60 h-60 rounded-full blur-3xl"
               style={{ backgroundColor: `${statusColor}33` }}
-              animate={{
-                scale: state === 'idle' ? [1, 1.15, 1] : [1, 1.4, 1.05, 1.5, 1],
-                opacity: state === 'idle' ? [0.25, 0.5, 0.25] : [0.5, 0.9, 0.6, 1, 0.5],
-              }}
-              transition={{ duration: state === 'idle' ? 3 : 1.2, repeat: Infinity }}
-            />
-            <motion.div
-              className="absolute w-40 h-40 rounded-full blur-2xl"
-              style={{ backgroundColor: `${statusColor}55` }}
-              animate={{ scale: [1, 1.25, 1], opacity: [0.4, 0.85, 0.4] }}
-              transition={{ duration: state === 'idle' ? 2 : 0.9, repeat: Infinity }}
+              animate={{ opacity: state === 'idle' ? [0.25, 0.45, 0.25] : [0.5, 0.95, 0.5] }}
+              transition={{ duration: state === 'idle' ? 3 : 1.1, repeat: Infinity }}
             />
 
-            {/* Main Orb — Click to Talk */}
-            <motion.div
-              className="relative w-32 h-32 rounded-full flex items-center justify-center overflow-hidden"
-              style={{
-                background: `radial-gradient(circle, ${statusColor}33 0%, transparent 70%)`,
-                border: `2px solid ${statusColor}66`,
-                boxShadow: `0 0 20px ${statusColor}44`,
-                cursor: onTalk && (state === 'idle') ? 'pointer' : 'default',
-              }}
-              animate={{
-                borderColor: state === 'listening' ? ['#D4AF3766', '#FFFFFF66', '#D4AF3766'] : '#D4AF3766',
-                scale: state === 'idle' && onTalk ? [1, 1.03, 1] : 1,
-              }}
-              transition={{ duration: state === 'idle' ? 3 : 1, repeat: Infinity }}
-              onClick={() => state === 'idle' && onTalk && onTalk()}
-              title={state === 'idle' ? 'Click to speak to Genius' : undefined}
-            >
-              {/* Inner Rotating Tech Elements */}
-              <motion.div 
-                className="absolute inset-2 border border-[#D4AF37]/40 rounded-full"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-              >
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-[#D4AF37] rounded-full" />
-              </motion.div>
+            <svg viewBox="-120 -120 240 240" className="w-[300px] h-[300px] overflow-visible">
+              <defs>
+                <radialGradient id="reactorFill" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.95" />
+                  <stop offset="38%" stopColor={statusColor} stopOpacity="0.9" />
+                  <stop offset="100%" stopColor={statusColor} stopOpacity="0.04" />
+                </radialGradient>
+                <filter id="reactorGlow" x="-80%" y="-80%" width="260%" height="260%">
+                  <feGaussianBlur stdDeviation="5" result="b" />
+                  <feMerge>
+                    <feMergeNode in="b" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              {/* outer aura blob */}
+              <path ref={auraRef} fill={statusColor} opacity={0.16} filter="url(#reactorGlow)" />
+              {/* main morphing blob */}
+              <path ref={blobRef} fill="url(#reactorFill)" stroke={statusColor} strokeWidth={1.3} filter="url(#reactorGlow)" />
+              {/* bright reactive center */}
+              <circle ref={centerRef} cx={0} cy={0} r={5} fill="#FFFFFF" />
+            </svg>
 
-              {/* State Text */}
+            {/* State label overlay */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={state}
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 1.2 }}
-                  className="text-[10px] font-bold tracking-[0.3em] uppercase z-20"
+                  className="text-[10px] font-bold tracking-[0.3em] uppercase mix-blend-difference"
                 >
                   {state}
                 </motion.div>
               </AnimatePresence>
-
-              {/* Waveform Visualization (Speaking) */}
-              {state === 'speaking' && (
-                <div className="absolute bottom-4 flex gap-1 items-end h-8">
-                  {[...Array(5)].map((_, i) => (
-                    <motion.div
-                      key={i}
-                      className="w-1 bg-[#D4AF37]"
-                      animate={{ height: [4, 16, 4] }}
-                      transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
-                    />
-                  ))}
-                </div>
-              )}
-            </motion.div>
+            </div>
           </div>
         </div>
 

@@ -19,6 +19,7 @@ import {
 
 // Genius Components
 import GeniusHUD from "@/components/genius/GeniusHUD";
+import { useReactorAudio } from "@/components/genius/useReactorAudio";
 import ConsoleTerminal from "@/components/genius/ConsoleTerminal";
 import SystemWidget from "@/components/genius/SystemWidget";
 import AgentControl from "@/components/genius/AgentControl";
@@ -160,6 +161,7 @@ export default function Admin() {
   
   // HUD States
   const [hudState, setHudState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
+  const reactor = useReactorAudio();
 
   // ── GENIUSS reactor color + voice (persisted in localStorage) ──────────────
   const [hudHueDeg, setHudHueDeg] = useState<number>(() => {
@@ -457,6 +459,7 @@ export default function Admin() {
     setHudState('listening');
     addLog("[Genius] Listening. Speak now.");
     sfx.playBeep?.(880, 0.08);
+    void reactor.start();
 
     const rec = new SR();
     rec.continuous = false;
@@ -467,6 +470,7 @@ export default function Admin() {
     const finish = (transcript: string | null) => {
       if (finished) return; finished = true;
       try { rec.stop(); } catch { /* noop */ }
+      reactor.stop();
 
       if (!transcript) { setHudState('idle'); return; }
 
@@ -665,7 +669,7 @@ export default function Admin() {
               className={hudState !== 'idle' ? 'geniuss-rainbow' : undefined}
               style={hudState === 'idle' ? { filter: `hue-rotate(${hudHueDeg}deg)` } : undefined}
             >
-              <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} />
+              <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} levelRef={reactor.levelRef} />
             </div>
 
             {/* Reactor color + voice controls */}
