@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ReactorCore } from './ReactorCore';
+import { ReactorGL } from './ReactorGL';
 
 interface HUDProps {
   state: 'idle' | 'listening' | 'thinking' | 'speaking';
@@ -44,6 +45,7 @@ function stateBaseline(state: string, t: number): number {
 const BLOB_SEEDS = [0, 1.7, 3.4, 5.1, 6.8, 8.5, 10.2, 11.9, 13.6];
 
 const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, bandsRef, peakRef }) => {
+  const [glSupported, setGlSupported] = useState(true);
   const getStatusColor = () => {
     switch (state) {
       case 'listening': return '#D4AF37'; // Gold
@@ -180,7 +182,9 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, band
               transition={{ duration: state === 'idle' ? 3 : 1.1, repeat: Infinity }}
             />
 
-            {levelRef && <ReactorCore levelRef={levelRef} bandsRef={bandsRef} peakRef={peakRef} state={state} />}
+            {levelRef && (glSupported
+              ? <ReactorGL levelRef={levelRef} bandsRef={bandsRef} peakRef={peakRef} state={state} onUnsupported={() => setGlSupported(false)} />
+              : <ReactorCore levelRef={levelRef} bandsRef={bandsRef} peakRef={peakRef} state={state} />)}
 
             <svg viewBox="-120 -120 240 240" className="w-[300px] h-[300px] overflow-visible">
               <defs>
