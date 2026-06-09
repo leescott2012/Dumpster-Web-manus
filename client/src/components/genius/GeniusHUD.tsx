@@ -78,14 +78,44 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk }) => {
             ))}
           </div>
 
+          {/* Radar sweep */}
+          <motion.div
+            className="absolute w-[85%] h-[85%] rounded-full"
+            style={{ background: 'conic-gradient(from 0deg, rgba(212,175,55,0) 0deg, rgba(212,175,55,0) 220deg, rgba(212,175,55,0.18) 320deg, rgba(212,175,55,0.55) 352deg, rgba(212,175,55,0) 360deg)' }}
+            animate={{ rotate: 360 }}
+            transition={{ duration: state === 'idle' ? 6 : 2.2, repeat: Infinity, ease: 'linear' }}
+          />
+
+          {/* Orbiting energy sparks */}
+          <motion.div
+            className="absolute w-[78%] h-[78%]"
+            animate={{ rotate: state === 'idle' ? 360 : -360 }}
+            transition={{ duration: state === 'idle' ? 14 : 4, repeat: Infinity, ease: 'linear' }}
+          >
+            {[0, 72, 144, 216, 288].map((deg) => (
+              <div key={deg} className="absolute top-1/2 left-1/2" style={{ transform: `rotate(${deg}deg) translateX(48%)` }}>
+                <div className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]" style={{ boxShadow: '0 0 10px 2px #D4AF37' }} />
+              </div>
+            ))}
+          </motion.div>
+
           {/* Central Arc Reactor Core */}
           <div className="relative z-10 flex items-center justify-center">
-            {/* Pulsing Core Glow */}
+            {/* Pulsing Core Glow — layered, intensifies when active */}
+            <motion.div
+              className="absolute w-56 h-56 rounded-full blur-3xl"
+              style={{ backgroundColor: `${statusColor}33` }}
+              animate={{
+                scale: state === 'idle' ? [1, 1.15, 1] : [1, 1.4, 1.05, 1.5, 1],
+                opacity: state === 'idle' ? [0.25, 0.5, 0.25] : [0.5, 0.9, 0.6, 1, 0.5],
+              }}
+              transition={{ duration: state === 'idle' ? 3 : 1.2, repeat: Infinity }}
+            />
             <motion.div
               className="absolute w-40 h-40 rounded-full blur-2xl"
-              style={{ backgroundColor: `${statusColor}22` }}
-              animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
-              transition={{ duration: 2, repeat: Infinity }}
+              style={{ backgroundColor: `${statusColor}55` }}
+              animate={{ scale: [1, 1.25, 1], opacity: [0.4, 0.85, 0.4] }}
+              transition={{ duration: state === 'idle' ? 2 : 0.9, repeat: Infinity }}
             />
 
             {/* Main Orb — Click to Talk */}

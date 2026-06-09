@@ -20,6 +20,6 @@
     "api/ai-chat.ts": { "maxDuration": 30, "memory": 512 },
     "api/stripe-checkout.ts": { "maxDuration": 10, "memory": 256 },
     "api/stripe-webhook.ts": { "maxDuration": 15, "memory": 256 },
-    "api/admin.ts": { "maxDuration": 30 }
+    "api/admin.ts": { "maxDuration": 60 }
   }
 }
