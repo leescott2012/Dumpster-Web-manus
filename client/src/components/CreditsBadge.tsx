@@ -4,8 +4,9 @@
  * Pulses orange when low, red when empty.
  * If not logged in, shows "Sign In" button.
  */
-import { Zap, User } from "lucide-react";
+import { Zap, User, LayoutDashboard } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { isOwnerId } from "@/lib/photoData";
 import { DAILY_FREE_CREDITS } from "@/lib/credits";
 
 interface CreditsBadgeProps {
@@ -58,6 +59,26 @@ export default function CreditsBadge({ onCreditsClick, onAuthClick }: CreditsBad
   var ringColor = isEmpty ? "#f87171" : isLow ? "#fb923c" : "var(--accent)";
 
   return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {isOwnerId(user.id) && (
+        <a
+          href="/admin"
+          data-tour="owner-dashboard"
+          title="Open GENIUSS Dashboard"
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "rgba(var(--accent-rgb),0.1)", border: "1px solid rgba(var(--accent-rgb),0.25)",
+            borderRadius: 10, padding: "6px 12px",
+            color: "var(--accent)", fontSize: 11, fontWeight: 800,
+            cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
+            textDecoration: "none", whiteSpace: "nowrap",
+          }}
+          onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; }}
+          onMouseLeave={function(e) { e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.25)"; }}
+        >
+          <LayoutDashboard size={13} /> Dashboard
+        </a>
+      )}
     <button
       onClick={onCreditsClick}
       style={{
@@ -139,5 +160,6 @@ export default function CreditsBadge({ onCreditsClick, onAuthClick }: CreditsBad
         "@keyframes creditsPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }"
       }</style>
     </button>
+    </div>
   );
 }
