@@ -13,7 +13,7 @@
  *   body: { id, status?, admin_note? }
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getUserFromRequest } from "../server/creditGate.js";
+import { getUserFromRequest } from "../creditGate.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(

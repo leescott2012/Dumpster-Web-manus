@@ -20,7 +20,7 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Stripe from "stripe";
-import { getUserFromRequest } from "../server/creditGate.js";
+import { getUserFromRequest } from "../creditGate.js";
 import { createClient } from "@supabase/supabase-js";
 
 // Use service_role client directly for admin API access

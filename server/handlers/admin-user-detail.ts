@@ -8,8 +8,8 @@
  *   ?userId=<supabase-user-uuid>
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getUserFromRequest } from "../server/creditGate.js";
-import { supabaseAdmin } from "../server/supabaseAdmin.js";
+import { getUserFromRequest } from "../creditGate.js";
+import { supabaseAdmin } from "../supabaseAdmin.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).end();
