@@ -17,15 +17,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Support both ELEVENLABS_API_KEY and ELEVENLABS_API_KEY_2 naming conventions
   const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY_2;
 
-  // Resolve voice IDs from env vars (supports _2 suffix naming convention)
-  const voice1 = process.env.ELEVENLABS_VOICE_ID || process.env.ELEVENLABS_VOICE_ID_1 || '8Ln42OXYupYsag45MAUy';
-  const voice2 = process.env.ELEVENLABS_VOICE_ID_2 || 'bbGtsRRKUfYO634UxSjz';
+  // British "AI butler" voices — ElevenLabs default voices available to every
+  // account, so GENIUSS sounds like JARVIS out of the box (no extra setup).
+  const BRITISH_DANIEL = 'onwK4e9ZLuTAKqWW03F9'; // deep, authoritative British
+  const BRITISH_GEORGE = 'JBFqnCBsd6RMkjVDRZzb'; // warm British
+
+  // Any custom voices configured via env still work.
+  const envVoice1 = process.env.ELEVENLABS_VOICE_ID || process.env.ELEVENLABS_VOICE_ID_1 || '';
+  const envVoice2 = process.env.ELEVENLABS_VOICE_ID_2 || '';
+
+  // Default to the British butler voice unless an explicit env default is set.
+  const defaultVoice = process.env.ELEVENLABS_VOICE_ID || BRITISH_DANIEL;
 
   // Allowed voice IDs (whitelist to prevent abuse)
-  const ALLOWED_VOICES = [voice1, voice2];
+  const ALLOWED_VOICES = [BRITISH_DANIEL, BRITISH_GEORGE, envVoice1, envVoice2].filter(Boolean);
   const voiceId = ALLOWED_VOICES.includes(requestedVoiceId)
     ? requestedVoiceId
-    : voice1;
+    : defaultVoice;
 
   if (!apiKey) {
     return res.status(500).json({ error: 'ElevenLabs API key not configured' });

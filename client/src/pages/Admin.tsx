@@ -4,7 +4,7 @@
  * An immersive, Iron Man-style holographic dashboard that displays
  * live user activity, revenue, and system telemetry.
  */
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   BarChart, Bar
@@ -160,6 +160,30 @@ export default function Admin() {
   
   // HUD States
   const [hudState, setHudState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
+
+  // ── GENIUSS reactor color + voice (persisted in localStorage) ──────────────
+  const [hudHueDeg, setHudHueDeg] = useState<number>(() => {
+    const v = Number(localStorage.getItem('geniuss.hueDeg'));
+    return Number.isFinite(v) ? v : 0;
+  });
+  const [voiceId, setVoiceId] = useState<string>(
+    () => localStorage.getItem('geniuss.voiceId') || 'onwK4e9ZLuTAKqWW03F9'
+  );
+  const voiceIdRef = useRef(voiceId);
+  voiceIdRef.current = voiceId;
+  const COLOR_SWATCHES: { label: string; deg: number; css: string }[] = [
+    { label: 'Gold', deg: 0, css: '#D4AF37' },
+    { label: 'Emerald', deg: 95, css: '#10b981' },
+    { label: 'Cyan', deg: 140, css: '#22d3ee' },
+    { label: 'Azure', deg: 180, css: '#3b82f6' },
+    { label: 'Violet', deg: 235, css: '#a855f7' },
+    { label: 'Magenta', deg: 270, css: '#ec4899' },
+    { label: 'Crimson', deg: 315, css: '#ef4444' },
+  ];
+  const VOICE_OPTIONS: { id: string; name: string }[] = [
+    { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel — British Butler' },
+    { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George — British Warm' },
+  ];
   const [logs, setLogs] = useState<string[]>([]);
   const [isWarmingUp, setIsWarmingUp] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -367,9 +391,14 @@ export default function Admin() {
       try {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        u.rate = 1.05; u.pitch = 1.0; u.volume = 1.0;
+        u.rate = 0.96; u.pitch = 0.92; u.volume = 1.0;
         const voices = window.speechSynthesis.getVoices();
-        const pref = voices.find(v => /Daniel|Alex|Samantha|Karen|Google US English/i.test(v.name));
+        const isGb = (v: SpeechSynthesisVoice) => (v.lang || '').toLowerCase() === 'en-gb';
+        const pref =
+          voices.find(v => isGb(v) && /Daniel|Arthur|George|Ryan|Male/i.test(v.name)) ||
+          voices.find(isGb) ||
+          voices.find(v => /Google UK English Male/i.test(v.name)) ||
+          voices.find(v => /Daniel|Arthur|George/i.test(v.name));
         if (pref) u.voice = pref;
         u.onend = () => resolve();
         u.onerror = () => resolve();
@@ -382,7 +411,7 @@ export default function Admin() {
         const response = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, voiceId: voiceIdRef.current }),
         });
 
         if (response.ok && (response.headers.get('content-type') || '').startsWith('audio/')) {
@@ -596,7 +625,7 @@ export default function Admin() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-[#D4AF37] rounded-full animate-pulse" />
-            <span className="text-xs font-bold tracking-[0.4em] uppercase">Genius_v4.2</span>
+            <span className="text-xs font-bold tracking-[0.4em] uppercase">GENIUSS_v4.2</span>
           </div>
           <div className="h-4 w-[1px] bg-[#D4AF37]/20" />
           <div className="text-[10px] text-[#D4AF37]/50 uppercase tracking-widest">
@@ -629,9 +658,50 @@ export default function Admin() {
         {/* LEFT COLUMN: Main HUD & Stats */}
         <div className="col-span-12 lg:col-span-8 space-y-8">
           
-          {/* Central Genius HUD Component */}
+          {/* Central GENIUSS HUD Component */}
           <div className="bg-[#050505] border border-[#D4AF37]/20 rounded-3xl overflow-hidden shadow-[0_0_100px_rgba(212,175,55,0.05)]">
-            <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} />
+            <style>{`.geniuss-rainbow{animation:geniussRainbow 2.4s linear infinite}@keyframes geniussRainbow{to{filter:hue-rotate(360deg) saturate(1.6) brightness(1.1)}}`}</style>
+            <div
+              className={hudState !== 'idle' ? 'geniuss-rainbow' : undefined}
+              style={hudState === 'idle' ? { filter: `hue-rotate(${hudHueDeg}deg)` } : undefined}
+            >
+              <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} />
+            </div>
+
+            {/* Reactor color + voice controls */}
+            <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-t border-[#D4AF37]/10 bg-black/40">
+              <span className="text-[9px] uppercase tracking-widest text-[#D4AF37]/50">Reactor</span>
+              {COLOR_SWATCHES.map((s) => (
+                <button
+                  key={s.label}
+                  title={s.label}
+                  onClick={() => { setHudHueDeg(s.deg); localStorage.setItem('geniuss.hueDeg', String(s.deg)); }}
+                  className={`w-5 h-5 rounded-full transition ${hudHueDeg === s.deg ? 'ring-2 ring-white/80' : 'ring-1 ring-white/10 hover:ring-white/40'}`}
+                  style={{ background: s.css, boxShadow: `0 0 8px ${s.css}aa` }}
+                />
+              ))}
+              <span
+                className="text-[9px] uppercase tracking-widest text-white/70 px-1.5 py-0.5 rounded font-bold"
+                style={{ backgroundImage: 'linear-gradient(90deg,#ef4444,#f59e0b,#10b981,#22d3ee,#a855f7)' }}
+              >
+                Rainbow on talk
+              </span>
+              <div className="h-4 w-px bg-[#D4AF37]/20 mx-1" />
+              <span className="text-[9px] uppercase tracking-widest text-[#D4AF37]/50">Voice</span>
+              <select
+                value={voiceId}
+                onChange={(e) => { setVoiceId(e.target.value); localStorage.setItem('geniuss.voiceId', e.target.value); }}
+                className="bg-slate-950 border border-[#D4AF37]/20 text-[#D4AF37] text-[10px] rounded px-2 py-1 outline-none"
+              >
+                {VOICE_OPTIONS.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+              <button
+                onClick={() => handleReadAloud('GENIUSS online and at your service, sir.')}
+                className="text-[10px] text-[#D4AF37]/70 border border-[#D4AF37]/20 rounded px-2 py-1 hover:bg-[#D4AF37]/10 transition"
+              >
+                Test voice
+              </button>
+            </div>
           </div>
 
           {/* Overview Stat Cards */}
