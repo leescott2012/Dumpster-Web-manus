@@ -9,6 +9,8 @@ import { useCallback, useEffect, useRef } from "react";
  */
 export function useReactorAudio() {
   const levelRef = useRef(0);
+  const bandsRef = useRef<[number, number, number]>([0, 0, 0]); // bass / mid / treble
+  const peakRef = useRef(0);
   const ctxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataRef = useRef<Uint8Array | null>(null);
@@ -21,13 +23,27 @@ export function useReactorAudio() {
     const data = dataRef.current;
     if (a && data) {
       a.getByteFrequencyData(data);
+      const n = data.length;
       let sum = 0;
-      for (let i = 0; i < data.length; i++) sum += data[i];
-      const avg = sum / data.length / 255; // 0..1
+      for (let i = 0; i < n; i++) sum += data[i];
+      const avg = sum / n / 255; // 0..1
       // Fast attack, slow release — punchy but smooth.
       levelRef.current = avg > levelRef.current ? avg : levelRef.current * 0.82 + avg * 0.18;
+      // Frequency bands off the same read (zero extra cost), same smoothing.
+      const band = (lo: number, hi: number) => { let s = 0; for (let i = lo; i < hi; i++) s += data[i]; return s / Math.max(1, hi - lo) / 255; };
+      const bass = band(0, 16), mid = band(16, 96), treble = band(96, n);
+      const b = bandsRef.current;
+      b[0] = bass > b[0] ? bass : b[0] * 0.85 + bass * 0.15;
+      b[1] = mid > b[1] ? mid : b[1] * 0.85 + mid * 0.15;
+      b[2] = treble > b[2] ? treble : b[2] * 0.85 + treble * 0.15;
+      // Peak follower (fast up, slow down) for bloom flares.
+      peakRef.current = levelRef.current > peakRef.current ? levelRef.current : peakRef.current * 0.9 + levelRef.current * 0.1;
     } else {
       levelRef.current *= 0.9;
+      peakRef.current *= 0.9;
+      bandsRef.current[0] *= 0.9;
+      bandsRef.current[1] *= 0.9;
+      bandsRef.current[2] *= 0.9;
     }
     rafRef.current = requestAnimationFrame(tick);
   }, []);
@@ -73,5 +89,5 @@ export function useReactorAudio() {
     };
   }, []);
 
-  return { levelRef, start, stop };
+  return { levelRef, bandsRef, peakRef, start, stop };
 }

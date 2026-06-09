@@ -669,7 +669,7 @@ export default function Admin() {
               className={hudState !== 'idle' ? 'geniuss-rainbow' : undefined}
               style={hudState === 'idle' ? { filter: `hue-rotate(${hudHueDeg}deg)` } : undefined}
             >
-              <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} levelRef={reactor.levelRef} />
+              <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} levelRef={reactor.levelRef} bandsRef={reactor.bandsRef} peakRef={reactor.peakRef} />
             </div>
 
             {/* Reactor color + voice controls */}

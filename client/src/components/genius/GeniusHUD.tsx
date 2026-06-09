@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ReactorCore } from './ReactorCore';
 
 interface HUDProps {
   state: 'idle' | 'listening' | 'thinking' | 'speaking';
@@ -7,6 +8,8 @@ interface HUDProps {
   onTalk?: () => void;
   /** Live 0..1 mic amplitude that deforms the morphing core (optional). */
   levelRef?: React.MutableRefObject<number>;
+  bandsRef?: React.MutableRefObject<[number, number, number]>;
+  peakRef?: React.MutableRefObject<number>;
 }
 
 // Smooth closed blob path (Catmull-Rom -> cubic bezier) through control points.
@@ -40,7 +43,7 @@ function stateBaseline(state: string, t: number): number {
 
 const BLOB_SEEDS = [0, 1.7, 3.4, 5.1, 6.8, 8.5, 10.2, 11.9, 13.6];
 
-const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef }) => {
+const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, bandsRef, peakRef }) => {
   const getStatusColor = () => {
     switch (state) {
       case 'listening': return '#D4AF37'; // Gold
@@ -176,6 +179,8 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef }) =>
               animate={{ opacity: state === 'idle' ? [0.25, 0.45, 0.25] : [0.5, 0.95, 0.5] }}
               transition={{ duration: state === 'idle' ? 3 : 1.1, repeat: Infinity }}
             />
+
+            {levelRef && <ReactorCore levelRef={levelRef} bandsRef={bandsRef} peakRef={peakRef} state={state} />}
 
             <svg viewBox="-120 -120 240 240" className="w-[300px] h-[300px] overflow-visible">
               <defs>
