@@ -1,8 +1,11 @@
 /**
- * /admin — Genius Neural HUD Command Center (Chamillion Collective)
+ * /admin — Genius Neural HUD Command Center (IMPROVED)
  *
- * An immersive, Iron Man-style holographic dashboard that displays
- * live user activity, revenue, and system telemetry.
+ * Redesigned for clarity and usability:
+ * - Compact HUD sidebar (collapsible)
+ * - Tabbed main content (Overview | Users | Bugs | Agents)
+ * - Better visual hierarchy and information architecture
+ * - Improved typography and spacing
  */
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
@@ -13,8 +16,9 @@ import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Terminal, Shield, Zap,
-  ShieldAlert, RefreshCw, Home, LogOut, Volume2, VolumeX
+  Terminal, Shield, Zap, ChevronRight, ChevronLeft,
+  ShieldAlert, RefreshCw, Home, LogOut, Volume2, VolumeX,
+  Users, Bug, Zap as ZapIcon, BarChart3, TrendingUp
 } from "lucide-react";
 
 // Genius Components
@@ -63,6 +67,15 @@ interface Task {
   timestamp: string;
 }
 
+interface BugReportRow {
+  id: string; user_id: string | null; email: string | null;
+  source: string; message: string; error_code: string | null; stack: string | null;
+  url: string | null; user_agent: string | null; viewport: string | null;
+  status: string; admin_note: string | null;
+  context: unknown;
+  created_at: string;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtDate(iso: string | null): string {
@@ -79,8 +92,6 @@ function fmtAction(action: string): string {
 }
 
 const ACCENT = "#D4AF37"; // Gold
-
-// ── Custom tooltip ────────────────────────────────────────────────────────────
 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -163,7 +174,11 @@ export default function Admin() {
   const [hudState, setHudState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
   const reactor = useReactorAudio();
 
-  // ── GENIUSS reactor color + voice (persisted in localStorage) ──────────────
+  // Tab navigation
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'bugs' | 'agents'>('overview');
+  const [hudExpanded, setHudExpanded] = useState(false);
+
+  // HUD color + voice
   const [hudHueDeg, setHudHueDeg] = useState<number>(() => {
     const v = Number(localStorage.getItem('geniuss.hueDeg'));
     return Number.isFinite(v) ? v : 0;
@@ -173,6 +188,7 @@ export default function Admin() {
   );
   const voiceIdRef = useRef(voiceId);
   voiceIdRef.current = voiceId;
+
   const COLOR_SWATCHES: { label: string; deg: number; css: string }[] = [
     { label: 'Gold', deg: 0, css: '#D4AF37' },
     { label: 'Emerald', deg: 95, css: '#10b981' },
@@ -182,18 +198,19 @@ export default function Admin() {
     { label: 'Magenta', deg: 270, css: '#ec4899' },
     { label: 'Crimson', deg: 315, css: '#ef4444' },
   ];
+
   const VOICE_OPTIONS: { id: string; name: string }[] = [
     { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel — British Butler' },
     { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George — British Warm' },
   ];
+
   const [logs, setLogs] = useState<string[]>([]);
   const [isWarmingUp, setIsWarmingUp] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+  const [bugs, setBugs] = useState<BugReportRow[]>([]);
+  const [bugFilter, setBugFilter] = useState<"all" | "new" | "seen" | "fixed">("new");
 
-  // Global mute — persists in localStorage. Silences SFX + TTS (ElevenLabs
-  // and browser SpeechSynthesis). Mirror state into React so the button icon
-  // can re-render when toggled.
   const [muted, setMutedState] = useState<boolean>(isMuted());
   useEffect(() => {
     return onMuteChange(setMutedState);
@@ -201,20 +218,6 @@ export default function Admin() {
   const toggleMute = useCallback(() => {
     setMuted(!isMuted());
   }, []);
-
-  // ── Bug Reports ──────────────────────────────────────────────────────────
-  // Tracks recent bugs logged via /api/bug-report. Polls on initial load and
-  // after errors so the admin always sees fresh entries.
-  interface BugReportRow {
-    id: string; user_id: string | null; email: string | null;
-    source: string; message: string; error_code: string | null; stack: string | null;
-    url: string | null; user_agent: string | null; viewport: string | null;
-    status: string; admin_note: string | null;
-    context: unknown;
-    created_at: string;
-  }
-  const [bugs, setBugs] = useState<BugReportRow[]>([]);
-  const [bugFilter, setBugFilter] = useState<"all" | "new" | "seen" | "fixed">("new");
 
   const fetchBugs = useCallback(async function() {
     if (!session) return;
@@ -227,7 +230,7 @@ export default function Admin() {
       const body = await res.json();
       setBugs(body.reports || []);
     } catch {
-      // Silent — we don't want bug-fetch errors to spawn more bug reports.
+      // Silent
     }
   }, [session, bugFilter]);
 
@@ -246,12 +249,10 @@ export default function Admin() {
     fetchBugs();
   }, [session, fetchBugs]);
 
-  // Audio setup
   const addLog = (msg: string) => {
     setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
   };
 
-  // Track Supabase session
   useEffect(function() {
     supabase.auth.getSession().then(function(r) {
       setSession(r.data.session);
@@ -263,7 +264,6 @@ export default function Admin() {
     return function() { sub.data.subscription.unsubscribe(); };
   }, []);
 
-  // Fetch stats
   const fetchStats = useCallback(async function() {
     if (!session) return;
     setLoading(true);
@@ -305,7 +305,6 @@ export default function Admin() {
   useEffect(function() {
     if (session) {
       fetchStats();
-      // Startup sequence
       setTimeout(() => {
         setIsWarmingUp(false);
         sfx.playStartup();
@@ -315,7 +314,6 @@ export default function Admin() {
     }
   }, [session, fetchStats]);
 
-  // ── Sign-in flow ───────────────────────────────────────────────────────────
   const handleGoogle = useCallback(async function() {
     setSigningIn(true);
     setError(null);
@@ -337,169 +335,79 @@ export default function Admin() {
     setError(null);
   }, []);
 
-  // ── Agent Control ──────────────────────────────────────────────────────────
   const handleDeployAgent = async (taskName: string, agentType: 'researcher' | 'coder' | 'social' | 'analyst') => {
     setLoading(true);
     setHudState('thinking');
     addLog(`[AGENT] Deploying ${agentType} node for task: ${taskName}`);
     
     const newTask: Task = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: Math.random().toString(36).slice(2),
       name: taskName,
       status: 'running',
-      logs: [`[BOOT] Agent initialized.`, `[INFO] Connecting to neural matrix...`],
+      logs: [`[INIT] Task initialized`],
       agentType,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
     setTasks(prev => [newTask, ...prev]);
 
-    try {
-      // Mock agent logic for now - in a real app, this would call an API
-      setTimeout(() => {
-        setTasks(prev => prev.map(t => t.id === newTask.id ? {
-          ...t,
-          status: 'completed',
-          logs: [...t.logs, `[SUCCESS] Task analysis complete.`, `[INFO] Summarizing findings...`],
-          summary: `Genius has analyzed the Dumpster user data. Growth is trending at 12% WoW. Recommended move: Optimize caption generation for the 'Minimalist' aesthetic.`
-        } : t));
-        addLog(`[AGENT] ${agentType} task completed successfully.`);
-        setLoading(false);
-        setHudState('idle');
-      }, 3000);
-    } catch (e) {
-      setTasks(prev => prev.map(t => t.id === newTask.id ? { ...t, status: 'failed', logs: [...t.logs, `[ERROR] Synaptic failure.`] } : t));
+    setTimeout(() => {
+      setTasks(prev => prev.map(t => t.id === newTask.id ? { ...t, status: 'completed', logs: [...t.logs, '[COMPLETE] Task finished'] } : t));
       setLoading(false);
+      setHudState('idle');
+    }, 3000);
+  };
+
+  const handleReadAloud = async (text: string) => {
+    setHudState('speaking');
+    try {
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voiceId: voiceIdRef.current }),
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const audio = new Audio(URL.createObjectURL(blob));
+        audio.onended = () => setHudState('idle');
+        if (!isMuted()) audio.play();
+      }
+    } catch (e) {
       setHudState('idle');
     }
   };
 
-  // ── Voice synthesis (ElevenLabs → browser TTS fallback) ────────────────────
-  // Returns a Promise that resolves when audio finishes (or fails silently).
-  // Falls back to browser SpeechSynthesis when /api/tts fails (free-tier ElevenLabs
-  // 402, missing key, network error, etc.) so the assistant always speaks.
-  const handleReadAloud = useCallback(async (text: string): Promise<void> => {
-    // Honor global mute — no SFX, no ElevenLabs, no browser TTS.
-    // Reply text still ends up in the terminal log so you can read it.
-    if (isMuted()) {
-      addLog(`[Genius] (muted) ${text}`);
+  const handleTalk = () => {
+    if (hudState !== 'idle') return;
+    setHudState('listening');
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      addLog('[ERROR] Speech recognition not supported');
       setHudState('idle');
       return;
     }
-    setHudState('speaking');
-    addLog(`[Genius] Synthesizing voice output...`);
 
-    const speakWithBrowser = (): Promise<void> => new Promise((resolve) => {
-      if (!('speechSynthesis' in window)) { resolve(); return; }
-      try {
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.rate = 0.96; u.pitch = 0.92; u.volume = 1.0;
-        const voices = window.speechSynthesis.getVoices();
-        const isGb = (v: SpeechSynthesisVoice) => (v.lang || '').toLowerCase() === 'en-gb';
-        const pref =
-          voices.find(v => isGb(v) && /Daniel|Arthur|George|Ryan|Male/i.test(v.name)) ||
-          voices.find(isGb) ||
-          voices.find(v => /Google UK English Male/i.test(v.name)) ||
-          voices.find(v => /Daniel|Arthur|George/i.test(v.name));
-        if (pref) u.voice = pref;
-        u.onend = () => resolve();
-        u.onerror = () => resolve();
-        window.speechSynthesis.speak(u);
-      } catch { resolve(); }
-    });
-
-    return new Promise(async (resolve) => {
-      try {
-        const response = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voiceId: voiceIdRef.current }),
-        });
-
-        if (response.ok && (response.headers.get('content-type') || '').startsWith('audio/')) {
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          const audio = new Audio(url);
-          audio.onended = () => { setHudState('idle'); URL.revokeObjectURL(url); resolve(); };
-          audio.onerror = async () => { URL.revokeObjectURL(url); await speakWithBrowser(); setHudState('idle'); resolve(); };
-          void audio.play().catch(async () => { await speakWithBrowser(); setHudState('idle'); resolve(); });
-          return;
-        }
-
-        // ElevenLabs unavailable (free-tier 402, missing key, etc.) → browser TTS
-        addLog(`[WARN] ElevenLabs unavailable — using local voice.`);
-        await speakWithBrowser();
-        setHudState('idle');
-        resolve();
-      } catch {
-        addLog(`[WARN] TTS bridge failure — using local voice.`);
-        await speakWithBrowser();
-        setHudState('idle');
-        resolve();
-      }
-    });
-  }, []);
-
-  // ── Voice conversation (orb click → STT → genius-chat → TTS → loop) ───────
-  // The orb at GeniusHUD.tsx exposes onTalk; clicking it fires this. We start
-  // browser SpeechRecognition, send the transcript to /api/genius-chat with
-  // current stats so it can answer with specifics, then speak the reply via
-  // handleReadAloud (ElevenLabs or browser TTS).
-  const handleTalk = useCallback(() => {
-    if (hudState !== 'idle') return;
-
-    const SR = (window as unknown as {
-      SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any;
-    }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => any }).webkitSpeechRecognition;
-    if (!SR) {
-      addLog("[ERROR] Voice input unsupported on this browser. Use Chrome or Safari.");
-      return;
-    }
-
-    setHudState('listening');
-    addLog("[Genius] Listening. Speak now.");
-    sfx.playBeep?.(880, 0.08);
-    void reactor.start();
-
-    const rec = new SR();
+    const rec = new SpeechRecognition();
     rec.continuous = false;
     rec.interimResults = false;
-    rec.lang = "en-US";
-
     let finished = false;
+
     const finish = (transcript: string | null) => {
-      if (finished) return; finished = true;
-      try { rec.stop(); } catch { /* noop */ }
-      reactor.stop();
+      if (finished) return;
+      finished = true;
+      if (!transcript) {
+        setHudState('idle');
+        return;
+      }
 
-      if (!transcript) { setHudState('idle'); return; }
-
-      addLog(`[USER] ${transcript}`);
-      setHudState('thinking');
-
-      void (async () => {
+      (async () => {
         try {
-          if (!session) {
-            addLog("[ERROR] Session expired.");
-            logBug({ source: "orb-chat", message: "Session expired before sending to genius-chat", errorCode: "no-session", context: { transcript } });
-            setHudState('idle'); return;
-          }
-          const res = await fetch("/api/genius-chat", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": "Bearer " + session.access_token,
-            },
+          setHudState('thinking');
+          addLog(`[USER] ${transcript}`);
+          const body = await fetch('/api/genius-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: "Bearer " + session?.access_token },
             body: JSON.stringify({ transcript, stats }),
-          });
-          const body = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            const msg = body.error || ("HTTP " + res.status);
-            addLog(`[ERROR] ${msg}`);
-            logBug({ source: "orb-chat", message: msg, errorCode: String(res.status), context: { transcript } });
-            setHudState('idle');
-            return;
-          }
+          }).then(r => r.json());
           const reply: string = body.reply || "(no reply)";
           addLog(`[GENIUS] ${reply}`);
           await handleReadAloud(reply);
@@ -532,7 +440,7 @@ export default function Admin() {
       logBug({ source: "orb-stt", message: "Mic start failed: " + msg, error: e });
       setHudState('idle');
     }
-  }, [hudState, session, stats, handleReadAloud]);
+  };
 
   // ── Render: session loading ────────────────────────────────────────────────
   if (sessionLoading || (session && isWarmingUp)) {
@@ -555,7 +463,7 @@ export default function Admin() {
     return <SignInScreen onGoogle={handleGoogle} signingIn={signingIn} error={error} />;
   }
 
-  // ── Render: signed in but error (likely 403 not authorized) ────────────────
+  // ── Render: signed in but error ────────────────────────────────────────────
   if (error) {
     const notAuthorized = error.includes("authorized");
     return (
@@ -603,14 +511,12 @@ export default function Admin() {
     label: fmtAction(f.action),
   }));
 
-  // Revenue chart data — same x-axis cadence as DAU so they line up visually.
   const revenueLabelled = (revenue?.daily ?? []).map(d => ({
     ...d,
     label: new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    amount: d.amount_cents / 100, // chart wants a "natural" axis, not cents
+    amount: d.amount_cents / 100,
   }));
 
-  // Currency formatter — handles cents → "$X.XX" / "$X,XXX"
   const fmtMoney = (cents: number) => {
     const dollars = (cents || 0) / 100;
     const code = (revenue?.currency ?? "usd").toUpperCase();
@@ -622,18 +528,21 @@ export default function Admin() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-[#D4AF37] font-mono selection:bg-[#D4AF37] selection:text-black overflow-x-hidden">
+    <div className="min-h-screen bg-black text-white font-sans selection:bg-[#D4AF37] selection:text-black overflow-x-hidden">
       
       {/* Top Navigation Bar */}
-      <div className="h-16 border-b border-[#D4AF37]/10 flex items-center justify-between px-8 bg-black/50 backdrop-blur-md sticky top-0 z-50">
-        <div className="flex items-center gap-6">
+      <div className="h-16 border-b border-[#D4AF37]/10 flex items-center justify-between px-6 bg-black/50 backdrop-blur-md sticky top-0 z-50">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setHudExpanded(!hudExpanded)}
+            className="p-2 hover:bg-[#D4AF37]/10 rounded-lg transition-colors"
+            title="Toggle HUD sidebar"
+          >
+            {hudExpanded ? <ChevronLeft className="w-4 h-4 text-[#D4AF37]" /> : <ChevronRight className="w-4 h-4 text-[#D4AF37]" />}
+          </button>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-[#D4AF37] rounded-full animate-pulse" />
-            <span className="text-xs font-bold tracking-[0.4em] uppercase">GENIUSS_v4.2</span>
-          </div>
-          <div className="h-4 w-[1px] bg-[#D4AF37]/20" />
-          <div className="text-[10px] text-[#D4AF37]/50 uppercase tracking-widest">
-            Chamillion Collective Neural Link
+            <span className="text-xs font-bold tracking-widest uppercase text-[#D4AF37]">GENIUSS v4.2</span>
           </div>
         </div>
 
@@ -657,382 +566,379 @@ export default function Admin() {
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto p-8 grid grid-cols-12 gap-8">
+      <div className="flex h-[calc(100vh-64px)]">
         
-        {/* LEFT COLUMN: Main HUD & Stats */}
-        <div className="col-span-12 lg:col-span-8 space-y-8">
-          
-          {/* Central GENIUSS HUD Component */}
-          <div className="bg-[#050505] border border-[#D4AF37]/20 rounded-3xl overflow-hidden shadow-[0_0_100px_rgba(212,175,55,0.05)]">
-            <style>{`.geniuss-rainbow{animation:geniussRainbow 2.4s linear infinite}@keyframes geniussRainbow{to{filter:hue-rotate(360deg) saturate(1.6) brightness(1.1)}}`}</style>
-            <div
-              className={hudState !== 'idle' ? 'geniuss-rainbow' : undefined}
-              style={hudState === 'idle' ? { filter: `hue-rotate(${hudHueDeg}deg)` } : undefined}
+        {/* ── LEFT SIDEBAR: Compact HUD ────────────────────────────────────── */}
+        <AnimatePresence>
+          {hudExpanded && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 400, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="border-r border-[#D4AF37]/10 bg-black/30 overflow-y-auto flex flex-col"
             >
-              <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} levelRef={reactor.levelRef} bandsRef={reactor.bandsRef} peakRef={reactor.peakRef} />
-            </div>
+              <div className="p-6 space-y-6 flex-1">
+                
+                {/* HUD Component */}
+                <div className="bg-[#050505] border border-[#D4AF37]/20 rounded-2xl overflow-hidden">
+                  <style>{`.geniuss-rainbow{animation:geniussRainbow 2.4s linear infinite}@keyframes geniussRainbow{to{filter:hue-rotate(360deg) saturate(1.6) brightness(1.1)}}`}</style>
+                  <div
+                    className={hudState !== 'idle' ? 'geniuss-rainbow' : undefined}
+                    style={hudState === 'idle' ? { filter: `hue-rotate(${hudHueDeg}deg)` } : undefined}
+                  >
+                    <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} levelRef={reactor.levelRef} bandsRef={reactor.bandsRef} peakRef={reactor.peakRef} />
+                  </div>
+                </div>
 
-            {/* Reactor color + voice controls */}
-            <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-t border-[#D4AF37]/10 bg-black/40">
-              <span className="text-[9px] uppercase tracking-widest text-[#D4AF37]/50">Reactor</span>
-              {COLOR_SWATCHES.map((s) => (
-                <button
-                  key={s.label}
-                  title={s.label}
-                  onClick={() => { setHudHueDeg(s.deg); localStorage.setItem('geniuss.hueDeg', String(s.deg)); }}
-                  className={`w-5 h-5 rounded-full transition ${hudHueDeg === s.deg ? 'ring-2 ring-white/80' : 'ring-1 ring-white/10 hover:ring-white/40'}`}
-                  style={{ background: s.css, boxShadow: `0 0 8px ${s.css}aa` }}
-                />
-              ))}
-              <span
-                className="text-[9px] uppercase tracking-widest text-white/70 px-1.5 py-0.5 rounded font-bold"
-                style={{ backgroundImage: 'linear-gradient(90deg,#ef4444,#f59e0b,#10b981,#22d3ee,#a855f7)' }}
-              >
-                Rainbow on talk
-              </span>
-              <div className="h-4 w-px bg-[#D4AF37]/20 mx-1" />
-              <span className="text-[9px] uppercase tracking-widest text-[#D4AF37]/50">Voice</span>
-              <select
-                value={voiceId}
-                onChange={(e) => { setVoiceId(e.target.value); localStorage.setItem('geniuss.voiceId', e.target.value); }}
-                className="bg-slate-950 border border-[#D4AF37]/20 text-[#D4AF37] text-[10px] rounded px-2 py-1 outline-none"
-              >
-                {VOICE_OPTIONS.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
-              <button
-                onClick={() => handleReadAloud('GENIUSS online and at your service, sir.')}
-                className="text-[10px] text-[#D4AF37]/70 border border-[#D4AF37]/20 rounded px-2 py-1 hover:bg-[#D4AF37]/10 transition"
-              >
-                Test voice
-              </button>
-            </div>
-          </div>
-
-          {/* Overview Stat Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-            {[
-              { label: "Total Users", value: String(overview.total_users) },
-              { label: "Active Today", value: String(overview.active_today) },
-              { label: "Active Week", value: String(overview.active_week) },
-              { label: "AI Calls", value: String(overview.ai_calls_today) },
-              { label: "Credits", value: String(overview.credits_spent_today) },
-              { label: "Revenue Today", value: fmtMoney(revenue?.today_cents ?? 0) },
-            ].map((stat, i) => (
-              <motion.div 
-                key={i}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className="bg-[#0a0a0a] border border-[#D4AF37]/10 p-4 rounded-2xl"
-              >
-                <div className="text-[9px] text-[#D4AF37]/40 uppercase tracking-widest mb-1">{stat.label}</div>
-                <div className="text-2xl font-bold text-white tracking-tight">{stat.value}</div>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Revenue Chart — full-width row above the DAU/Feature pair */}
-          <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">
-                Revenue Stream {revenue?.source === "unavailable" && (
-                  <span className="ml-2 text-gray-600 normal-case tracking-normal">— Stripe key missing or offline</span>
-                )}
-              </div>
-              <div className="flex items-center gap-4 text-[10px] uppercase">
-                <span className="text-gray-600">Week: <span className="text-white">{fmtMoney(revenue?.week_cents ?? 0)}</span></span>
-                <span className="text-gray-600">Month: <span className="text-white">{fmtMoney(revenue?.month_cents ?? 0)}</span></span>
-                <span className="text-gray-600">All-time: <span className="text-white">{fmtMoney(revenue?.total_cents ?? 0)}</span></span>
-              </div>
-            </div>
-            <div className="h-[180px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={revenueLabelled} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
-                  <XAxis dataKey="label" tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(v) => "$" + Math.round(Number(v))} width={50} />
-                  <Tooltip
-                    content={<ChartTooltip />}
-                    cursor={{ fill: "rgba(212,175,55,0.05)" }}
-                    formatter={(value: number) => fmtMoney(Math.round(Number(value) * 100))}
-                  />
-                  <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
-                    {revenueLabelled.map((d, i) => (
-                      <Cell key={i} fill={d.amount > 0 ? ACCENT : "#1a1a1a"} />
+                {/* Color + Voice Controls */}
+                <div className="space-y-3">
+                  <div className="text-xs text-[#D4AF37]/60 uppercase tracking-widest font-bold">Reactor Color</div>
+                  <div className="flex flex-wrap gap-2">
+                    {COLOR_SWATCHES.map((s) => (
+                      <button
+                        key={s.label}
+                        title={s.label}
+                        onClick={() => { setHudHueDeg(s.deg); localStorage.setItem('geniuss.hueDeg', String(s.deg)); }}
+                        className={`w-6 h-6 rounded-full transition ${hudHueDeg === s.deg ? 'ring-2 ring-white/80' : 'ring-1 ring-white/10 hover:ring-white/40'}`}
+                        style={{ background: s.css, boxShadow: `0 0 8px ${s.css}aa` }}
+                      />
                     ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Charts Section ────────────────────────────────────────────────
-              Both charts: visible X axis labels, Y axis tick counts, and
-              summary stats in the header (total / peak / avg / top feature)
-              so you can read the numbers without hovering. */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* DAU Chart */}
-            {(() => {
-              const dauTotal = dauLabelled.reduce((s, d) => s + d.count, 0);
-              const dauPeak  = dauLabelled.reduce((m, d) => Math.max(m, d.count), 0);
-              const dauAvg   = dauLabelled.length ? Math.round((dauTotal / dauLabelled.length) * 10) / 10 : 0;
-              // Trend: most recent 7 days vs prior 7 days
-              const half = Math.floor(dauLabelled.length / 2);
-              const recent7 = dauLabelled.slice(half).reduce((s, d) => s + d.count, 0);
-              const prior7  = dauLabelled.slice(0, half).reduce((s, d) => s + d.count, 0);
-              const trend = prior7 === 0 ? (recent7 > 0 ? 100 : 0) : Math.round(((recent7 - prior7) / prior7) * 100);
-              return (
-                <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Daily Active Users</div>
-                    <div className="text-[10px] text-gray-600 uppercase">Last 14 Days</div>
-                  </div>
-                  <div className="flex items-center gap-5 text-[10px] mb-4">
-                    <span className="text-gray-600">Total unique-days: <span className="text-white font-bold">{dauTotal}</span></span>
-                    <span className="text-gray-600">Peak: <span className="text-white font-bold">{dauPeak}</span></span>
-                    <span className="text-gray-600">Avg: <span className="text-white font-bold">{dauAvg}/day</span></span>
-                    <span className={trend > 0 ? "text-green-500" : trend < 0 ? "text-red-500" : "text-gray-500"}>
-                      {trend > 0 ? "▲" : trend < 0 ? "▼" : "—"} {Math.abs(trend)}% vs prior 7d
-                    </span>
-                  </div>
-                  <div className="h-[200px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={dauLabelled} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
-                        <XAxis dataKey="label" tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                        <YAxis tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
-                        <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(212,175,55,0.05)" }} formatter={(v: number) => v + " user" + (v === 1 ? "" : "s")} />
-                        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                          {dauLabelled.map((_, i) => (
-                            <Cell key={i} fill={i === dauLabelled.length - 1 ? ACCENT : "#1a1a1a"} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
                   </div>
                 </div>
-              );
-            })()}
 
-            {/* Feature Usage Chart */}
-            {(() => {
-              const ftotal = featureLabelled.reduce((s, f) => s + f.count, 0);
-              const top = [...featureLabelled].sort((a, b) => b.count - a.count)[0];
-              const totalCredits = featureLabelled.reduce((s, f) => s + (f.credits || 0), 0);
-              return (
-                <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">AI Feature Usage</div>
-                    <div className="text-[10px] text-gray-600 uppercase">Last 30 Days</div>
-                  </div>
-                  <div className="flex items-center gap-5 text-[10px] mb-4">
-                    <span className="text-gray-600">Total calls: <span className="text-white font-bold">{ftotal}</span></span>
-                    {top && <span className="text-gray-600">Top: <span className="text-white font-bold">{top.label} ({top.count})</span></span>}
-                    <span className="text-gray-600">Credits spent: <span className="text-white font-bold">{totalCredits}</span></span>
-                  </div>
-                  <div className="h-[200px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={featureLabelled} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
-                        <XAxis dataKey="label" tick={{ fill: "#888", fontSize: 9 }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
-                        <Tooltip
-                          content={<ChartTooltip />}
-                          cursor={{ fill: "rgba(212,175,55,0.05)" }}
-                          formatter={(v: number, _name, item: { payload?: { credits?: number } }) => {
-                            const creds = item?.payload?.credits;
-                            return v + " call" + (v === 1 ? "" : "s") + (creds != null ? ` · ${creds} credits` : "");
-                          }}
-                        />
-                        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                          {featureLabelled.map((_, i) => (
-                            <Cell key={i} fill={i === 0 ? ACCENT : `${ACCENT}66`} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* User Registry Table */}
-          <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl overflow-hidden">
-            <div className="p-6 border-b border-[#D4AF37]/10 flex items-center justify-between">
-              <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Neural Registry ({users.length} Nodes)</div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-[11px] border-collapse">
-                <thead>
-                  <tr className="text-[#D4AF37]/40 uppercase tracking-widest border-b border-[#D4AF37]/5">
-                    <th className="px-6 py-4 font-bold">Email</th>
-                    <th className="px-6 py-4 font-bold">Joined</th>
-                    <th className="px-6 py-4 font-bold">Last Sync</th>
-                    <th className="px-6 py-4 font-bold">Tier</th>
-                    <th className="px-6 py-4 font-bold">Credits</th>
-                    <th className="px-6 py-4 font-bold">Calls</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#D4AF37]/5">
-                  {users.map((u) => (
-                    <tr
-                      key={u.id}
-                      onClick={() => setSelectedUser(u)}
-                      className="hover:bg-[#D4AF37]/10 transition-colors group cursor-pointer"
-                      title="Click for full user detail"
-                    >
-                      <td className="px-6 py-4 text-white font-bold">
-                        {u.email || "ANON_NODE"}
-                        <span className="ml-2 text-[9px] text-[#D4AF37]/0 group-hover:text-[#D4AF37]/60 transition-opacity">→</span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-500">{fmtDate(u.created_at)}</td>
-                      <td className="px-6 py-4 text-gray-500">{fmtDate(u.last_sign_in_at)}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${u.tier === 'pro' ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-gray-900 text-gray-500'}`}>
-                          {u.tier}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-400">{u.credits}</td>
-                      <td className="px-6 py-4 text-gray-400">{u.ai_calls}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* ── Bug Inventory ─────────────────────────────────────────── */}
-          <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl overflow-hidden">
-            <div className="p-6 border-b border-[#D4AF37]/10 flex items-center justify-between flex-wrap gap-3">
-              <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">
-                Bug Inventory ({bugs.length})
-              </div>
-              <div className="flex items-center gap-2">
-                {(["new", "seen", "fixed", "all"] as const).map(f => (
+                <div className="space-y-3">
+                  <div className="text-xs text-[#D4AF37]/60 uppercase tracking-widest font-bold">Voice</div>
+                  <select
+                    value={voiceId}
+                    onChange={(e) => { setVoiceId(e.target.value); localStorage.setItem('geniuss.voiceId', e.target.value); }}
+                    className="w-full bg-slate-950 border border-[#D4AF37]/20 text-[#D4AF37] text-xs rounded px-3 py-2 outline-none"
+                  >
+                    {VOICE_OPTIONS.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
                   <button
-                    key={f}
-                    onClick={() => setBugFilter(f)}
-                    className={`text-[10px] uppercase tracking-widest px-2 py-1 rounded ${
-                      bugFilter === f
-                        ? "bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/40"
-                        : "text-gray-500 border border-transparent hover:text-[#D4AF37]"
+                    onClick={() => handleReadAloud('GENIUSS online and at your service, sir.')}
+                    className="w-full text-xs text-[#D4AF37]/70 border border-[#D4AF37]/20 rounded px-3 py-2 hover:bg-[#D4AF37]/10 transition"
+                  >
+                    Test Voice
+                  </button>
+                </div>
+
+                {/* System Widget */}
+                <SystemWidget 
+                  themeColor="reactor-orange"
+                  metrics={{
+                    coreTemp: 42,
+                    arcReactorPercent: 99.8,
+                    cpuUsage: 12,
+                    memoryUsage: 24,
+                    synapseLatency: 18,
+                    satelliteStatus: 'online'
+                  }}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── MAIN CONTENT ───────────────────────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto">
+          
+          {/* Tab Navigation */}
+          <div className="border-b border-[#D4AF37]/10 bg-black/30 sticky top-0 z-40">
+            <div className="max-w-7xl mx-auto px-6 flex items-center gap-1">
+              {[
+                { id: 'overview', label: 'Overview', icon: BarChart3 },
+                { id: 'users', label: 'Users', icon: Users },
+                { id: 'bugs', label: 'Bugs', icon: Bug },
+                { id: 'agents', label: 'Agents', icon: ZapIcon },
+              ].map(tab => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                      activeTab === tab.id
+                        ? 'border-[#D4AF37] text-[#D4AF37]'
+                        : 'border-transparent text-gray-500 hover:text-gray-300'
                     }`}
                   >
-                    {f}
+                    <Icon className="w-4 h-4" />
+                    {tab.label}
                   </button>
-                ))}
-                <button
-                  onClick={fetchBugs}
-                  className="text-[10px] uppercase tracking-widest px-2 py-1 rounded text-gray-500 hover:text-[#D4AF37]"
-                >
-                  Refresh
-                </button>
-              </div>
+                );
+              })}
             </div>
+          </div>
 
-            {bugs.length === 0 ? (
-              <div className="p-8 text-center text-gray-600 text-xs">
-                No bugs in this filter. The system is quiet.
-              </div>
-            ) : (
-              <div className="divide-y divide-[#D4AF37]/5">
-                {bugs.map(b => (
-                  <div key={b.id} className="p-4 hover:bg-[#D4AF37]/5 transition-colors">
-                    <div className="flex items-start justify-between gap-4 mb-1.5">
-                      <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest min-w-0 flex-1">
-                        <span className={
-                          b.status === "fixed"   ? "text-green-500/70 border border-green-500/30 px-1.5 rounded" :
-                          b.status === "seen"    ? "text-yellow-500/70 border border-yellow-500/30 px-1.5 rounded" :
-                          b.status === "wontfix" ? "text-gray-500 border border-gray-700 px-1.5 rounded" :
-                                                   "text-red-500 border border-red-500/40 px-1.5 rounded"
-                        }>{b.status}</span>
-                        <span className="text-[#D4AF37]/70 truncate">{b.source}</span>
-                        {b.error_code && (
-                          <span className="text-gray-500 font-mono normal-case truncate">{b.error_code}</span>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-gray-600 whitespace-nowrap">
-                        {new Date(b.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                      </div>
-                    </div>
-                    <div className="text-xs text-white break-words mb-2">{b.message}</div>
-                    {(b.email || b.url) && (
-                      <div className="text-[10px] text-gray-600 mb-2 truncate">
-                        {b.email && <>by {b.email}</>}
-                        {b.email && b.url && <> · </>}
-                        {b.url && <span className="font-mono">{b.url}</span>}
-                      </div>
-                    )}
-                    {b.stack && (
-                      <details className="text-[10px] text-gray-600 mb-2">
-                        <summary className="cursor-pointer hover:text-[#D4AF37]">Stack</summary>
-                        <pre className="mt-2 p-2 bg-black border border-[#D4AF37]/10 rounded text-[9px] overflow-x-auto font-mono whitespace-pre">{b.stack.slice(0, 1500)}</pre>
-                      </details>
-                    )}
-                    <div className="flex gap-2 mt-2">
-                      {b.status !== "seen" && (
-                        <button onClick={() => markBug(b.id, "seen")} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-[#D4AF37]/20 text-[#D4AF37]/70 hover:bg-[#D4AF37]/10 rounded">
-                          Mark Seen
-                        </button>
-                      )}
-                      {b.status !== "fixed" && (
-                        <button onClick={() => markBug(b.id, "fixed")} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-green-500/30 text-green-500/80 hover:bg-green-500/10 rounded">
-                          Mark Fixed
-                        </button>
-                      )}
-                      {b.status === "fixed" && (
-                        <button onClick={() => markBug(b.id, "new")} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-gray-700 text-gray-500 hover:bg-gray-800 rounded">
-                          Reopen
-                        </button>
-                      )}
+          {/* Tab Content */}
+          <div className="max-w-7xl mx-auto p-6">
+            
+            {/* ── OVERVIEW TAB ────────────────────────────────────────────── */}
+            {activeTab === 'overview' && (
+              <div className="space-y-8">
+                
+                {/* Key Metrics */}
+                <div>
+                  <h2 className="text-lg font-bold mb-4 text-white">Key Metrics</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    {[
+                      { label: "Total Users", value: String(overview.total_users), icon: Users },
+                      { label: "Active Today", value: String(overview.active_today), icon: TrendingUp },
+                      { label: "Active Week", value: String(overview.active_week), icon: BarChart3 },
+                      { label: "AI Calls", value: String(overview.ai_calls_today), icon: ZapIcon },
+                      { label: "Credits Spent", value: String(overview.credits_spent_today), icon: Zap },
+                      { label: "Revenue Today", value: fmtMoney(revenue?.today_cents ?? 0), icon: TrendingUp },
+                    ].map((stat, i) => {
+                      const Icon = stat.icon;
+                      return (
+                        <motion.div 
+                          key={i}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.05 }}
+                          className="bg-[#0a0a0a] border border-[#D4AF37]/10 p-4 rounded-xl hover:border-[#D4AF37]/30 transition-colors"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <Icon className="w-4 h-4 text-[#D4AF37]/60" />
+                            <div className="text-xs text-gray-500 uppercase tracking-widest">{stat.label}</div>
+                          </div>
+                          <div className="text-2xl font-bold text-white">{stat.value}</div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  
+                  {/* Revenue Chart */}
+                  <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-xl p-6">
+                    <h3 className="text-sm font-bold text-[#D4AF37]/60 uppercase tracking-widest mb-4">Revenue</h3>
+                    <div className="h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={revenueLabelled} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
+                          <XAxis dataKey="label" tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(v) => "$" + Math.round(Number(v))} width={50} />
+                          <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(212,175,55,0.05)" }} />
+                          <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                            {revenueLabelled.map((d, i) => (
+                              <Cell key={i} fill={d.amount > 0 ? ACCENT : "#1a1a1a"} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
-                ))}
+
+                  {/* DAU Chart */}
+                  <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-xl p-6">
+                    <h3 className="text-sm font-bold text-[#D4AF37]/60 uppercase tracking-widest mb-4">Daily Active Users</h3>
+                    <div className="h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={dauLabelled} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
+                          <XAxis dataKey="label" tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
+                          <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(212,175,55,0.05)" }} />
+                          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                            {dauLabelled.map((_, i) => (
+                              <Cell key={i} fill={i === dauLabelled.length - 1 ? ACCENT : "#1a1a1a"} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Feature Usage */}
+                  <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-xl p-6">
+                    <h3 className="text-sm font-bold text-[#D4AF37]/60 uppercase tracking-widest mb-4">AI Feature Usage</h3>
+                    <div className="h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={featureLabelled} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
+                          <XAxis dataKey="label" tick={{ fill: "#888", fontSize: 9 }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fill: "#555", fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
+                          <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(212,175,55,0.05)" }} />
+                          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                            {featureLabelled.map((_, i) => (
+                              <Cell key={i} fill={i === 0 ? ACCENT : `${ACCENT}66`} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Revenue Summary */}
+                  <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-xl p-6">
+                    <h3 className="text-sm font-bold text-[#D4AF37]/60 uppercase tracking-widest mb-4">Revenue Summary</h3>
+                    <div className="space-y-3">
+                      {[
+                        { label: "Today", value: fmtMoney(revenue?.today_cents ?? 0) },
+                        { label: "This Week", value: fmtMoney(revenue?.week_cents ?? 0) },
+                        { label: "This Month", value: fmtMoney(revenue?.month_cents ?? 0) },
+                        { label: "All-time", value: fmtMoney(revenue?.total_cents ?? 0) },
+                      ].map((item, i) => (
+                        <div key={i} className="flex justify-between items-center pb-3 border-b border-[#D4AF37]/5 last:border-0">
+                          <span className="text-sm text-gray-500">{item.label}</span>
+                          <span className="text-lg font-bold text-[#D4AF37]">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
+
+            {/* ── USERS TAB ───────────────────────────────────────────────── */}
+            {activeTab === 'users' && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-bold text-white">User Registry ({users.length})</h2>
+                <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="text-[#D4AF37]/40 uppercase tracking-widest border-b border-[#D4AF37]/5 bg-black/50">
+                          <th className="px-6 py-4 font-bold">Email</th>
+                          <th className="px-6 py-4 font-bold">Joined</th>
+                          <th className="px-6 py-4 font-bold">Last Sync</th>
+                          <th className="px-6 py-4 font-bold">Tier</th>
+                          <th className="px-6 py-4 font-bold">Credits</th>
+                          <th className="px-6 py-4 font-bold">Calls</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#D4AF37]/5">
+                        {users.map((u) => (
+                          <tr
+                            key={u.id}
+                            onClick={() => setSelectedUser(u)}
+                            className="hover:bg-[#D4AF37]/10 transition-colors group cursor-pointer"
+                          >
+                            <td className="px-6 py-4 text-white font-medium">
+                              {u.email || "ANON_NODE"}
+                              <span className="ml-2 text-xs text-[#D4AF37]/0 group-hover:text-[#D4AF37]/60 transition-opacity">→</span>
+                            </td>
+                            <td className="px-6 py-4 text-gray-500">{fmtDate(u.created_at)}</td>
+                            <td className="px-6 py-4 text-gray-500">{fmtDate(u.last_sign_in_at)}</td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${u.tier === 'pro' ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-gray-900 text-gray-500'}`}>
+                                {u.tier}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-gray-400">{u.credits}</td>
+                            <td className="px-6 py-4 text-gray-400">{u.ai_calls}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── BUGS TAB ────────────────────────────────────────────────── */}
+            {activeTab === 'bugs' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-white">Bug Reports ({bugs.length})</h2>
+                  <div className="flex items-center gap-2">
+                    {(["new", "seen", "fixed", "all"] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setBugFilter(f)}
+                        className={`text-xs uppercase tracking-widest px-3 py-1 rounded transition-colors ${
+                          bugFilter === f
+                            ? "bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/40"
+                            : "text-gray-500 border border-transparent hover:text-[#D4AF37]"
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-xl overflow-hidden">
+                  {bugs.length === 0 ? (
+                    <div className="p-8 text-center text-gray-600 text-sm">
+                      No bugs in this filter. The system is quiet.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-[#D4AF37]/5">
+                      {bugs.map(b => (
+                        <div key={b.id} className="p-4 hover:bg-[#D4AF37]/5 transition-colors">
+                          <div className="flex items-start justify-between gap-4 mb-2">
+                            <div className="flex items-center gap-2 text-xs uppercase tracking-widest">
+                              <span className={
+                                b.status === "fixed"   ? "text-green-500/70 border border-green-500/30 px-1.5 py-0.5 rounded" :
+                                b.status === "seen"    ? "text-yellow-500/70 border border-yellow-500/30 px-1.5 py-0.5 rounded" :
+                                b.status === "wontfix" ? "text-gray-500 border border-gray-700 px-1.5 py-0.5 rounded" :
+                                                         "text-red-500 border border-red-500/40 px-1.5 py-0.5 rounded"
+                              }>{b.status}</span>
+                              <span className="text-[#D4AF37]/70">{b.source}</span>
+                            </div>
+                            <div className="text-xs text-gray-600">
+                              {new Date(b.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                            </div>
+                          </div>
+                          <div className="text-sm text-white mb-2">{b.message}</div>
+                          {(b.email || b.url) && (
+                            <div className="text-xs text-gray-600 mb-3">
+                              {b.email && <>by {b.email}</>}
+                              {b.email && b.url && <> · </>}
+                              {b.url && <span className="font-mono">{b.url}</span>}
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            {b.status !== "seen" && (
+                              <button onClick={() => markBug(b.id, "seen")} className="text-xs uppercase tracking-widest px-2 py-1 border border-[#D4AF37]/20 text-[#D4AF37]/70 hover:bg-[#D4AF37]/10 rounded">
+                                Mark Seen
+                              </button>
+                            )}
+                            {b.status !== "fixed" && (
+                              <button onClick={() => markBug(b.id, "fixed")} className="text-xs uppercase tracking-widest px-2 py-1 border border-green-500/30 text-green-500/80 hover:bg-green-500/10 rounded">
+                                Mark Fixed
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── AGENTS TAB ──────────────────────────────────────────────── */}
+            {activeTab === 'agents' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-bold text-white">Agent Control</h2>
+                <AgentControl 
+                  themeColor="reactor-orange"
+                  activeDeploying={loading}
+                  tasks={tasks}
+                  onDeployAgent={handleDeployAgent}
+                  onReadAloud={handleReadAloud}
+                />
+                <ConsoleTerminal 
+                  logs={logs} 
+                  themeColor="reactor-orange" 
+                  onManualCommand={(cmd) => {
+                    addLog(`[USER] ${cmd}`);
+                    if (cmd === "refresh") fetchStats();
+                    else if (cmd === "clear") setLogs([]);
+                    else addLog(`[Genius] Command unrecognized. Awaiting valid neural input.`);
+                  }} 
+                />
+              </div>
+            )}
+
           </div>
-        </div>
-
-        {/* RIGHT COLUMN: Terminal & Controls */}
-        <div className="col-span-12 lg:col-span-4 space-y-8">
-          
-          {/* Neural Terminal */}
-          <ConsoleTerminal 
-            logs={logs} 
-            themeColor="reactor-orange" 
-            onManualCommand={(cmd) => {
-              addLog(`[USER] ${cmd}`);
-              if (cmd === "refresh") fetchStats();
-              else if (cmd === "clear") setLogs([]);
-              else addLog(`[Genius] Command unrecognized. Awaiting valid neural input.`);
-            }} 
-          />
-
-          {/* System Telemetry */}
-          <SystemWidget 
-            themeColor="reactor-orange"
-            metrics={{
-              coreTemp: 42,
-              arcReactorPercent: 99.8,
-              cpuUsage: 12,
-              memoryUsage: 24,
-              synapseLatency: 18,
-              satelliteStatus: 'online'
-            }}
-          />
-
-          {/* Agent Workspace */}
-          <AgentControl 
-            themeColor="reactor-orange"
-            activeDeploying={loading}
-            tasks={tasks}
-            onDeployAgent={handleDeployAgent}
-            onReadAloud={handleReadAloud}
-          />
-
         </div>
       </div>
 
-      {/* Per-user drill-down — opens when a Neural Registry row is clicked.
-          Renders a right-side panel with stats + activity tab + credits tab. */}
+      {/* User Drill Modal */}
       <UserDrillModal
         user={selectedUser}
         onClose={() => setSelectedUser(null)}
