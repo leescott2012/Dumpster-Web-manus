@@ -2,7 +2,7 @@
  * DumpActionSheet — iOS-style "..." action menu for a dump
  * Actions: Rate, Heart, Valet (AI assistant), Generate Captions, Export/Share, Delete
  */
-import { Heart, Sparkles, Share2, Trash2, X, MessageCircle, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Heart, Sparkles, Share2, Trash2, X, MessageCircle, ThumbsUp, ThumbsDown, Archive, ArchiveRestore } from "lucide-react";
 import type { Dump } from "@/lib/photoData";
 
 interface DumpActionSheetProps {
@@ -15,6 +15,8 @@ interface DumpActionSheetProps {
   onThumbsDown: (dumpId: string) => void;
   onCaptions: (dumpId: string) => void;
   onExport: (dumpId: string) => void;
+  onArchive: (dumpId: string) => void;
+  isArchived?: boolean;
   onDelete: (dumpId: string) => void;
 }
 
@@ -29,7 +31,7 @@ interface ActionRow {
 }
 
 export default function DumpActionSheet({
-  dump, open, onClose, onHeart, onChat, onRate, onThumbsDown, onCaptions, onExport, onDelete,
+  dump, open, onClose, onHeart, onChat, onRate, onThumbsDown, onCaptions, onExport, onArchive, isArchived, onDelete,
 }: DumpActionSheetProps) {
   if (!open || !dump) return null;
 
@@ -67,6 +69,13 @@ export default function DumpActionSheet({
       color: "var(--accent)",
       disabled: dump.photos.length === 0,
       onClick: function() { onExport(dump.id); onClose(); },
+    },
+    {
+      icon: isArchived ? <ArchiveRestore size={18} /> : <Archive size={18} />,
+      label: isArchived ? "Unarchive Dump" : "Archive Dump",
+      sublabel: isArchived ? "Show it in the main list again" : "Save it and hide from the main list",
+      color: "#e8e8e8",
+      onClick: function() { onArchive(dump.id); onClose(); },
     },
     {
       icon: <Trash2 size={18} />,

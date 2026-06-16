@@ -30,6 +30,17 @@ export interface PoolCaption {
    * would resurrect deleted captions. UI hides anything with deleted=true.
    */
   deleted?: boolean;
+  /**
+   * Archived = "used". Once a caption has been copied/applied to a post the
+   * user doesn't want it cluttering the active list, so it moves to the "Used"
+   * tab. Unlike `deleted` it's fully reversible and keeps a link to the dump
+   * it was used on.
+   */
+  archived?: boolean;
+  /** Epoch ms the caption was marked used. */
+  usedAt?: number;
+  /** Dump this caption was used on, if it was archived alongside one. */
+  usedInDumpId?: string;
 }
 
 const STORAGE_KEY = "dumpster_captions";
@@ -152,6 +163,39 @@ export function removeCaption(id: string): PoolCaption[] {
   const list = raw.map(c => c.id === id ? { ...c, deleted: true, favorited: false, banned: false } : c);
   saveCaptions(list);
   return list.filter(c => !c.deleted);
+}
+
+/**
+ * Mark a caption as used → archive it so it drops off the active list.
+ * Reversible via the same toggle (un-archive). Returns the active list.
+ */
+export function markCaptionUsed(id: string, used: boolean, dumpId?: string): PoolCaption[] {
+  const list = loadCaptions().map(c => {
+    if (c.id !== id) return c;
+    return used
+      ? { ...c, archived: true, usedAt: Date.now(), usedInDumpId: dumpId ?? c.usedInDumpId }
+      : { ...c, archived: false };
+  });
+  saveCaptions(list);
+  return list;
+}
+
+/**
+ * Archive every pool caption whose text matches one used on a dump — called
+ * when a dump is archived so its captions don't keep showing as "available".
+ * Matching is case/whitespace-insensitive. Returns the active list.
+ */
+export function archiveCaptionsByText(texts: string[], dumpId?: string): PoolCaption[] {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const wanted = new Set(texts.map(norm));
+  const now = Date.now();
+  const list = loadCaptions().map(c =>
+    !c.archived && wanted.has(norm(c.text))
+      ? { ...c, archived: true, usedAt: now, usedInDumpId: dumpId ?? c.usedInDumpId }
+      : c
+  );
+  saveCaptions(list);
+  return list;
 }
 
 export function importCaptions(texts: string[], style: CaptionStyle): PoolCaption[] {

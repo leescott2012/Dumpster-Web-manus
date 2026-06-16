@@ -142,12 +142,31 @@ export function logBug(args: BugInput): void {
 
 // ── Global handlers ──────────────────────────────────────────────────────────
 
+// Errors thrown by injected third-party scripts aren't ours to fix and just
+// pollute the bug inventory. The Vercel Live feedback toolbar (preview
+// deployments) throws a recurring InvalidNodeTypeError from its text-selection
+// feature; browser extensions inject scripts under *-extension:// URLs. Drop
+// anything that originates from these instead of logging it.
+const NOISE_MARKERS = [
+  "vercel.live",
+  "chrome-extension://",
+  "moz-extension://",
+  "safari-extension://",
+  "safari-web-extension://",
+];
+function isNoiseError(...parts: Array<string | undefined | null>): boolean {
+  const hay = parts.filter(Boolean).join(" ");
+  return NOISE_MARKERS.some(m => hay.includes(m));
+}
+
 let _installed = false;
 export function installGlobalBugHandlers(): void {
   if (_installed || typeof window === "undefined") return;
   _installed = true;
 
   window.addEventListener("error", (event) => {
+    const stack = event.error instanceof Error ? event.error.stack : undefined;
+    if (isNoiseError(stack, event.filename, event.message)) return;
     // event.error may be null in some browsers (CORS-failed scripts, etc.)
     logBug({
       source:   "unhandled",
@@ -164,6 +183,8 @@ export function installGlobalBugHandlers(): void {
   });
 
   window.addEventListener("unhandledrejection", (event) => {
+    const stack = event.reason instanceof Error ? event.reason.stack : undefined;
+    if (isNoiseError(stack, getMessage(event.reason, ""))) return;
     logBug({
       source:   "unhandled-promise",
       message:  getMessage(event.reason, "Unhandled promise rejection"),

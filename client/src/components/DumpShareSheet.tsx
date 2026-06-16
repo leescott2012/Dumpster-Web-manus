@@ -7,7 +7,7 @@
  */
 import { useState, useCallback } from "react";
 import {
-  X, Download, Copy, Check, Share2, ExternalLink, Loader2,
+  X, Download, Copy, Check, Share2, ExternalLink, Loader2, Archive,
 } from "lucide-react";
 import type { Dump } from "@/lib/photoData";
 import { track } from "@/lib/analytics";
@@ -16,6 +16,8 @@ interface DumpShareSheetProps {
   dump: Dump | null;
   open: boolean;
   onClose: () => void;
+  /** Archive the dump once its photos are saved (optional). */
+  onArchive?: (dumpId: string) => void;
 }
 
 // iOS Safari sends `<a download>` to the Files app, not Photos. The Web Share
@@ -106,7 +108,7 @@ async function sharePhotosBulk(urls: string[], filenamePrefix: string): Promise<
   }
 }
 
-export default function DumpShareSheet({ dump, open, onClose }: DumpShareSheetProps) {
+export default function DumpShareSheet({ dump, open, onClose, onArchive }: DumpShareSheetProps) {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
@@ -323,6 +325,23 @@ export default function DumpShareSheet({ dump, open, onClose }: DumpShareSheetPr
               : <><Download size={14} /> {onIos ? `Save All ${dump.photos.length} to Photos` : `Download All ${dump.photos.length} Photos`}</>
             }
           </button>
+
+          {/* Archive once saved — "after I save photos … archive the dump".
+              Appears after at least one slide has been downloaded/shared. */}
+          {onArchive && downloadedIds.size > 0 && (
+            <button
+              onClick={() => { onArchive(dump.id); handleClose(); }}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 10,
+                padding: "13px 20px", color: "#22c55e",
+                fontSize: 13, fontWeight: 700, cursor: "pointer",
+                fontFamily: "inherit", letterSpacing: "0.04em", marginBottom: 20,
+              }}
+            >
+              <Archive size={14} /> Saved — Archive this dump
+            </button>
+          )}
 
           {/* Captions section */}
           {hasCaptions && (

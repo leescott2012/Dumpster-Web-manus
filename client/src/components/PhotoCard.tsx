@@ -29,6 +29,8 @@ interface PhotoCardProps {
   selectionIndex?: number;
   deleteMode?: boolean;
   isDeleteSelected?: boolean;
+  /** Flagged as a possible duplicate of another photo — amber border + badge. */
+  isDuplicate?: boolean;
 }
 
 export default function PhotoCard({
@@ -37,6 +39,7 @@ export default function PhotoCard({
   isDragOver = false, width = 200, height = 260, fill = false,
   selectionMode = false, selectionIndex,
   deleteMode = false, isDeleteSelected = false,
+  isDuplicate = false,
 }: PhotoCardProps) {
   var { startDrag, dragState } = useDrag();
 
@@ -185,6 +188,8 @@ export default function PhotoCard({
     borderColor = "var(--accent)";
   } else if (isDragOver) {
     borderColor = "var(--accent)";
+  } else if (isDuplicate) {
+    borderColor = "#f59e0b"; // amber — possible duplicate
   } else {
     borderColor = "#1e1e1e";
   }
@@ -253,6 +258,19 @@ export default function PhotoCard({
       }}>
         {badgeLabel}
       </div>
+
+      {/* Possible-duplicate badge — amber, sits under the slide number */}
+      {isDuplicate && !selectionMode && !deleteMode && (
+        <div style={{
+          position: "absolute", top: "8px", right: "8px",
+          background: "rgba(245,158,11,0.92)", color: "#1a1200",
+          fontSize: "8px", fontWeight: 800, letterSpacing: "0.08em",
+          padding: "2px 6px", borderRadius: "4px", pointerEvents: "none",
+          textTransform: "uppercase",
+        }}>
+          Dupe?
+        </div>
+      )}
 
       {/* Gold star badge — when favorited */}
       {photo.isFavorite && (

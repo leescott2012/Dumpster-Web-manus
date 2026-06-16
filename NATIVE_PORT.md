@@ -186,4 +186,52 @@ Web doesn't have these yet — opportunity for native to ship first:
 
 ---
 
-_Last updated by Claude: 2026-05-28 · session commit ref: `0a99f50` … `live-stripe-deploy`_
+## 11. Native → Admin dashboard wiring
+
+The **GENIUSS admin dashboard** (`/admin`) is web-only by design, but its data is **backend-sourced, not client-sourced**. It reads entirely from Supabase + Stripe via `server/handlers/admin-stats.ts` (service_role, bypasses RLS). So native usage flows into the same dashboard **automatically** for anything the server records — no per-client dashboard exists or is needed.
+
+### What connects automatically (zero native work)
+As long as the iOS app (a) authenticates against the **same Supabase project** and (b) routes AI calls through the **same backend endpoints** (`/api/ai-caption`, `/api/ai-suggest`, `/api/ai-chat`):
+
+| Dashboard data | Backend source | Why it's automatic |
+|---|---|---|
+| Total users, join date, last sign-in | `auth.users` | same Supabase Auth |
+| Credits, subscription tier | `profiles` | shared table |
+| AI feature usage (counts + credit spend), per-user `ai_calls`/`credits_used` | `credit_transactions` | written **server-side** in `server/supabaseAdmin.ts` on every gated AI call |
+
+### Gap A — Activity events (DAU / uploads / exports) ⚪
+These are the **only** dashboard inputs emitted client-side (`client/src/lib/analytics.ts`), so native must emit its own. Insert directly into `public.activity_log` via the Supabase Swift SDK using the signed-in user's JWT — RLS policy `users_insert_own_activity` already permits `auth.uid() = user_id`, so **no new endpoint is required**. Fire-and-forget; never block UI.
+
+Emit the exact same three events with the exact metadata shapes the aggregator reads:
+
+| Event | When | Metadata | Read by dashboard as |
+|---|---|---|---|
+| `session_start` | once per sign-in | _(none)_ | DAU + active_today/active_week |
+| `photo_uploaded` | after photos land in pool | `{ "count": <n> }` | per-user `photos_uploaded` (sums `count`) |
+| `dump_exported` | after a full-dump export | `{ "photo_count": <n> }` | per-user `exports` (counts rows) |
+
+```swift
+// AIProfileSync.swift / Analytics.swift — mirror analytics.ts:28 verbatim
+func track(_ event: String, metadata: [String: Any]? = nil) async {
+    guard let userId = currentUserId else { return }
+    if userId == adminUserId { return }   // keep owner's own usage out of analytics
+    try? await supabase.from("activity_log").insert([
+        "user_id": userId, "event": event, "metadata": metadata
+    ]).execute()                          // fire-and-forget; ignore errors
+}
+```
+
+**Owner exclusion:** web skips analytics for `IS_OWNER` accounts. Native is account-based — skip tracking when `userId == ADMIN_USER_ID` so your own usage doesn't pollute the data (shown above).
+
+### Gap B — IAP revenue ⚪
+The revenue chart pulls Stripe `balanceTransactions` (`fetchRevenue()` in `admin-stats.ts:98`). Apple IAP money never touches Stripe, so it won't appear. To unify:
+1. Verify IAP receipts in the planned `POST /api/iap-verify` endpoint (§7).
+2. Record each verified purchase into a revenue table (or reuse `credit_transactions` with a positive `amount` + `type='iap_purchase'`).
+3. Extend `fetchRevenue()` to merge that source into the daily buckets + today/week/month sums alongside Stripe.
+
+### Summary
+Point native at the same Supabase + backend → **users, credits, tiers, and AI usage land in the dashboard with no changes.** Add the three `activity_log` inserts (Gap A) and an IAP revenue feed (Gap B) for full parity.
+
+---
+
+_Last updated by Claude: 2026-06-14 · added §11 Native → Admin dashboard wiring. Prior: 2026-05-28 `live-stripe-deploy`. NOTE: §§1–10 predate the GENIUSS/reactor/admin wave, owner cross-device sync write-back, bulk delete, IG Scrub, and the $1 pack — those web features are not yet itemized here._

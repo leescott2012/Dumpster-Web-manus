@@ -235,16 +235,30 @@ export default function Admin() {
 
   const markBug = useCallback(async function(id: string, status: "seen" | "fixed" | "new") {
     if (!session) return;
-    await fetch("/api/bug-report", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + session.access_token,
-      },
-      body: JSON.stringify({ id, status }),
-    });
-    fetchBugs();
-  }, [session, fetchBugs]);
+    // Optimistic UI: if the new status no longer matches the active filter,
+    // drop the row from view immediately so a bug labeled "fixed" clears at
+    // once (rather than lingering until the next fetch). When viewing "all",
+    // just update the badge in place.
+    const stillVisible = bugFilter === "all" || bugFilter === status;
+    setBugs(prev =>
+      stillVisible
+        ? prev.map(b => (b.id === id ? { ...b, status } : b))
+        : prev.filter(b => b.id !== id)
+    );
+    try {
+      const res = await fetch("/api/bug-report", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + session.access_token,
+        },
+        body: JSON.stringify({ id, status }),
+      });
+      if (!res.ok) fetchBugs(); // server rejected — resync to the truth
+    } catch {
+      fetchBugs(); // network error — resync so the row reappears
+    }
+  }, [session, bugFilter, fetchBugs]);
 
   // Audio setup
   const addLog = (msg: string) => {
@@ -669,7 +683,22 @@ export default function Admin() {
               className={hudState !== 'idle' ? 'geniuss-rainbow' : undefined}
               style={hudState === 'idle' ? { filter: `hue-rotate(${hudHueDeg}deg)` } : undefined}
             >
-              <GeniusHUD state={hudState} isOnline={true} onTalk={handleTalk} levelRef={reactor.levelRef} bandsRef={reactor.bandsRef} peakRef={reactor.peakRef} />
+              <GeniusHUD
+                state={hudState}
+                isOnline={true}
+                onTalk={handleTalk}
+                levelRef={reactor.levelRef}
+                bandsRef={reactor.bandsRef}
+                peakRef={reactor.peakRef}
+                metrics={{
+                  users: overview.total_users,
+                  activeToday: overview.active_today,
+                  aiCalls: overview.ai_calls_today,
+                  creditsToday: overview.credits_spent_today,
+                  revenueToday: fmtMoney(revenue?.today_cents ?? 0),
+                  revenueAll: fmtMoney(revenue?.total_cents ?? 0),
+                }}
+              />
             </div>
 
             {/* Reactor color + voice controls */}

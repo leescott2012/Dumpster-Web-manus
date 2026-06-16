@@ -4,14 +4,14 @@
  * Features: style chips, auto-generate from style banks, custom add, filter tabs, favorite/ban/remove.
  */
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { Heart, Trash2, Ban, Copy, Check, Sparkles, Plus } from "lucide-react";
+import { Heart, Trash2, Ban, Copy, Check, Sparkles, Plus, RotateCcw } from "lucide-react";
 import {
   loadCaptions, toggleFavorite, toggleBanned, removeCaption,
-  addCaption, importCaptions,
+  addCaption, importCaptions, markCaptionUsed,
   type PoolCaption, type CaptionStyle,
 } from "@/lib/captionPool";
 
-type FilterTab = "all" | "favorites" | "banned";
+type FilterTab = "all" | "favorites" | "banned" | "used";
 
 const STYLES: { key: Exclude<CaptionStyle, "ai" | "custom">; label: string }[] = [
   { key: "storytelling", label: "Storytelling" },
@@ -51,21 +51,42 @@ export default function CaptionPool() {
 
   const filtered = useMemo(() => {
     let xs = list;
-    if (filterTab === "favorites") xs = xs.filter(c => c.favorited);
-    else if (filterTab === "banned") xs = xs.filter(c => c.banned);
+    // "Used" shows only archived captions; every other tab hides them so a used
+    // caption drops off the active list ("i dont need to see it on my list").
+    if (filterTab === "used") xs = xs.filter(c => c.archived);
+    else {
+      xs = xs.filter(c => !c.archived);
+      if (filterTab === "favorites") xs = xs.filter(c => c.favorited);
+      else if (filterTab === "banned") xs = xs.filter(c => c.banned);
+    }
     if (activeStyle !== "all") xs = xs.filter(c => c.style === activeStyle);
     return xs;
   }, [list, filterTab, activeStyle]);
 
   const handleAutoGenerate = useCallback(() => {
-    const styleKey = activeStyle === "all" ? "storytelling" : activeStyle;
-    const bank = STYLE_BANKS[styleKey as string] || STYLE_BANKS.storytelling;
-    // Pick 3 random ones not already in pool
+    // "All" draws from every preset bank; a specific style draws from its own.
+    // (AI/Custom have no preset bank, so the button is disabled for them.)
+    const banks: [string, string[]][] =
+      activeStyle === "all"
+        ? Object.entries(STYLE_BANKS)
+        : [[activeStyle as string, STYLE_BANKS[activeStyle as string] || []]];
+
+    // Flatten to candidates, dropping any already in the pool.
     const existing = new Set(list.map(c => c.text.toLowerCase()));
-    const fresh = bank.filter(t => !existing.has(t.toLowerCase()));
-    const picks = fresh.length >= 3 ? fresh.sort(() => 0.5 - Math.random()).slice(0, 3) : fresh;
-    if (picks.length === 0) return;
-    const next = importCaptions(picks, styleKey as CaptionStyle);
+    const candidates = banks.flatMap(([style, texts]) =>
+      texts.filter(t => !existing.has(t.toLowerCase())).map(text => ({ text, style }))
+    );
+    if (candidates.length === 0) return;
+
+    // Pick 3 at random, then add them grouped by their own style so each
+    // caption keeps its correct style tag.
+    const picks = candidates.sort(() => 0.5 - Math.random()).slice(0, 3);
+    const styles = picks.map(p => p.style).filter((s, i, arr) => arr.indexOf(s) === i);
+    let next = list;
+    styles.forEach(style => {
+      const texts = picks.filter(p => p.style === style).map(p => p.text);
+      next = importCaptions(texts, style as CaptionStyle);
+    });
     setList(next);
   }, [activeStyle, list]);
 
@@ -86,8 +107,13 @@ export default function CaptionPool() {
       await navigator.clipboard.writeText(text);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 1500);
+      // Using a caption archives it → moves to the "Used" tab so the active
+      // list stays clean. Short delay so the copied checkmark is visible first.
+      setTimeout(() => setList(markCaptionUsed(id, true)), 700);
     } catch { /* noop */ }
   }, []);
+
+  const handleRestore = useCallback((id: string) => setList(markCaptionUsed(id, false)), []);
 
   // ── styles ────────────────────────────────────────────────────────────────
 
@@ -119,15 +145,15 @@ export default function CaptionPool() {
       <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "stretch", flexWrap: "wrap" }}>
         <button
           onClick={handleAutoGenerate}
-          disabled={activeStyle === "all" || activeStyle === "ai" || activeStyle === "custom"}
-          title={(activeStyle === "all" || activeStyle === "ai" || activeStyle === "custom") ? "Pick a style chip first" : "Add 3 random " + activeStyle + " captions"}
+          disabled={activeStyle === "ai" || activeStyle === "custom"}
+          title={(activeStyle === "ai" || activeStyle === "custom") ? "Auto-generate isn't available for AI / Custom — pick a preset style or All" : activeStyle === "all" ? "Add 3 random captions across all styles" : "Add 3 random " + activeStyle + " captions"}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            background: (activeStyle === "all" || activeStyle === "ai" || activeStyle === "custom") ? "#1a1a1a" : "var(--accent)",
-            color: (activeStyle === "all" || activeStyle === "ai" || activeStyle === "custom") ? "#444" : "#000",
+            background: (activeStyle === "ai" || activeStyle === "custom") ? "#1a1a1a" : "var(--accent)",
+            color: (activeStyle === "ai" || activeStyle === "custom") ? "#444" : "#000",
             border: "none", borderRadius: 100,
             padding: "8px 14px", fontSize: 12, fontWeight: 700,
-            cursor: (activeStyle === "all" || activeStyle === "ai" || activeStyle === "custom") ? "not-allowed" : "pointer",
+            cursor: (activeStyle === "ai" || activeStyle === "custom") ? "not-allowed" : "pointer",
             fontFamily: "inherit",
           }}
         >
@@ -164,9 +190,13 @@ export default function CaptionPool() {
 
       {/* Filter tabs */}
       <div style={{ display: "flex", gap: 6, marginBottom: 16, borderBottom: "1px solid #1e1e1e", paddingBottom: 12 }}>
-        {(["all", "favorites", "banned"] as FilterTab[]).map(tab => {
+        {(["all", "favorites", "banned", "used"] as FilterTab[]).map(tab => {
           const active = filterTab === tab;
-          const count = tab === "all" ? list.length : tab === "favorites" ? list.filter(c => c.favorited).length : list.filter(c => c.banned).length;
+          const activeList = list.filter(c => !c.archived);
+          const count = tab === "all" ? activeList.length
+            : tab === "favorites" ? activeList.filter(c => c.favorited).length
+            : tab === "banned" ? activeList.filter(c => c.banned).length
+            : list.filter(c => c.archived).length;
           return (
             <button key={tab} onClick={() => setFilterTab(tab)} style={{
               background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit",
@@ -190,6 +220,7 @@ export default function CaptionPool() {
         }}>
           {filterTab === "favorites" ? "No favorites yet — heart captions you love." :
            filterTab === "banned" ? "Nothing banned." :
+           filterTab === "used" ? "Nothing used yet. Captions you copy land here." :
            "No captions in this style. Pick another or auto-generate."}
         </div>
       ) : (
@@ -226,7 +257,12 @@ export default function CaptionPool() {
               </div>
 
               <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                <button onClick={() => handleCopy(c.text, c.id)} title="Copy" style={iconBtnStyle(copiedId === c.id ? "#22c55e" : "#666")}>
+                {c.archived && (
+                  <button onClick={() => handleRestore(c.id)} title="Restore to active list" style={iconBtnStyle("var(--accent)")}>
+                    <RotateCcw size={14} />
+                  </button>
+                )}
+                <button onClick={() => handleCopy(c.text, c.id)} title={c.archived ? "Copy" : "Copy & mark used"} style={iconBtnStyle(copiedId === c.id ? "#22c55e" : "#666")}>
                   {copiedId === c.id ? <Check size={14} /> : <Copy size={14} />}
                 </button>
                 <button onClick={() => handleFavorite(c.id)} title={c.favorited ? "Unfavorite" : "Favorite"} style={iconBtnStyle(c.favorited ? "var(--accent)" : "#666")}>

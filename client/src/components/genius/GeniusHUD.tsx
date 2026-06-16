@@ -11,6 +11,8 @@ interface HUDProps {
   levelRef?: React.MutableRefObject<number>;
   bandsRef?: React.MutableRefObject<[number, number, number]>;
   peakRef?: React.MutableRefObject<number>;
+  /** Real live admin metrics for the corner readouts. */
+  metrics?: { users: number; activeToday: number; aiCalls: number; creditsToday: number; revenueToday: string; revenueAll: string };
 }
 
 // Smooth closed blob path (Catmull-Rom -> cubic bezier) through control points.
@@ -44,8 +46,9 @@ function stateBaseline(state: string, t: number): number {
 
 const BLOB_SEEDS = [0, 1.7, 3.4, 5.1, 6.8, 8.5, 10.2, 11.9, 13.6];
 
-const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, bandsRef, peakRef }) => {
+const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, bandsRef, peakRef, metrics }) => {
   const [glSupported, setGlSupported] = useState(true);
+  const m = metrics ?? { users: 0, activeToday: 0, aiCalls: 0, creditsToday: 0, revenueToday: "—", revenueAll: "—" };
   const getStatusColor = () => {
     switch (state) {
       case 'listening': return '#D4AF37'; // Gold
@@ -229,63 +232,62 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, band
         {/* Floating Data Widgets - Layer 3 (Front) */}
         <div className="absolute inset-0 pointer-events-none" style={{ transform: 'translateZ(50px)' }}>
           
-          {/* Top Left: Bio-Metrics */}
+          {/* Top Left: Total Users */}
           <div className="absolute top-10 left-10 w-48 p-4 border-l border-t border-[#D4AF37]/40 space-y-2">
-            <div className="text-[9px] text-[#D4AF37]/60 uppercase tracking-widest">Neural Linkage</div>
+            <div className="text-[9px] text-[#D4AF37]/60 uppercase tracking-widest">Total Users</div>
             <div className="flex items-end gap-2">
-              <div className="text-xl font-bold">98.4</div>
-              <div className="text-[10px] pb-1 opacity-60">SYNC_RATE</div>
+              <div className="text-xl font-bold">{m.users}</div>
+              <div className="text-[10px] pb-1 opacity-60">{m.activeToday} ACTIVE</div>
             </div>
             <div className="h-[2px] w-full bg-[#D4AF37]/10 overflow-hidden">
-              <motion.div 
-                className="h-full bg-[#D4AF37]" 
-                animate={{ width: ['20%', '98%', '85%'] }}
-                transition={{ duration: 5, repeat: Infinity }}
+              <div
+                className="h-full bg-[#D4AF37]"
+                style={{ width: `${m.users > 0 ? Math.min(100, Math.round((m.activeToday / m.users) * 100)) : 0}%`, transition: 'width 0.6s ease' }}
               />
             </div>
           </div>
 
-          {/* Top Right: System Load */}
+          {/* Top Right: AI Calls Today */}
           <div className="absolute top-10 right-10 w-48 p-4 border-r border-t border-[#D4AF37]/40 text-right space-y-2">
-            <div className="text-[9px] text-[#D4AF37]/60 uppercase tracking-widest">Power Core</div>
+            <div className="text-[9px] text-[#D4AF37]/60 uppercase tracking-widest">AI Calls · Today</div>
             <div className="flex items-end justify-end gap-2">
-              <div className="text-xl font-bold">100%</div>
-              <div className="text-[10px] pb-1 opacity-60">STABLE</div>
+              <div className="text-xl font-bold">{m.aiCalls}</div>
+              <div className="text-[10px] pb-1 opacity-60">CALLS</div>
             </div>
             <div className="flex justify-end gap-1">
               {[...Array(10)].map((_, i) => (
-                <div key={i} className="w-2 h-1 bg-[#D4AF37]" />
+                <div key={i} className="w-2 h-1" style={{ background: i < Math.min(10, m.aiCalls) ? '#D4AF37' : 'rgba(212,175,55,0.2)' }} />
               ))}
             </div>
           </div>
 
-          {/* Bottom Left: Coordinates */}
+          {/* Bottom Left: Revenue */}
           <div className="absolute bottom-20 left-10 text-[10px] space-y-1">
             <div className="flex gap-4">
-              <span className="opacity-40">LAT:</span>
-              <span>34.0194° N</span>
+              <span className="opacity-40">TODAY:</span>
+              <span className="font-bold">{m.revenueToday}</span>
             </div>
             <div className="flex gap-4">
-              <span className="opacity-40">LONG:</span>
-              <span>118.4912° W</span>
+              <span className="opacity-40">ALL-TIME:</span>
+              <span className="font-bold">{m.revenueAll}</span>
             </div>
             <div className="pt-2 border-t border-[#D4AF37]/20">
-              <span className="text-[8px] opacity-60">CHAMILLION_COLLECTIVE_INDUSTRIES_SECURE_LINK</span>
+              <span className="text-[8px] opacity-60">CHAMILLION_COLLECTIVE · REVENUE</span>
             </div>
           </div>
 
-          {/* Bottom Right: Environment */}
+          {/* Bottom Right: Usage Today */}
           <div className="absolute bottom-20 right-10 text-[10px] text-right space-y-1">
             <div className="flex justify-end gap-4">
-              <span>MALIBU_CA</span>
-              <span className="opacity-40">LOC:</span>
+              <span className="font-bold">{m.creditsToday}</span>
+              <span className="opacity-40">CREDITS:</span>
             </div>
             <div className="flex justify-end gap-4">
-              <span>72°F</span>
-              <span className="opacity-40">TEMP:</span>
+              <span className="font-bold">{m.activeToday}</span>
+              <span className="opacity-40">ACTIVE:</span>
             </div>
             <div className="pt-2 border-t border-[#D4AF37]/20">
-              <span className="text-[8px] opacity-60">ENVIRO_SCAN_V2.1</span>
+              <span className="text-[8px] opacity-60">USAGE · TODAY</span>
             </div>
           </div>
         </div>
