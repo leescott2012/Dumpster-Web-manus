@@ -123,15 +123,23 @@ export async function loadWorkspace(
 
 import { getAuthHeaders } from "./supabase";
 
+function isCloudUrl(url: string) { return url.startsWith("http"); }
+
 function serialize(dumps: Dump[], pool: Photo[]) {
+  // Data-URL photos are too large for the workspace JSON (hits Vercel's 4.5 MB
+  // body limit fast). They live in IndexedDB only; only HTTPS-URL photos sync.
   return {
     dumps: dumps.map(function (d) {
       return {
         id: d.id, title: d.title, subtitle: d.subtitle,
-        photos: d.photos.map(function (p) { return { id: p.id, url: p.url, category: p.category }; }),
+        photos: d.photos
+          .filter(function (p) { return isCloudUrl(p.url); })
+          .map(function (p) { return { id: p.id, url: p.url, category: p.category }; }),
       };
     }),
-    pool: pool.map(function (p) { return { id: p.id, url: p.url, category: p.category }; }),
+    pool: pool
+      .filter(function (p) { return isCloudUrl(p.url); })
+      .map(function (p) { return { id: p.id, url: p.url, category: p.category }; }),
   };
 }
 
@@ -154,6 +162,29 @@ export async function saveWorkspaceNow(
     });
   } catch (e) {
     console.warn("[workspaceSync] save failed:", e);
+  }
+}
+
+/**
+ * Upload one photo's bytes to Supabase Storage at import time and return its
+ * public HTTPS URL. Returns null when not signed in, the url isn't a data URL,
+ * or anything fails — caller keeps the data URL (device-local fallback).
+ */
+export async function uploadPhotoToCloud(id: string, dataUrl: string): Promise<string | null> {
+  if (!dataUrl || dataUrl.indexOf("data:") !== 0) return null;
+  try {
+    var headers = await getAuthHeaders();
+    if (!headers.Authorization) return null; // guest → stays local
+    var res = await fetch("/api/upload-photo", {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json" }, headers),
+      body: JSON.stringify({ id: id, dataUrl: dataUrl }),
+    });
+    if (!res.ok) return null;
+    var data = await res.json();
+    return data && typeof data.url === "string" ? data.url : null;
+  } catch {
+    return null;
   }
 }
 

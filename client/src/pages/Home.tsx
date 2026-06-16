@@ -35,11 +35,12 @@ import DemoBanner from "@/components/DemoBanner";
 import GuidedTour, { isTourCompleted } from "@/components/GuidedTour";
 import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { loadCaptions } from "@/lib/captionPool";
+import { loadCaptions, archiveCaptionsByText } from "@/lib/captionPool";
+import { findDuplicatePhotoIds } from "@/lib/photoDupes";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
-import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave } from "@/lib/workspaceSync";
+import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud } from "@/lib/workspaceSync";
 import { track } from "@/lib/analytics";
 
 function HomeContent() {
@@ -48,10 +49,40 @@ function HomeContent() {
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,
-    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
+    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, replacePhotoUrl, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto, setDumpChatHistory,
+    archivedDumpIds, archiveDump, unarchiveDump,
   } = useCarouselState();
+
+  // Split dumps into the active list (shown up top) and the archived list
+  // (collapsed below). Archived dumps stay in `dumps` so nothing is lost.
+  var archivedIdSet = useMemo(function() { return new Set(archivedDumpIds); }, [archivedDumpIds]);
+  var activeDumps = useMemo(function() { return dumps.filter(function(d) { return !archivedIdSet.has(d.id); }); }, [dumps, archivedIdSet]);
+  var archivedDumps = useMemo(function() { return dumps.filter(function(d) { return archivedIdSet.has(d.id); }); }, [dumps, archivedIdSet]);
+  var [showArchived, setShowArchived] = useState(false);
+
+  // Archive a dump and tuck away any caption-pool entries it used, so a saved
+  // dump and its captions both drop off the active lists in one move.
+  var handleArchiveDump = useCallback(function(dumpId: string) {
+    if (archivedIdSet.has(dumpId)) {
+      unarchiveDump(dumpId);
+      toast("Dump restored");
+      return;
+    }
+    var d = dumps.find(function(x) { return x.id === dumpId; });
+    archiveDump(dumpId);
+    if (d && d.captions && d.captions.length > 0) archiveCaptionsByText(d.captions, dumpId);
+    toast("Dump archived");
+  }, [dumps, archivedIdSet, archiveDump, unarchiveDump]);
+
+  // Possible-duplicate photo ids, computed across the whole workspace (pool +
+  // every dump) so a re-uploaded photo is flagged wherever it sits.
+  var duplicatePhotoIds = useMemo(function() {
+    var all = pool.slice();
+    for (var i = 0; i < dumps.length; i++) all = all.concat(dumps[i].photos);
+    return findDuplicatePhotoIds(all);
+  }, [pool, dumps]);
 
   var { dragState, updateDragPosition, endDrag } = useDrag();
 
@@ -182,10 +213,12 @@ function HomeContent() {
   // workspace renders as a wall of stats with no upload affordance — beta
   // testers were getting stuck here.
   useEffect(function() {
-    if (dumps.length === 0) {
+    // Count only active dumps — if every dump is archived the user still needs
+    // a visible target to upload into.
+    if (activeDumps.length === 0) {
       createNewDump();
     }
-  }, [dumps.length, createNewDump]);
+  }, [activeDumps.length, createNewDump]);
 
   /**
    * Credit gate — checks if user can afford an AI action.
@@ -470,17 +503,40 @@ function HomeContent() {
         .filter(function(r): r is PromiseFulfilledResult<Photo> { return r.status === "fulfilled"; })
         .map(function(r) { return r.value; });
       var failCount = results.length - photos.length;
-      if (photos.length > 0) {
-        addUploadedPhotos(photos);
-        track("photo_uploaded", { count: photos.length });
-        var msg = "Added " + photos.length + (photos.length === 1 ? " item" : " items") + " to pool";
-        if (failCount > 0) msg += " (" + failCount + " couldn't be processed)";
-        toast(msg);
-      } else {
+      if (photos.length === 0) {
         toast("Couldn't process " + (failCount === 1 ? "that file" : "those files") + " — try again");
+        return;
       }
+
+      // Show them in the pool right away (data URLs render instantly), then for
+      // signed-in users push each photo's bytes to Supabase Storage and swap in
+      // the durable HTTPS URL. This is what makes photos survive a refresh and
+      // appear on every device — the cloud holds the bytes, not just IndexedDB.
+      addUploadedPhotos(photos);
+      track("photo_uploaded", { count: photos.length });
+      var msg = "Added " + photos.length + (photos.length === 1 ? " item" : " items") + " to pool";
+      if (failCount > 0) msg += " (" + failCount + " couldn't be processed)";
+      toast(msg);
+
+      if (!user) return; // guest → stays device-local, nothing to upload
+
+      // Upload data-URL photos with limited concurrency, swapping each pool
+      // entry's url to the cloud URL as it lands. Failures keep the data URL.
+      var uploadable = photos.filter(function(p) { return p.url.indexOf("data:") === 0; });
+      var idx = 0;
+      function next(): Promise<void> {
+        if (idx >= uploadable.length) return Promise.resolve();
+        var p = uploadable[idx++];
+        return uploadPhotoToCloud(p.id, p.url).then(function(cloudUrl) {
+          if (cloudUrl) replacePhotoUrl(p.id, cloudUrl);
+        }).catch(function() { /* keep data URL */ }).then(next);
+      }
+      var LANES = 4;
+      var lanes: Promise<void>[] = [];
+      for (var L = 0; L < LANES; L++) lanes.push(next());
+      Promise.all(lanes); // fire-and-forget; state updates as each completes
     });
-  }, [addUploadedPhotos, user]);
+  }, [addUploadedPhotos, replacePhotoUrl, user]);
 
   var handleAICreateDumps = useCallback(function(clusters: SuggestedCluster[]) {
     createDumpsFromSuggestions(clusters);
@@ -614,8 +670,8 @@ function HomeContent() {
         </div>
       </header>
 
-      {/* Dump Strips */}
-      {dumps.map(function(dump) {
+      {/* Dump Strips (active, non-archived) */}
+      {activeDumps.map(function(dump) {
         return (
           <div key={dump.id} style={{
             position: "relative",
@@ -638,6 +694,47 @@ function HomeContent() {
           </div>
         );
       })}
+
+      {/* Archived dumps — collapsed by default so saved dumps stay out of the
+          way but remain one tap from being restored. */}
+      {archivedDumps.length > 0 && (
+        <div style={{
+          maxWidth: "1100px", margin: "0 auto 8px", padding: "0 32px",
+          position: "relative",
+          zIndex: (selectionMode || deleteMode) ? 50 : "auto",
+          opacity: (selectionMode || deleteMode) ? 0.3 : 1, transition: "opacity 0.3s",
+          pointerEvents: (selectionMode || deleteMode) ? "none" : "auto",
+        }}>
+          <button
+            onClick={function() { setShowArchived(function(v) { return !v; }); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              background: "transparent", border: "none", cursor: "pointer",
+              color: "#666", fontSize: "12px", fontWeight: 700, fontFamily: "inherit",
+              letterSpacing: "0.08em", textTransform: "uppercase", padding: "8px 0",
+            }}
+          >
+            {showArchived ? "▾" : "▸"} Archived ({archivedDumps.length})
+          </button>
+          {showArchived && archivedDumps.map(function(dump) {
+            return (
+              <div key={dump.id} style={{ opacity: 0.85, marginBottom: 8 }}>
+                <DumpStrip
+                  dump={dump} selectedPhotoId={selectedPhotoId}
+                  onSelectPhoto={handleSelectPhoto} onDotsClick={handleDotsClick}
+                  onDoubleTapPhoto={handleDoubleTapPhoto} onDropPhoto={handleDropOnDump}
+                  onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
+                  onRenameDump={renameDump} onPlusClick={handlePlusClick}
+                  onMenuClick={function(dumpId) { setActionSheetDumpId(dumpId); }}
+                  onCaptionClick={function(dumpId) { if (creditGate("ai_caption")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
+                  onUploadFromDevice={handleUploadPhotos}
+                  isCustom={!originalDumpIds.includes(dump.id)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div style={{
@@ -733,6 +830,7 @@ function HomeContent() {
           <PhotoPool
             photos={pool}
             dumps={dumps}
+            duplicateIds={duplicatePhotoIds}
             selectedPhotoId={selectedPhotoId}
             onSelectPhoto={handleSelectPhoto}
             onDotsClick={handleDotsClick}
@@ -839,12 +937,15 @@ function HomeContent() {
         }}
         onCaptions={function(dumpId) { if (creditGate("ai_caption")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
         onExport={function(dumpId) { setShareSheetDumpId(dumpId); }}
+        onArchive={handleArchiveDump}
+        isArchived={actionSheetDumpId ? archivedIdSet.has(actionSheetDumpId) : false}
         onDelete={function(dumpId) { handleDeleteDump(dumpId); }}
       />
       <DumpShareSheet
         open={shareSheetDumpId !== null}
         dump={shareSheetDumpId ? (dumps.find(function(d) { return d.id === shareSheetDumpId; }) || null) : null}
         onClose={function() { setShareSheetDumpId(null); }}
+        onArchive={handleArchiveDump}
       />
       <DumpChatSheet
         open={chatDumpId !== null}

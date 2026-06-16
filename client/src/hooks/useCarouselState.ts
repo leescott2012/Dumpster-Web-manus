@@ -2,12 +2,16 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { INITIAL_DUMPS, INITIAL_POOL, IS_OWNER, type Dump, type Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
 import type { SuggestedCluster } from "@/components/AISuggestSheet";
-import { toast } from "sonner";
+import { idbGet, idbSet, idbDel, idbFlush } from "@/lib/localStore";
 
 // ── localStorage persistence ───────────────────────────────────────────────
 
 var SK_DUMPS = IS_OWNER ? "dumpster_state_dumps_owner" : "dumpster_state_dumps_guest";
 var SK_POOL  = IS_OWNER ? "dumpster_state_pool_owner" : "dumpster_state_pool_guest";
+// Archived dump ids are tracked as a small id list (not a flag on each Dump)
+// so the many field-by-field dump reconstructions below can't accidentally drop
+// the archived state on a reorder/move.
+var SK_ARCHIVED = IS_OWNER ? "dumpster_state_archived_owner" : "dumpster_state_archived_guest";
 
 function loadSaved<T>(key: string): T | null {
   try {
@@ -34,18 +38,17 @@ function loadSaved<T>(key: string): T | null {
   return null;
 }
 
-var _storageWarnedThisSession = false;
-
 function persist(key: string, value: unknown) {
+  // Durable copy → IndexedDB (no ~5 MB cap; survives refresh well past the
+  // point where localStorage gives out, so uploaded photos actually stick).
+  idbSet(key, value);
+  // Fast first-paint cache → localStorage. Best-effort: a QuotaExceededError
+  // here is now harmless because IndexedDB holds the authoritative copy, so we
+  // no longer warn or lose data — we just keep whatever fit.
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch (e) {
-    console.warn("[Dumpster] localStorage write failed for " + key + ":", e);
-    // Only show one toast per session so it doesn't spam on every keystroke
-    if (!_storageWarnedThisSession) {
-      _storageWarnedThisSession = true;
-      toast("Storage full — couldn't save all photos. Remove some to free space.", { duration: 8000 });
-    }
+  } catch {
+    /* localStorage full — fine, IndexedDB has the full set. */
   }
 }
 
@@ -93,6 +96,13 @@ export function useCarouselState() {
     return deepClonePool(INITIAL_POOL);
   });
 
+  // Ids of dumps the user has archived ("saved" and tucked away). Hidden from
+  // the main list; still in `dumps` so their photos/captions aren't lost.
+  var [archivedDumpIds, rawSetArchived] = useState<string[]>(function() {
+    var saved = loadSaved<string[]>(SK_ARCHIVED);
+    return Array.isArray(saved) ? saved : [];
+  });
+
   // Cloud sync (load + debounced save) is orchestrated by Home.tsx via
   // replaceState() and clearDemoContent() so the page can coordinate it with
   // file uploads to Supabase Storage. This hook stays focused on local state.
@@ -100,6 +110,11 @@ export function useCarouselState() {
   // Refs that always track latest state (for beforeunload backup)
   var dumpsRef = useRef(dumps);
   var poolRef = useRef(pool);
+
+  // Gate: until IndexedDB hydration has run, the mount-time fallback effects
+  // below must NOT write — otherwise they'd persist the initial (demo/empty)
+  // state straight over the durable IndexedDB copy before we get to read it.
+  var hydrationDoneRef = useRef(false);
 
   // Wrapped setters — persist to localStorage synchronously inside the updater
   // so every state change is guaranteed to be saved (no useEffect timing issues)
@@ -121,14 +136,16 @@ export function useCarouselState() {
     });
   }, []);
 
-  // Belt-and-suspenders: also persist via useEffect as a fallback
+  // Belt-and-suspenders: also persist via useEffect as a fallback. Keep the
+  // refs current always, but skip the WRITE until hydration has run so we never
+  // clobber the durable IndexedDB copy with the initial state on mount.
   useEffect(function() {
-    persist(SK_DUMPS, dumps);
     dumpsRef.current = dumps;
+    if (hydrationDoneRef.current) persist(SK_DUMPS, dumps);
   }, [dumps]);
   useEffect(function() {
-    persist(SK_POOL, pool);
     poolRef.current = pool;
+    if (hydrationDoneRef.current) persist(SK_POOL, pool);
   }, [pool]);
 
   // Last-resort backup: save on page unload
@@ -136,6 +153,7 @@ export function useCarouselState() {
     var handleBeforeUnload = function() {
       persist(SK_DUMPS, dumpsRef.current);
       persist(SK_POOL, poolRef.current);
+      idbFlush(); // push any debounced IndexedDB writes before the tab dies
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return function() {
@@ -143,23 +161,86 @@ export function useCarouselState() {
     };
   }, []);
 
+  // ── IndexedDB hydration ────────────────────────────────────────────────────
+  // localStorage gives us an instant (possibly truncated) first paint above.
+  // IndexedDB holds the FULL workspace — including photos that overflowed the
+  // ~5 MB localStorage cap — so on mount we adopt its copy. First run on a
+  // device (IDB empty) migrates the current state in. Fully fail-safe: if IDB
+  // is unavailable both reads resolve null and we keep the localStorage state.
+  var hydratedRef = useRef(false);
+  useEffect(function() {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    var initialDumps = dumpsRef.current;
+    var initialPool = poolRef.current;
+    Promise.all([idbGet<Dump[]>(SK_DUMPS), idbGet<Photo[]>(SK_POOL)]).then(function(res) {
+      var idbDumps = res[0];
+      var idbPool = res[1];
+      if (idbDumps == null && idbPool == null) {
+        // No durable copy yet — seed IndexedDB (+ localStorage cache) from
+        // whatever we loaded, then let normal persistence take over.
+        persist(SK_DUMPS, initialDumps);
+        persist(SK_POOL, initialPool);
+        hydrationDoneRef.current = true;
+        return;
+      }
+      // Only adopt the durable copy if nothing has mutated state since mount
+      // (a cloud load, demo-clear, or fresh upload landing first must win —
+      // reference identity changes on any setDumps/setPool).
+      if (dumpsRef.current === initialDumps && poolRef.current === initialPool) {
+        var nextDumps = idbDumps != null ? idbDumps : initialDumps;
+        var nextPool = idbPool != null ? idbPool : initialPool;
+        rawSetDumps(nextDumps);
+        rawSetPool(nextPool);
+        dumpsRef.current = nextDumps;
+        poolRef.current = nextPool;
+        // Refresh the localStorage cache best-effort (may be partial — fine).
+        persist(SK_DUMPS, nextDumps);
+        persist(SK_POOL, nextPool);
+      }
+      // Hydration has run — re-enable the fallback persist effects either way.
+      hydrationDoneRef.current = true;
+    }).catch(function() {
+      hydrationDoneRef.current = true; // don't strand persistence on an IDB error
+    });
+  }, []);
+
   var resetAll = useCallback(function() {
-    rawSetDumps(deepCloneDumps(INITIAL_DUMPS));
-    rawSetPool(deepClonePool(INITIAL_POOL));
+    var freshDumps = deepCloneDumps(INITIAL_DUMPS);
+    var freshPool = deepClonePool(INITIAL_POOL);
+    rawSetDumps(freshDumps);
+    rawSetPool(freshPool);
+    dumpsRef.current = freshDumps;
+    poolRef.current = freshPool;
     try {
       localStorage.removeItem(SK_DUMPS);
       localStorage.removeItem(SK_POOL);
     } catch {}
+    // Clear the durable copy too, else the next mount re-hydrates old photos.
+    void idbDel(SK_DUMPS);
+    void idbDel(SK_POOL);
   }, []);
 
   // Replace entire state at once — used by cloud sync to load saved state.
+  // Locally-uploaded photos (data URLs) that the cloud doesn't know about are
+  // preserved in the pool so a cloud load never silently wipes them.
   var replaceState = useCallback(function(newDumps: Dump[], newPool: Photo[]) {
+    var cloudIds = new Set<string>();
+    var ci: number, cj: number;
+    for (ci = 0; ci < newPool.length; ci++) cloudIds.add(newPool[ci].id);
+    for (ci = 0; ci < newDumps.length; ci++) {
+      for (cj = 0; cj < newDumps[ci].photos.length; cj++) cloudIds.add(newDumps[ci].photos[cj].id);
+    }
+    var localOnly = poolRef.current.filter(function(p) {
+      return p.url.startsWith("data:") && !cloudIds.has(p.id);
+    });
+    var mergedPool = localOnly.length > 0 ? newPool.concat(localOnly) : newPool;
     rawSetDumps(newDumps);
-    rawSetPool(newPool);
+    rawSetPool(mergedPool);
     persist(SK_DUMPS, newDumps);
-    persist(SK_POOL, newPool);
+    persist(SK_POOL, mergedPool);
     dumpsRef.current = newDumps;
-    poolRef.current = newPool;
+    poolRef.current = mergedPool;
   }, []);
 
   // Clear demo/stock content — gives authenticated users a clean slate.
@@ -299,6 +380,8 @@ export function useCarouselState() {
       if (!dump) return prev;
       var dumpPhotos = dump.photos.slice();
       setPool(function(prevPool) { return prevPool.concat(dumpPhotos); });
+      // Drop any archive marker for the deleted dump so the set can't leak ids.
+      setArchived(function(prevIds) { return prevIds.filter(function(id) { return id !== dumpId; }); });
       return prev.filter(function(d) { return d.id !== dumpId; }).map(function(d, i) {
         return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
       });
@@ -326,6 +409,33 @@ export function useCarouselState() {
 
   var addUploadedPhotos = useCallback(function(newPhotos: Photo[]) {
     setPool(function(prev) { return prev.concat(newPhotos); });
+  }, []);
+
+  // Swap a single photo's url in place (pool or any dump) — used after a photo's
+  // bytes are uploaded to cloud Storage so its data URL becomes a durable HTTPS
+  // URL without changing its position. No-op if the photo isn't found.
+  var replacePhotoUrl = useCallback(function(photoId: string, url: string) {
+    setPool(function(prev) {
+      var hit = false;
+      var next = prev.map(function(p) {
+        if (p.id === photoId) { hit = true; return { ...p, url: url }; }
+        return p;
+      });
+      return hit ? next : prev;
+    });
+    setDumps(function(prev) {
+      var changed = false;
+      var next = prev.map(function(d) {
+        var dHit = false;
+        var photos = d.photos.map(function(p) {
+          if (p.id === photoId) { dHit = true; return { ...p, url: url }; }
+          return p;
+        });
+        if (dHit) { changed = true; return { ...d, photos: photos }; }
+        return d;
+      });
+      return changed ? next : prev;
+    });
   }, []);
 
   var renameDump = useCallback(function(dumpId: string, title: string) {
@@ -501,6 +611,25 @@ export function useCarouselState() {
     });
   }, []);
 
+  // ── Archive ────────────────────────────────────────────────────────────────
+  // "After I save photos … archive the dump." Archiving hides a finished dump
+  // from the main list without deleting it; the user can restore it any time.
+  var setArchived = useCallback(function(action: string[] | ((prev: string[]) => string[])) {
+    rawSetArchived(function(prev) {
+      var next = typeof action === "function" ? (action as (p: string[]) => string[])(prev) : action;
+      persist(SK_ARCHIVED, next);
+      return next;
+    });
+  }, []);
+
+  var archiveDump = useCallback(function(dumpId: string) {
+    setArchived(function(prev) { return prev.indexOf(dumpId) === -1 ? prev.concat([dumpId]) : prev; });
+  }, [setArchived]);
+
+  var unarchiveDump = useCallback(function(dumpId: string) {
+    setArchived(function(prev) { return prev.filter(function(id) { return id !== dumpId; }); });
+  }, [setArchived]);
+
   // Rate a dump thumbs up/down (or clear)
   var rateDump = useCallback(function(dumpId: string, rating: "up" | "down" | null) {
     setDumps(function(prev) {
@@ -515,9 +644,10 @@ export function useCarouselState() {
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,
-    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, renameDump,
+    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, replacePhotoUrl, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto,
     setDumpChatHistory,
+    archivedDumpIds, archiveDump, unarchiveDump,
   };
 }
