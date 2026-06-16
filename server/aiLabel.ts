@@ -103,7 +103,7 @@ Respond ONLY with valid JSON, no markdown, no code fences:
   try {
     const anthropic = new Anthropic({ apiKey });
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 60 * usableIds.length + 200,
       system,
       messages: [{ role: "user", content }],
