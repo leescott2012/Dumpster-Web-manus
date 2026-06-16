@@ -11,6 +11,7 @@ import DumpStrip from "@/components/DumpStrip";
 import PhotoPool from "@/components/PhotoPool";
 import PhotoLightbox from "@/components/PhotoLightbox";
 import PhotoContextMenu from "@/components/PhotoContextMenu";
+import FindOriginalSheet from "@/components/FindOriginalSheet";
 import DragGhost from "@/components/DragGhost";
 import type { Photo } from "@/lib/photoData";
 import { Plus, RotateCcw, Sparkles, Menu } from "lucide-react";
@@ -141,6 +142,7 @@ function HomeContent() {
   var [igScrubOpen, setIGScrubOpen] = useState(false);
   var [captionSheetOpen, setCaptionSheetOpen] = useState(false);
   var [scanning, setScanning] = useState(false);
+  var [findOriginalPhoto, setFindOriginalPhoto] = useState<Photo | null>(null);
   var [captionInitialDumpId, setCaptionInitialDumpId] = useState<string | null>(null);
   var [shareSheetDumpId, setShareSheetDumpId] = useState<string | null>(null);
   var [actionSheetDumpId, setActionSheetDumpId] = useState<string | null>(null);
@@ -999,7 +1001,9 @@ function HomeContent() {
         onRemove={handleRemove}
         onToggleFavorite={toggleFavorite}
         onRecycle={function(photoId, dumpId) { setRecyclePhotoId(photoId); setRecycleDumpId(dumpId); setContextMenu(null); setSelectedPhotoId(null); }}
+        onFindOriginal={function(photo) { setFindOriginalPhoto(photo); setContextMenu(null); setSelectedPhotoId(null); }}
       />
+      <FindOriginalSheet photo={findOriginalPhoto} onClose={function() { setFindOriginalPhoto(null); }} />
       <RecycleSheet
         open={recyclePhotoId !== null}
         photoId={recyclePhotoId}

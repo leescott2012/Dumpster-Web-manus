@@ -12,10 +12,11 @@ interface PhotoContextMenuProps {
   onRemove: (photoId: string) => void;
   onToggleFavorite: (photoId: string) => void;
   onRecycle?: (photoId: string, dumpId: string) => void;
+  onFindOriginal?: (photo: Photo) => void;
 }
 
 export default function PhotoContextMenu({
-  photo, position, dumpId, onClose, onRemove, onToggleFavorite, onRecycle,
+  photo, position, dumpId, onClose, onRemove, onToggleFavorite, onRecycle, onFindOriginal,
 }: PhotoContextMenuProps) {
   if (!photo || !position) return null;
 
@@ -50,6 +51,16 @@ export default function PhotoContextMenu({
         >
           {photo.isFavorite ? "★ " : "☆ "}{favLabel}
         </button>
+
+        {onFindOriginal && (
+          <button style={itemStyle}
+            onClick={function() { onFindOriginal(photo); onClose(); }}
+            onMouseEnter={function(e) { e.currentTarget.style.background = "#1a1a1a"; }}
+            onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
+          >
+            {"🔍 Find in Photos"}
+          </button>
+        )}
 
         {showRecycle && (
           <button style={{
