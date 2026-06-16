@@ -17,6 +17,10 @@ function aiSuggestPlugin(): Plugin {
         const { handleAICaption } = await import("./server/aiCaption.js");
         await handleAICaption(req, res);
       });
+      server.middlewares.use("/api/ai-label", async (req, res) => {
+        const { handleAILabel } = await import("./server/aiLabel.js");
+        await handleAILabel(req, res);
+      });
     },
   };
 }

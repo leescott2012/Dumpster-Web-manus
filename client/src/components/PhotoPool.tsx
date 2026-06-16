@@ -9,7 +9,7 @@ import { useRef, useEffect, useState } from "react";
 import PhotoCard from "./PhotoCard";
 import { useDrag } from "@/contexts/DragContext";
 import type { Dump, Photo } from "@/lib/photoData";
-import { Plus, Play, Trash2 } from "lucide-react";
+import { Plus, Play, Trash2, Sparkles, Loader2 } from "lucide-react";
 
 type FilterMode = "all" | "starred" | "used" | "videos";
 type PoolSize = "S" | "M" | "L";
@@ -24,6 +24,7 @@ var SIZE_CONFIG: Record<PoolSize, { cols: string; w: number; h: number }> = {
 interface PhotoPoolProps {
   photos: Photo[];
   dumps?: Dump[];           // for "Used" filter — photos in dumps
+  duplicateIds?: Set<string>; // photo ids flagged as possible duplicates
   onSelectPhoto: (photo: Photo) => void;
   onDotsClick: (photo: Photo, position: { x: number; y: number }) => void;
   onDoubleTapPhoto: (photo: Photo) => void;
@@ -42,13 +43,16 @@ interface PhotoPoolProps {
   onToggleDeleteSelection: (photo: Photo) => void;
   onConfirmDelete: () => void;
   onCancelDeleteMode: () => void;
+  onScan?: () => void;        // AI scan + label unlabeled photos
+  scanning?: boolean;         // true while a scan is in flight
 }
 
 export default function PhotoPool({
-  photos, dumps = [], onSelectPhoto, onDotsClick, onDoubleTapPhoto, onDropToPool, onUploadPhotos,
+  photos, dumps = [], duplicateIds, onSelectPhoto, onDotsClick, onDoubleTapPhoto, onDropToPool, onUploadPhotos,
   selectionMode, selectedIds, onTogglePoolSelection, onConfirmSelection, onCancelSelection,
   targetDumpId, selectedPhotoId,
   deleteMode, selectedDeleteIds, onEnterDeleteMode, onToggleDeleteSelection, onConfirmDelete, onCancelDeleteMode,
+  onScan, scanning = false,
 }: PhotoPoolProps) {
   var poolRef = useRef<HTMLDivElement>(null);
   var fileInputRef = useRef<HTMLInputElement>(null);
@@ -249,19 +253,42 @@ export default function PhotoPool({
                   );
                 })}
               </div>
-              <button
-                onClick={onEnterDeleteMode}
-                style={{
-                  background: "transparent", border: "1px solid #2a2a2a",
-                  borderRadius: "100px", padding: "6px 14px", fontSize: "11px", color: "#666",
-                  cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
-                  display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
-                }}
-                onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
-                onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
-              >
-                <Trash2 size={11} />Select to Delete
-              </button>
+              <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
+                {onScan && (
+                  <button
+                    onClick={scanning ? undefined : onScan}
+                    disabled={scanning}
+                    style={{
+                      background: scanning ? "rgba(var(--accent-rgb),0.12)" : "var(--accent)",
+                      border: "1px solid var(--accent)",
+                      borderRadius: "100px", padding: "6px 14px", fontSize: "11px",
+                      color: scanning ? "var(--accent)" : "#000", fontWeight: 700,
+                      cursor: scanning ? "default" : "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
+                      display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
+                      opacity: scanning ? 0.85 : 1,
+                    }}
+                    title="Scan photos with AI and auto-label them"
+                  >
+                    {scanning
+                      ? <Loader2 size={11} className="animate-spin" />
+                      : <Sparkles size={11} />}
+                    {scanning ? "Scanning…" : "Scan"}
+                  </button>
+                )}
+                <button
+                  onClick={onEnterDeleteMode}
+                  style={{
+                    background: "transparent", border: "1px solid #2a2a2a",
+                    borderRadius: "100px", padding: "6px 14px", fontSize: "11px", color: "#666",
+                    cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
+                    display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
+                  }}
+                  onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+                  onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
+                >
+                  <Trash2 size={11} />Select to Delete
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -322,6 +349,7 @@ export default function PhotoPool({
                 selectionIndex={selectionMode && selIdx >= 0 ? selIdx : undefined}
                 deleteMode={deleteMode}
                 isDeleteSelected={delIdx >= 0}
+                isDuplicate={duplicateIds ? duplicateIds.has(photo.id) : false}
               />
             );
           })}

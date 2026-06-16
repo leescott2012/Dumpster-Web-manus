@@ -438,6 +438,24 @@ export function useCarouselState() {
     });
   }, []);
 
+  // Apply AI scan results — set category (+ alt label) on matching photos in
+  // the pool. Used by the Pool "Scan" button. Unmatched ids are ignored.
+  var applyPhotoLabels = useCallback(function(labels: Array<{ id: string; category: string; label: string }>) {
+    if (!labels || labels.length === 0) return;
+    var byId: Record<string, { category: string; label: string }> = {};
+    for (var i = 0; i < labels.length; i++) byId[labels[i].id] = labels[i];
+    setPool(function(prev) {
+      var changed = false;
+      var next = prev.map(function(p) {
+        var l = byId[p.id];
+        if (!l) return p;
+        changed = true;
+        return { ...p, category: l.category || p.category, alt: l.label || p.alt };
+      });
+      return changed ? next : prev;
+    });
+  }, []);
+
   var renameDump = useCallback(function(dumpId: string, title: string) {
     setDumps(function(prev) {
       return prev.map(function(d) {
@@ -644,7 +662,7 @@ export function useCarouselState() {
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,
-    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, replacePhotoUrl, renameDump,
+    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, replacePhotoUrl, applyPhotoLabels, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto,
     setDumpChatHistory,

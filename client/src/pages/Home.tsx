@@ -41,6 +41,7 @@ import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
 import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud } from "@/lib/workspaceSync";
+import { scanPhotos } from "@/lib/aiLabel";
 import { track } from "@/lib/analytics";
 
 function HomeContent() {
@@ -49,7 +50,7 @@ function HomeContent() {
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,
-    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, replacePhotoUrl, renameDump,
+    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, replacePhotoUrl, applyPhotoLabels, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto, setDumpChatHistory,
     archivedDumpIds, archiveDump, unarchiveDump,
@@ -139,6 +140,7 @@ function HomeContent() {
   var [aiSheetOpen, setAiSheetOpen] = useState(false);
   var [igScrubOpen, setIGScrubOpen] = useState(false);
   var [captionSheetOpen, setCaptionSheetOpen] = useState(false);
+  var [scanning, setScanning] = useState(false);
   var [captionInitialDumpId, setCaptionInitialDumpId] = useState<string | null>(null);
   var [shareSheetDumpId, setShareSheetDumpId] = useState<string | null>(null);
   var [actionSheetDumpId, setActionSheetDumpId] = useState<string | null>(null);
@@ -538,6 +540,32 @@ function HomeContent() {
     });
   }, [addUploadedPhotos, replacePhotoUrl, user]);
 
+  // Scan pool photos with AI and auto-label them (category + short alt). Only
+  // scans photos that haven't been labeled yet ("" or "Uploaded" category),
+  // skips videos, and applies labels incrementally as each batch returns.
+  var handleScanPhotos = useCallback(function() {
+    if (scanning) return;
+    if (!user) { setAuthSheetOpen(true); toast("Sign in to scan photos"); return; }
+    var toScan = pool.filter(function(p) {
+      if (p.category === "Video") return false;
+      return p.category === "" || p.category === "Uploaded";
+    });
+    if (toScan.length === 0) { toast("All photos are already labeled"); return; }
+
+    setScanning(true);
+    toast("Scanning " + toScan.length + (toScan.length === 1 ? " photo…" : " photos…"));
+    var input = toScan.map(function(p) { return { id: p.id, url: p.url }; });
+    scanPhotos(input, function(labels) { applyPhotoLabels(labels); })
+      .then(function(all) {
+        track("photos_scanned", { count: all.length });
+        toast("Labeled " + all.length + (all.length === 1 ? " photo" : " photos"));
+      })
+      .catch(function(e) {
+        toast(e && e.message ? e.message : "Scan failed — try again");
+      })
+      .then(function() { setScanning(false); });
+  }, [scanning, user, pool, applyPhotoLabels]);
+
   var handleAICreateDumps = useCallback(function(clusters: SuggestedCluster[]) {
     createDumpsFromSuggestions(clusters);
     toast("Created " + clusters.length + " AI-suggested dump" + (clusters.length !== 1 ? "s" : ""));
@@ -849,6 +877,8 @@ function HomeContent() {
             onToggleDeleteSelection={handleToggleDeleteSelection}
             onConfirmDelete={handleConfirmDelete}
             onCancelDeleteMode={handleCancelDeleteMode}
+            onScan={handleScanPhotos}
+            scanning={scanning}
           />
         ) : (
           <CaptionPool />

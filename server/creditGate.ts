@@ -42,6 +42,7 @@ export async function getUserFromRequest(req: IncomingMessage): Promise<string |
 var COSTS: Record<string, number> = {
   ai_suggest: 25, // Claude vision, up to 20 images (~25¢)
   ai_caption: 3,  // Claude Haiku vision (~3¢)
+  ai_label: 4,    // Claude Haiku vision, up to 12 images per batch (~4¢)
   ai_chat: 1,     // Valet (~1¢)
   ai_recycle: 3,  // (~3¢)
   ig_scrub: 5,    // Apify scraping costs us ~5¢/call — charge accordingly

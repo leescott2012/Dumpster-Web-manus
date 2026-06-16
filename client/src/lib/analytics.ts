@@ -18,6 +18,7 @@ import { getCurrentUserId } from "./currentUser";
 export type AnalyticsEvent =
   | "session_start"
   | "photo_uploaded"
+  | "photos_scanned"
   | "dump_exported";
 
 /**
