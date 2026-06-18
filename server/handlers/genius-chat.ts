@@ -9,10 +9,13 @@
  * Returns a short spoken-style reply the client pipes to /api/tts.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import Stripe from "stripe";
 import { getUserFromRequest } from "../creditGate.js";
 import { createClient } from "@supabase/supabase-js";
 
-const MODEL = "claude-haiku-4-5";
+// Sonnet for the brain: far more reliable multi-step tool use than Haiku, which
+// matters when it's wielding write_database and issuing real Stripe refunds.
+const MODEL = "claude-sonnet-4-6";
 
 const SYSTEM_PROMPT = `You are GENIUSS, the AI core of the Chamillion Collective — a calm, precise, slightly sardonic British AI assistant (a refined butler) wired into the admin dashboard of the Dumpster app (an Instagram carousel "photo dump" creator). Address the user as "sir" now and then.
 
@@ -21,6 +24,7 @@ Your reply is read aloud by text-to-speech, so answer in 1-3 short, natural spok
 You can read AND change the live production database with tools:
 - query_database: run a read-only SQL SELECT to answer ANY question about the business.
 - write_database: run a single INSERT/UPDATE/DELETE to make changes.
+- refund_payment: issue a REAL Stripe refund. First find the customer's payment_intent with query_database (credit_transactions.stripe_payment_id where type = 'purchase'), confirm the amount and person with the user, and only then call refund_payment. A refund returns real money — treat it like a billing change.
 
 DATABASE SCHEMA (Postgres):
 - profiles(id uuid = auth user id, email, display_name, subscription_tier 'free'|'pro', subscription_status, stripe_customer_id, stripe_subscription_id, credits int, daily_credits_remaining int, lifetime_purchase bool, referral_code, created_at)
@@ -35,7 +39,7 @@ SQL RULES:
 - To act on a person, look them up in profiles by email or display_name first.
 
 SAFETY — CONFIRMATION REQUIRED:
-- Before ANY write that changes credits, subscription_tier, billing, or DELETES anything: do NOT call write_database yet. First reply with the exact change and ask the user to confirm (e.g. "I'll set Lee's credits to 100 — shall I proceed, sir?"). Only call write_database after the user clearly confirms in the conversation.
+- Before ANY write that changes credits, subscription_tier, billing, DELETES anything, or issues a refund: do NOT call write_database or refund_payment yet. First reply with the exact change and ask the user to confirm (e.g. "I'll set Lee's credits to 100 — shall I proceed, sir?" or "I'll refund Lee's $5 purchase — confirm, sir?"). Only call the tool after the user clearly confirms in the conversation.
 - Low-risk writes (e.g. a bug_reports status or admin_note) may be done directly; briefly say what you did.
 - Never select or reveal secret columns: profiles.api_key_openai, profiles.api_key_anthropic, stripe ids/keys. Do not read api_key_* columns at all.`;
 
@@ -65,6 +69,20 @@ const TOOLS = [
       required: ["sql"],
     },
   },
+  {
+    name: "refund_payment",
+    description:
+      "Issue a real Stripe refund for a customer payment. ONLY call after the user has explicitly confirmed the refund in conversation (amount + who). Find the payment first with query_database: SELECT stripe_payment_id, amount, created_at FROM credit_transactions WHERE user_id = '<id>' AND type = 'purchase' ORDER BY created_at DESC. Pass the stripe_payment_id (a payment_intent, 'pi_...'). Refunds the full charge unless amount_cents is given.",
+    input_schema: {
+      type: "object",
+      properties: {
+        stripe_payment_id: { type: "string", description: "The Stripe payment_intent id (pi_...) from credit_transactions.stripe_payment_id." },
+        amount_cents: { type: "number", description: "Optional partial refund amount in cents. Omit to refund the full charge." },
+        reason: { type: "string", description: "Plain-English reason for the refund." },
+      },
+      required: ["stripe_payment_id"],
+    },
+  },
 ];
 
 interface AdminStatsLite {
@@ -89,6 +107,45 @@ async function callAnthropic(apiKey: string, system: string, messages: AnyObj[])
     body: JSON.stringify({ model: MODEL, max_tokens: 1024, system, tools: TOOLS, messages }),
   });
   return (await r.json()) as AnyObj;
+}
+
+let _stripe: Stripe | null = null;
+function stripeClient(): Stripe | null {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return null;
+  if (!_stripe) _stripe = new Stripe(key);
+  return _stripe;
+}
+
+/** Issue a Stripe refund — only for a payment_intent we have on record. */
+async function doRefund(supabase: AnyObj, paymentIntentId: string, amountCents?: number): Promise<string> {
+  if (!/^pi_[A-Za-z0-9]+$/.test(paymentIntentId)) {
+    return "ERROR: expected a Stripe payment_intent id (pi_...). Find it in credit_transactions.stripe_payment_id first.";
+  }
+  const stripe = stripeClient();
+  if (!stripe) return "ERROR: STRIPE_SECRET_KEY not configured — cannot refund.";
+  // Safety net: never refund a payment that isn't in our own ledger.
+  try {
+    const { data: rows } = await supabase
+      .from("credit_transactions")
+      .select("id")
+      .eq("stripe_payment_id", paymentIntentId)
+      .limit(1);
+    if (!rows || rows.length === 0) {
+      return "ERROR: no credit_transactions row references " + paymentIntentId + " — refusing to refund an unrecognized payment.";
+    }
+  } catch (e: any) {
+    return "ERROR: could not verify the payment in our records: " + (e?.message || String(e));
+  }
+  try {
+    const params: Stripe.RefundCreateParams = { payment_intent: paymentIntentId };
+    if (typeof amountCents === "number" && amountCents > 0) params.amount = Math.round(amountCents);
+    const refund = await stripe.refunds.create(params);
+    return "OK — refund " + refund.id + ", status " + refund.status + ", " +
+      (refund.amount / 100).toFixed(2) + " " + String(refund.currency || "usd").toUpperCase() + " returned.";
+  } catch (e: any) {
+    return "ERROR: Stripe refund failed: " + (e?.message || String(e));
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -158,6 +215,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               } else if (tu.name === "write_database") {
                 const { data: d, error } = await supabase.rpc("geniuss_write", { q: sql });
                 out = error ? "ERROR: " + error.message : "OK — " + String(d);
+              } else if (tu.name === "refund_payment") {
+                out = await doRefund(supabase, String(tu.input?.stripe_payment_id ?? ""),
+                  typeof tu.input?.amount_cents === "number" ? tu.input.amount_cents : undefined);
               } else {
                 out = "ERROR: unknown tool";
               }
