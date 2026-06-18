@@ -21,6 +21,10 @@ function aiSuggestPlugin(): Plugin {
         const { handleAILabel } = await import("./server/aiLabel.js");
         await handleAILabel(req, res);
       });
+      server.middlewares.use("/api/ai-chat", async (req, res) => {
+        const { handleAIChat } = await import("./server/aiChat.js");
+        await handleAIChat(req, res);
+      });
     },
   };
 }
