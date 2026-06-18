@@ -161,6 +161,13 @@ export default function Admin() {
   
   // HUD States
   const [hudState, setHudState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
+  // Conversation mode: after GENIUSS finishes speaking, auto-listen again so you
+  // can go back-and-forth hands-free. Silence ends the loop. Refs let the async
+  // voice loop read the latest values without stale closures.
+  const [conversationMode, setConversationMode] = useState(false);
+  const conversationModeRef = useRef(false);
+  conversationModeRef.current = conversationMode;
+  const handleTalkRef = useRef<() => void>(() => {});
   const reactor = useReactorAudio();
 
   // ── GENIUSS reactor color + voice (persisted in localStorage) ──────────────
@@ -402,11 +409,10 @@ export default function Admin() {
     setHudState('speaking');
     addLog(`[Genius] Synthesizing voice output...`);
 
-    const speakWithBrowser = (): Promise<void> => new Promise((resolve) => {
+    const speakWithBrowser = (chunk: string): Promise<void> => new Promise((resolve) => {
       if (!('speechSynthesis' in window)) { resolve(); return; }
       try {
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
+        const u = new SpeechSynthesisUtterance(chunk);
         u.rate = 0.96; u.pitch = 0.92; u.volume = 1.0;
         const voices = window.speechSynthesis.getVoices();
         const isGb = (v: SpeechSynthesisVoice) => (v.lang || '').toLowerCase() === 'en-gb';
@@ -422,36 +428,47 @@ export default function Admin() {
       } catch { resolve(); }
     });
 
-    return new Promise(async (resolve) => {
+    // Fetch ElevenLabs audio for ONE chunk. null → caller falls back to browser TTS.
+    const fetchTts = async (chunk: string): Promise<HTMLAudioElement | null> => {
       try {
-        const response = await fetch('/api/tts', {
+        const r = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voiceId: voiceIdRef.current }),
+          body: JSON.stringify({ text: chunk, voiceId: voiceIdRef.current }),
         });
-
-        if (response.ok && (response.headers.get('content-type') || '').startsWith('audio/')) {
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          const audio = new Audio(url);
-          audio.onended = () => { setHudState('idle'); URL.revokeObjectURL(url); resolve(); };
-          audio.onerror = async () => { URL.revokeObjectURL(url); await speakWithBrowser(); setHudState('idle'); resolve(); };
-          void audio.play().catch(async () => { await speakWithBrowser(); setHudState('idle'); resolve(); });
-          return;
+        if (r.ok && (r.headers.get('content-type') || '').startsWith('audio/')) {
+          const blob = await r.blob();
+          return new Audio(URL.createObjectURL(blob));
         }
+      } catch { /* fall through to browser TTS */ }
+      return null;
+    };
 
-        // ElevenLabs unavailable (free-tier 402, missing key, etc.) → browser TTS
-        addLog(`[WARN] ElevenLabs unavailable — using local voice.`);
-        await speakWithBrowser();
-        setHudState('idle');
-        resolve();
-      } catch {
-        addLog(`[WARN] TTS bridge failure — using local voice.`);
-        await speakWithBrowser();
-        setHudState('idle');
-        resolve();
-      }
+    const playAudio = (audio: HTMLAudioElement): Promise<void> => new Promise((resolve) => {
+      const done = () => { try { URL.revokeObjectURL(audio.src); } catch { /* noop */ } resolve(); };
+      audio.onended = done;
+      audio.onerror = done;
+      void audio.play().catch(() => resolve());
     });
+
+    // Split into sentences so the FIRST words play almost immediately instead of
+    // after the whole paragraph synthesizes. Prefetch the next chunk's audio
+    // while the current one is speaking → near-streaming feel.
+    const chunks = (text.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [text])
+      .map(s => s.trim()).filter(Boolean);
+    let warned = false;
+    let nextP: Promise<HTMLAudioElement | null> = fetchTts(chunks[0] || text);
+    for (let i = 0; i < chunks.length; i++) {
+      const audio = await nextP;
+      nextP = (i + 1 < chunks.length) ? fetchTts(chunks[i + 1]) : Promise.resolve(null);
+      if (audio) {
+        await playAudio(audio);
+      } else {
+        if (!warned) { addLog(`[WARN] ElevenLabs unavailable — using local voice.`); warned = true; }
+        await speakWithBrowser(chunks[i]);
+      }
+    }
+    setHudState('idle');
   }, []);
 
   // ── Voice conversation (orb click → STT → genius-chat → TTS → loop) ───────
@@ -517,6 +534,11 @@ export default function Admin() {
           const reply: string = body.reply || "(no reply)";
           addLog(`[GENIUS] ${reply}`);
           await handleReadAloud(reply);
+          // Conversation mode: listen again so you can reply hands-free. Staying
+          // silent ends the loop (a no-speech turn never reaches this path).
+          if (conversationModeRef.current && !isMuted()) {
+            setTimeout(() => { if (conversationModeRef.current) handleTalkRef.current(); }, 500);
+          }
         } catch (e: any) {
           const msg = e?.message || String(e);
           addLog(`[ERROR] Neural bridge: ${msg}`);
@@ -547,6 +569,9 @@ export default function Admin() {
       setHudState('idle');
     }
   }, [hudState, session, stats, handleReadAloud]);
+  // Keep the ref pointed at the latest handleTalk so the conversation loop
+  // re-invokes the current closure (fresh hudState/session) each turn.
+  handleTalkRef.current = handleTalk;
 
   // ── Render: session loading ────────────────────────────────────────────────
   if (sessionLoading || (session && isWarmingUp)) {
@@ -733,6 +758,19 @@ export default function Admin() {
                 className="text-[10px] text-[#D4AF37]/70 border border-[#D4AF37]/20 rounded px-2 py-1 hover:bg-[#D4AF37]/10 transition"
               >
                 Test voice
+              </button>
+              <div className="h-4 w-px bg-[#D4AF37]/20 mx-1" />
+              <button
+                onClick={() => {
+                  const next = !conversationMode;
+                  setConversationMode(next);
+                  addLog(next ? '[Genius] Conversation mode on — I will keep listening after each reply, sir.' : '[Genius] Conversation mode off.');
+                  if (next && hudState === 'idle') handleTalk();
+                }}
+                title="Hands-free back-and-forth: auto-listens after each reply. Stay silent to stop."
+                className={`text-[10px] rounded px-2 py-1 border transition ${conversationMode ? 'bg-[#D4AF37] text-black border-[#D4AF37] font-bold' : 'text-[#D4AF37]/70 border-[#D4AF37]/20 hover:bg-[#D4AF37]/10'}`}
+              >
+                {conversationMode ? '● Conversation' : 'Conversation'}
               </button>
             </div>
           </div>
