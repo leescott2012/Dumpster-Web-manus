@@ -80,7 +80,10 @@ void main(){
   float luma = dot(col, vec3(0.299, 0.587, 0.114));
   col = mix(vec3(luma), col, 1.18);
 
-  gl_FragColor = vec4(col, 1.0);
+  // Alpha from brightness so the dark corners are TRANSPARENT (no opaque black
+  // square over the HUD) — only the glowing plasma composites onto the radar.
+  float alpha = clamp(max(col.r, max(col.g, col.b)) * 1.1, 0.0, 1.0);
+  gl_FragColor = vec4(col, alpha);
 }`;
 
 export function ReactorGL({ levelRef, bandsRef, peakRef, state, size = 340, onUnsupported }: Props) {
