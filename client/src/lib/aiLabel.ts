@@ -10,10 +10,16 @@ import { compressDataUrlForVision } from "./imageDownscale";
 export interface PhotoLabel { id: string; category: string; label: string }
 interface ScanInput { id: string; url: string }
 
-const BATCH_SIZE = 8; // images per request — well under Vercel's body limit
+// Fewer images per request so each high-res frame fits the 4.5 MB body limit and
+// the model attends to each photo more carefully (better classification).
+const BATCH_SIZE = 6;
+// Higher fidelity than the default vision encode — more detail = more accurate
+// category/label. Claude downsamples past ~1568px anyway, so this is the sweet spot.
+const SCAN_VISION_MAX = 1568;
+const SCAN_VISION_QUALITY = 0.82;
 
 async function prepareUrl(url: string): Promise<string> {
-  if (url.startsWith("data:")) return compressDataUrlForVision(url);
+  if (url.startsWith("data:")) return compressDataUrlForVision(url, SCAN_VISION_MAX, SCAN_VISION_QUALITY);
   return url; // http(s) — sent by reference, server fetches it
 }
 

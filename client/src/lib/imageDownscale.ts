@@ -105,13 +105,18 @@ export async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 }
 
 /**
- * Compress an existing data URL down further for Vision API requests.
- * Resizes to 1024px max longest side, JPEG quality 0.65 → ~80–150 KB per image.
- * Why: Vercel caps serverless request bodies at 4.5 MB. With 20 photos this
- * budget is gone fast at pool-quality sizing. Vision API doesn't need full res.
+ * Compress an existing data URL down for Vision API requests.
+ * Defaults: 1024px / q0.65 (~80–150 KB) for batch features like ai-suggest where
+ * many images share one 4.5 MB request. Callers that need higher fidelity (e.g.
+ * the Scan classifier) can pass a larger maxDim/quality — Claude vision benefits
+ * from detail up to ~1568px on the long edge.
  * Returns the original URL unchanged if it isn't a data URL or compression fails.
  */
-export async function compressDataUrlForVision(url: string): Promise<string> {
+export async function compressDataUrlForVision(
+  url: string,
+  maxDim: number = 1024,
+  quality: number = 0.65,
+): Promise<string> {
   if (!url.startsWith("data:image/")) return url; // cloud URLs, blob:, etc — leave alone
   try {
     var img = await loadImage(url);
@@ -119,8 +124,8 @@ export async function compressDataUrlForVision(url: string): Promise<string> {
     var h = img.naturalHeight;
     if (!w || !h) return url;
 
-    var VISION_MAX = 1024;
-    var VISION_QUALITY = 0.65;
+    var VISION_MAX = maxDim;
+    var VISION_QUALITY = quality;
     var longest = Math.max(w, h);
     var scale = longest > VISION_MAX ? VISION_MAX / longest : 1;
     var targetW = Math.round(w * scale);

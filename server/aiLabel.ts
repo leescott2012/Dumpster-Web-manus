@@ -83,15 +83,20 @@ export async function handleAILabel(
     return;
   }
 
-  const system = `You label photos for a photo-organizing app. For EACH photo, pick the single best category and write a 2–4 word descriptive label.
+  const system = `You are an expert photo classifier. Look carefully at EACH photo, decide what it is PRIMARILY about, then pick the single best category and write a precise 2–4 word label.
 
 Categories (use the UPPERCASE name exactly):
 ${CATEGORY_HINTS}
 
-Rules:
-- category MUST be exactly one of: ${CATEGORIES.join(", ")}.
-- When a photo doesn't clearly fit a specific category, use ${FALLBACK_CATEGORY}.
-- label is a short human description, e.g. "Latte and croissant", "Sunset at the pier", "Group selfie".
+How to choose accurately:
+- Judge by the PRIMARY subject — what the photo is really about — not incidental background. A latte on a cafe table is DINING even if a building shows through the window.
+- Activity/context beats "there is a person in it". A person mid-workout is FITNESS; a person in clubwear under neon is NIGHTLIFE; a styled outfit shot is FASHION; a clean selfie/headshot is PORTRAIT.
+- Use STUDIO only for product/object shots on a controlled or seamless background (e-commerce look), not real-world scenes.
+- Use TRAVEL for outdoor nature/landscapes (beach, mountains, sunsets); ARCHITECTURE for buildings/interiors/cityscapes.
+- Only use ${FALLBACK_CATEGORY} when it genuinely doesn't fit any specific category — don't default to it out of uncertainty; commit to the best fit.
+
+Label rules:
+- Be specific and concrete — name the actual subject ("Red Ferrari", "Rooftop pool", "Plated sushi"), not vague ("nice photo").
 - Match each result to the photo's id given before its image.
 
 Respond ONLY with valid JSON, no markdown, no code fences:
@@ -125,7 +130,7 @@ Respond ONLY with valid JSON, no markdown, no code fences:
     const anthropic = new Anthropic({ apiKey });
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 60 * usableIds.length + 200,
+      max_tokens: 80 * usableIds.length + 250,
       system,
       messages: [{ role: "user", content }],
     });
