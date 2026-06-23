@@ -15,11 +15,30 @@ export interface LabelResult { id: string; category: string; label: string }
 
 const MAX_PHOTOS = 12; // per request — client chunks larger sets
 
-// Constrained taxonomy so categories stay consistent for the pool filters.
+// Taxonomy mirrors the native iOS PhotoAnalyzer (Apple Vision) categories EXACTLY
+// so a photo lands in the same bucket whether it's scanned on web or on device.
+// Keep this list in sync with dumpster/ios/.../PhotoAnalyzer.swift. Fallback is
+// LIFESTYLE (same as native's default).
 const CATEGORIES = [
-  "Food", "Drink", "People", "Selfie", "Nature", "Beach", "City", "Travel",
-  "Pets", "Party", "Fashion", "Fitness", "Art", "Home", "Object", "Other",
+  "AUTOMOTIVE", "PORTRAIT", "NIGHTLIFE", "DINING", "FITNESS", "TRAVEL",
+  "ARCHITECTURE", "ART", "FASHION", "STUDIO", "LIFESTYLE",
 ];
+const FALLBACK_CATEGORY = "LIFESTYLE";
+
+// Hints so Claude maps the same way native's keyword→category map does.
+const CATEGORY_HINTS = [
+  "AUTOMOTIVE — cars, vehicles, rims, engines, dashboards",
+  "PORTRAIT — people, faces, selfies, headshots, crowds",
+  "NIGHTLIFE — bars, clubs, parties, drinks, concerts, neon",
+  "DINING — food, meals, restaurants, coffee, plated dishes",
+  "FITNESS — gym, workouts, sports, athletes, training",
+  "TRAVEL — beaches, nature, landscapes, sunsets, mountains, water",
+  "ARCHITECTURE — buildings, interiors, cities, rooms, structures",
+  "ART — paintings, galleries, sculpture, museums, exhibitions",
+  "FASHION — outfits, clothing, style, accessories, shoes",
+  "STUDIO — product shots, controlled/studio lighting, flat lays",
+  "LIFESTYLE — everyday / anything that doesn't clearly fit above (default)",
+].join("\n");
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -64,17 +83,19 @@ export async function handleAILabel(
     return;
   }
 
-  const system = `You label photos for a photo-organizing app. For EACH photo, pick the single best category from this list and write a 2–4 word descriptive label.
+  const system = `You label photos for a photo-organizing app. For EACH photo, pick the single best category and write a 2–4 word descriptive label.
 
-Categories: ${CATEGORIES.join(", ")}
+Categories (use the UPPERCASE name exactly):
+${CATEGORY_HINTS}
 
 Rules:
-- category MUST be exactly one value from the list above.
+- category MUST be exactly one of: ${CATEGORIES.join(", ")}.
+- When a photo doesn't clearly fit a specific category, use ${FALLBACK_CATEGORY}.
 - label is a short human description, e.g. "Latte and croissant", "Sunset at the pier", "Group selfie".
 - Match each result to the photo's id given before its image.
 
 Respond ONLY with valid JSON, no markdown, no code fences:
-{"labels":[{"id":"<id>","category":"<Category>","label":"<short label>"}]}`;
+{"labels":[{"id":"<id>","category":"<CATEGORY>","label":"<short label>"}]}`;
 
   type ContentBlock =
     | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string } }
@@ -118,7 +139,8 @@ Respond ONLY with valid JSON, no markdown, no code fences:
     const labels: LabelResult[] = [];
     for (const l of rawLabels) {
       if (!l || typeof l.id !== "string") continue;
-      const cat = CATEGORIES.indexOf(l.category) >= 0 ? l.category : "Other";
+      const raw = typeof l.category === "string" ? l.category.toUpperCase() : "";
+      const cat = CATEGORIES.indexOf(raw) >= 0 ? raw : FALLBACK_CATEGORY;
       const label = typeof l.label === "string" ? l.label.slice(0, 60) : "";
       labels.push({ id: l.id, category: cat, label });
     }
