@@ -59,18 +59,28 @@ void main(){
   }
   float core = smoothstep(0.7, 1.7, field);
 
-  // Caustic veins + radial glow.
+  // Caustic veins + radial glow. Tighter glow falloff so the core has a
+  // defined edge instead of bleeding into a broad wash.
   float caust = pow(max(0.0, 1.0 - abs(plasma - 0.5)*2.0), 6.0);
-  float glow = exp(-r * (3.0 - 1.6*lvl));
-  float energy = clamp(core*0.9 + caust*0.5*core + glow*(0.32 + 0.6*lvl), 0.0, 1.6);
+  float glow = exp(-r * (3.6 - 1.3*lvl));
+  float energy = clamp(core*0.85 + caust*0.5*core + glow*(0.24 + 0.5*lvl), 0.0, 1.35);
 
-  // Hot center + peak bloom flare.
-  float hot = exp(-r*14.0) * (0.6 + lvl);
+  // Hot nucleus — WARM GOLD (uAccentHot), not pure white, with a tight falloff
+  // so the bright spot stays small and contained.
+  float hot = exp(-r*22.0) * (0.30 + 0.55*lvl);
   vec3 col = mix(uAccent, uAccentHot, clamp(energy, 0.0, 1.0));
-  col += vec3(1.0) * hot;
-  col += uAccentHot * uPeak * glow * 0.8;
+  col += uAccentHot * hot;
+  col += uAccentHot * uPeak * glow * 0.5;
+  col *= energy;
 
-  gl_FragColor = vec4(col * energy, 1.0);
+  // Filmic highlight roll-off: bright regions compress toward gold instead of
+  // clipping to a white sun, so the plasma detail stays visible in the core.
+  col = vec3(1.0) - exp(-col * 1.5);
+  // Nudge saturation back up a touch (tone-mapping desaturates highlights).
+  float luma = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(vec3(luma), col, 1.18);
+
+  gl_FragColor = vec4(col, 1.0);
 }`;
 
 export function ReactorGL({ levelRef, bandsRef, peakRef, state, size = 340, onUnsupported }: Props) {
@@ -109,7 +119,7 @@ export function ReactorGL({ levelRef, bandsRef, peakRef, state, size = 340, onUn
         uPeak: () => cur.uPeak,
         uRes: () => cur.uRes,
         uAccent: [0.55, 0.42, 0.12],
-        uAccentHot: [1.0, 0.92, 0.6],
+        uAccentHot: [1.0, 0.84, 0.46],
       },
       blend: { enable: true, func: { src: "one", dst: "one" } },
       depth: { enable: false },
