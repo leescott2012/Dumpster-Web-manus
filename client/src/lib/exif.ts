@@ -21,6 +21,26 @@ import exifr from "exifr";
 import type { PhotoMeta } from "./photoData";
 
 /**
+ * Decode an image File just far enough to read its true pixel dimensions.
+ * Uses createImageBitmap (fast header decode) with an <img> fallback. Resolves
+ * null if the file can't be decoded. Never throws.
+ */
+function decodeDimensions(file: File): Promise<{ w: number; h: number } | null> {
+  if (typeof createImageBitmap === "function") {
+    return createImageBitmap(file)
+      .then(function (b) { var r = { w: b.width, h: b.height }; if (b.close) b.close(); return r; })
+      .catch(function () { return null; });
+  }
+  return new Promise(function (resolve) {
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url); };
+    img.onerror = function () { resolve(null); URL.revokeObjectURL(url); };
+    img.src = url;
+  });
+}
+
+/**
  * Pull a small, useful EXIF subset from an uploaded file.
  * Returns an empty object if the file has no EXIF or parsing fails — never
  * throws, so callers can drop the result into the photo unconditionally.
@@ -37,6 +57,14 @@ export async function extractPhotoMeta(file: File): Promise<PhotoMeta> {
   else if (file.type === "image/png") fallback.format = "PNG";
   else if (file.type === "image/webp") fallback.format = "WEBP";
   else if (file.type === "image/gif") fallback.format = "GIF";
+
+  // Guarantee true pixel dimensions by decoding the image — EXIF dimension tags
+  // are missing on PNGs, screenshots, and many re-saved JPEGs, and the duplicate
+  // detector needs fileSize+w+h to recognize a re-uploaded file. Cheap + safe.
+  try {
+    var dims = await decodeDimensions(file);
+    if (dims) { fallback.width = dims.w; fallback.height = dims.h; }
+  } catch { /* dimensions are best-effort */ }
 
   try {
     var raw = await exifr.parse(file, {

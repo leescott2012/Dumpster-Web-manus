@@ -585,6 +585,12 @@ function TasteProfileSection() {
   const rulesSavedHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profileInitialRef = useRef(profile);
   const rulesInitialRef = useRef(rules);
+  // Latest values, refreshed every render, so the unmount flush below saves what
+  // is actually on screen instead of the stale values captured by its [] deps.
+  const profileLatestRef = useRef(profile);
+  profileLatestRef.current = profile;
+  const rulesLatestRef = useRef(rules);
+  rulesLatestRef.current = rules;
 
   useEffect(() => {
     if (profile === profileInitialRef.current) return;
@@ -618,13 +624,17 @@ function TasteProfileSection() {
   // closing the menu mid-typing doesn't lose the last edit.
   useEffect(() => {
     return () => {
-      if (profileTimerRef.current) {
-        clearTimeout(profileTimerRef.current);
-        saveTasteProfile(profile);
+      // Save the LATEST on-screen values (via refs), not the stale ones the
+      // empty-deps closure would otherwise capture. Always flush if the current
+      // text differs from the last saved baseline — covers closing the menu
+      // within the debounce window.
+      if (profileLatestRef.current !== profileInitialRef.current) {
+        if (profileTimerRef.current) clearTimeout(profileTimerRef.current);
+        saveTasteProfile(profileLatestRef.current);
       }
-      if (rulesTimerRef.current) {
-        clearTimeout(rulesTimerRef.current);
-        saveAIRules(rules);
+      if (rulesLatestRef.current !== rulesInitialRef.current) {
+        if (rulesTimerRef.current) clearTimeout(rulesTimerRef.current);
+        saveAIRules(rulesLatestRef.current);
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

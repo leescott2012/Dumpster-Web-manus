@@ -185,6 +185,28 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
     }
 
+    // 5) Delete photos removed locally. The pool is rebuilt on load from
+    //    "photos not attached to a dump", so a leftover row reappears in the
+    //    pool forever unless we prune it here (this is the explicit photo
+    //    deletion the v1 note deferred). SAFETY: only the caller's own rows,
+    //    only ids absent from this payload, and only when the payload actually
+    //    carried photos (photoRows.length > 0) — so a data-URL-only or racy
+    //    empty payload can never wipe the account.
+    if (photoRows.length > 0) {
+      var existingP = await supabaseAdmin.from("photos").select("id").eq("user_id", userId);
+      if (!existingP.error && existingP.data) {
+        var keepPhotoIds: Record<string, boolean> = {};
+        for (var kp = 0; kp < photoRows.length; kp++) keepPhotoIds[photoRows[kp].id] = true;
+        var staleP = existingP.data
+          .map(function (r) { return r.id as string; })
+          .filter(function (id) { return !keepPhotoIds[id]; });
+        if (staleP.length > 0) {
+          await supabaseAdmin.from("dump_photos").delete().in("photo_id", staleP);
+          await supabaseAdmin.from("photos").delete().in("id", staleP);
+        }
+      }
+    }
+
     return json(200, { ok: true, dumps: dumpRows.length, photos: photoRows.length, totalSent: totalPhotos });
   } catch (err) {
     var msg = err instanceof Error ? err.message : "Unknown error";

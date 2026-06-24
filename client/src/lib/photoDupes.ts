@@ -19,10 +19,14 @@ import type { Photo } from "./photoData";
 
 function signature(p: Photo): string | null {
   const m = p.meta;
-  if (m && m.fileSize && m.width && m.height) {
-    return "s:" + m.fileSize + ":" + m.width + "x" + m.height;
+  if (m && m.fileSize) {
+    // fileSize is byte-exact, so it alone catches a re-uploaded file even when
+    // the cloud URL differs. Append dimensions when we have them to make
+    // coincidental same-size collisions between different photos essentially nil.
+    if (m.width && m.height) return "s:" + m.fileSize + ":" + m.width + "x" + m.height;
+    return "s:" + m.fileSize;
   }
-  // No usable EXIF — fall back to exact image identity.
+  // No metadata at all (e.g. videos) — fall back to exact image identity.
   return p.url ? "u:" + p.url : null;
 }
 
