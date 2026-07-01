@@ -29,6 +29,9 @@ function getRedis(): Redis | null {
 /** Estimated $ cost per action, in CENTS. Conservative upper bounds. */
 var COST_CENTS: Record<string, number> = {
   ai_suggest: 25, // Claude vision, up to 20 images
+  ai_label: 12,   // Claude Sonnet vision, up to 12 images per batch -- keep in sync with
+                  // creditGate.ts COSTS.ai_label (was missing here, silently undercounted at
+                  // the `|| 2` default, ~6x under its real cost in the daily-budget total)
   ai_caption: 3,
   ai_chat: 1,
   ai_recycle: 3,
