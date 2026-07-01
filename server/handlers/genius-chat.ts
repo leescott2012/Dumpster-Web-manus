@@ -12,6 +12,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Stripe from "stripe";
 import { getUserFromRequest } from "../creditGate.js";
 import { createClient } from "@supabase/supabase-js";
+import { captureServerError, captureServerMessage } from "../sentry.js";
 
 // Sonnet for the brain: far more reliable multi-step tool use than Haiku, which
 // matters when it's wielding write_database and issuing real Stripe refunds.
@@ -242,7 +243,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .filter((m: AnyObj) => m.content.trim().length > 0);
       }
     } catch (e) {
-      console.warn("[genius-chat] history fetch failed:", e);
+      captureServerError(e, "genius-chat.history_fetch", { userId });
     }
 
     const system = SYSTEM_PROMPT + statsBlock(stats);
@@ -253,7 +254,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (let step = 0; step < 6; step++) {
         const data = await callAnthropic(anthropicKey, system, messages);
         if (data?.error) {
-          console.warn("[genius-chat] anthropic error:", data.error.message);
+          captureServerMessage("[genius-chat] anthropic error: " + data.error.message, "genius-chat.anthropic", "warning");
           break;
         }
         const content: AnyObj[] = Array.isArray(data.content) ? data.content : [];
@@ -349,12 +350,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { level: "GENIUS", message: replyText },
       ]);
     } catch (e) {
-      console.warn("[genius-chat] log write failed:", e);
+      captureServerError(e, "genius-chat.log_write", { userId });
     }
 
     return res.status(200).json({ reply: replyText });
   } catch (err: any) {
-    console.error("[genius-chat] error:", err);
+    captureServerError(err, "genius-chat", { userId });
     return res.status(500).json({ error: "Neural core error: " + err.message });
   }
 }

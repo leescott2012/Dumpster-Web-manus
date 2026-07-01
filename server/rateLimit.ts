@@ -35,6 +35,7 @@ var LIMITS: Record<string, { count: number; window: "10 m" | "1 m" | "1 h" }> = 
   ai_recycle:  { count: 10, window: "10 m" },
   ig_scrub:    { count: 3,  window: "10 m" }, // expensive scraping
   tts:         { count: 20, window: "10 m" }, // ElevenLabs cost per call
+  admin_user_detail: { count: 30, window: "10 m" }, // PII/IP lookup — throttle enumeration
   stripe_checkout: { count: 10, window: "1 h" }, // anti-spam
 };
 

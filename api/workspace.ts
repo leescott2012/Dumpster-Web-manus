@@ -29,6 +29,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { createHash } from "crypto";
 import { getUserFromRequest } from "../server/creditGate.js";
 import { supabaseAdmin } from "../server/supabaseAdmin.js";
+import { captureServerError } from "../server/sentry.js";
 
 export const config = { runtime: "nodejs", maxDuration: 30, memory: 512 };
 
@@ -88,8 +89,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
   if (req.method !== "POST") { res.writeHead(405).end("Method not allowed"); return; }
 
+  var userId: string | null = null;
   try {
-    var userId = await getUserFromRequest(req);
+    userId = await getUserFromRequest(req);
     if (!userId) return json(401, { error: "Sign in to sync.", code: "auth_required" });
 
     var body = await parseBody(req);
@@ -138,7 +140,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     if (photoRows.length > 0) {
       var pUp = await supabaseAdmin.from("photos").upsert(photoRows, { onConflict: "id" });
-      if (pUp.error) return json(500, { error: "photos upsert failed: " + pUp.error.message });
+      if (pUp.error) {
+        captureServerError(pUp.error, "workspace.photos_upsert", { userId: userId });
+        return json(500, { error: "Failed to save photos" });
+      }
     }
 
     // 2) Upsert dumps.
@@ -158,7 +163,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
     if (dumpRows.length > 0) {
       var dUp = await supabaseAdmin.from("dumps").upsert(dumpRows, { onConflict: "id" });
-      if (dUp.error) return json(500, { error: "dumps upsert failed: " + dUp.error.message });
+      if (dUp.error) {
+        captureServerError(dUp.error, "workspace.dumps_upsert", { userId: userId });
+        return json(500, { error: "Failed to save dumps" });
+      }
     }
 
     // 3) Delete dumps removed locally (+ their links). Photos are untouched.
@@ -181,7 +189,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         .filter(function (l) { return seen[l.photo_id]; });
       if (links.length > 0) {
         var lIns = await supabaseAdmin.from("dump_photos").insert(links);
-        if (lIns.error) return json(500, { error: "dump_photos insert failed: " + lIns.error.message });
+        if (lIns.error) {
+          captureServerError(lIns.error, "workspace.dump_photos_insert", { userId: userId });
+          return json(500, { error: "Failed to save dump layout" });
+        }
       }
     }
 
@@ -209,7 +220,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     return json(200, { ok: true, dumps: dumpRows.length, photos: photoRows.length, totalSent: totalPhotos });
   } catch (err) {
-    var msg = err instanceof Error ? err.message : "Unknown error";
-    return json(500, { error: msg });
+    captureServerError(err, "workspace", { userId: userId });
+    return json(500, { error: "Server error" });
   }
 }

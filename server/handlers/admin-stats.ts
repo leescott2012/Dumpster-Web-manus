@@ -22,6 +22,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Stripe from "stripe";
 import { getUserFromRequest } from "../creditGate.js";
 import { createClient } from "@supabase/supabase-js";
+import { captureServerError } from "../sentry.js";
 
 // Use service_role client directly for admin API access
 const supabaseAdmin = createClient(
@@ -167,7 +168,7 @@ async function fetchRevenue(rangeStartIso: string, dauDays: number): Promise<Rev
       source: "stripe",
     };
   } catch (err) {
-    console.error("[admin-stats] stripe revenue fetch failed:", err);
+    captureServerError(err, "admin-stats.stripe_revenue");
     return empty("unavailable");
   }
 }
@@ -351,7 +352,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(stats);
 
   } catch (err) {
-    console.error("[admin-stats] error:", err);
+    captureServerError(err, "admin-stats", { userId });
     return res.status(500).json({ error: "Internal error" });
   }
 }

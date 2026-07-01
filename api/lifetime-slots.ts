@@ -4,6 +4,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import { createClient } from "@supabase/supabase-js";
+import { captureServerError } from "../server/sentry.js";
 
 export var config = { runtime: "nodejs", maxDuration: 5, memory: 128 };
 
@@ -36,6 +37,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       .eq("lifetime_purchase", true);
 
     if (error) {
+      captureServerError(error, "lifetime-slots");
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "DB error" }));
       return;
@@ -48,7 +50,8 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ remaining: remaining, total: TOTAL_SLOTS }));
-  } catch {
+  } catch (err) {
+    captureServerError(err, "lifetime-slots");
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Server error" }));
   }

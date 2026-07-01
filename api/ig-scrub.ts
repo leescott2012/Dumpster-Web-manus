@@ -9,6 +9,7 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { checkCredits } from "../server/creditGate.js";
+import { captureServerError } from "../server/sentry.js";
 
 const IMAGE_EXT = /\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i;
 const VIDEO_EXT = /\.(mp4|mov|webm)(\?|$)/i;
@@ -110,31 +111,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "urls array required" });
   }
 
-  const results: ScrapedItem[] = [];
-  const errors: string[] = [];
-  const igUrls: string[] = [];
+  try {
+    const results: ScrapedItem[] = [];
+    const errors: string[] = [];
+    const igUrls: string[] = [];
 
-  for (const raw of urls.slice(0, 30)) {
-    const url = raw.trim();
-    if (!url) continue;
+    for (const raw of urls.slice(0, 30)) {
+      const url = raw.trim();
+      if (!url) continue;
 
-    if (IMAGE_EXT.test(url)) {
-      results.push({ src: url, category: "Image" });
-    } else if (VIDEO_EXT.test(url)) {
-      results.push({ src: url, category: "Video" });
-    } else if (IG_URL.test(url)) {
-      igUrls.push(url);
-    } else {
-      errors.push(url + " (unrecognised URL format)");
+      if (IMAGE_EXT.test(url)) {
+        results.push({ src: url, category: "Image" });
+      } else if (VIDEO_EXT.test(url)) {
+        results.push({ src: url, category: "Video" });
+      } else if (IG_URL.test(url)) {
+        igUrls.push(url);
+      } else {
+        errors.push(url + " (unrecognised URL format)");
+      }
     }
-  }
 
-  // Batch all IG URLs into one Apify run
-  if (igUrls.length > 0) {
-    const { items, errors: apifyErrors } = await scrapeWithApify(igUrls);
-    results.push(...items);
-    errors.push(...apifyErrors);
-  }
+    // Batch all IG URLs into one Apify run
+    if (igUrls.length > 0) {
+      const { items, errors: apifyErrors } = await scrapeWithApify(igUrls);
+      results.push(...items);
+      errors.push(...apifyErrors);
+    }
 
-  return res.status(200).json({ results, errors });
+    return res.status(200).json({ results, errors });
+  } catch (err) {
+    // Previously unhandled — an Apify/network failure here would 500 with no
+    // observability at all (backend security audit, 2026-07-01).
+    captureServerError(err, "ig-scrub", { userId: gate.userId });
+    return res.status(500).json({ error: "Scrub failed" });
+  }
 }
