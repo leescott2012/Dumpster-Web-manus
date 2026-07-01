@@ -94,7 +94,7 @@ Canonical checklist mapping **every web feature** to its native (SwiftUI / iOS) 
 |---|---|---|
 | Guided tour / onboarding | ✅ | `OnboardingView`, `SpotlightTutorialView` |
 | Main menu / settings | ✅ | `SettingsView`, `FileCabinetMenuView` |
-| Appearance options (dark/light, card size) | ⚪ | web shows "coming soon"; native **(verify)** |
+| Appearance options (dark/light, card size) | 🟢🐛 | web shows "coming soon"; native is actually **ahead** — full Theme Mode (Light/Dark/System) + 6 accent colors (`FileCabinetMenuView.AppearanceTabView`) — but has a real bug, see §G |
 | Legal pages (Privacy/Terms) | 🟡 | links present in `SignInView`/`PaywallView` **(verify)** |
 | PWA install | 🛑 | n/a — native *is* the native app |
 
@@ -118,6 +118,15 @@ Apple-Photos-style metadata card, revealed by **swipe-up** on native (vs web's (
 
 ### §C — Auto-Gen advanced filters  🟡
 Port `applyAutoGenFilters()` from web `AutoGenAdvanced.tsx`: date range (`DatePicker`), time-of-day window (hard — no-metadata photos excluded), category chips (multi-select, OR logic), mix mode (surprise = bypass filters; shuffle = randomize order), vibe note (freeform → AI `userHint`). **Hard rule:** photos already used in any dump are *always* excluded.
+
+### §G — Three UI bugs found via simulator audit  🐛 (found 2026-07-01, not yet fixed)
+Booted an iPhone 17 Pro simulator, built + installed + launched the app, and drove it directly (screenshots + taps) rather than just reading code. Three reproducible issues:
+
+1. **Appearance menu doesn't reflect its own theme setting.** Switching Theme Mode to Light correctly re-themes `PhotoPoolView` (uses `Theme.bg(appState.colorMode, cs)`), but the entire `FileCabinetMenuView` — including the `AppearanceTabView` screen where you make the choice — stays hardcoded black. Root cause: `FileCabinetMenuView.swift:156` backgrounds the whole menu with a literal `Color.black`; the file never calls the `Theme.bg(...)` helper `PhotoPoolView` uses. The `appState.colorMode` state itself is wired correctly (the toggle selection persists, other screens respect it) — only this menu's own rendering ignores it. Fix: replace hardcoded `Color.black`/`.white.opacity(...)` in `FileCabinetMenuView.swift` with the `Theme` helpers, matching `PhotoPoolView`'s pattern.
+2. **Lightbox close (X) button unresponsive.** Two separate taps at the button's rendered position did nothing; tapping the dimmed backdrop elsewhere dismissed immediately. Likely a hit-target/safe-area offset in `LightboxView.swift` — the button sits in `.padding(20)` near the top edge under a parent `.ignoresSafeArea()`. Needs confirming with Xcode's view debugger.
+3. **~300-400ms perceptible lag opening a photo.** `PhotoCardView.swift` stacks `.onTapGesture(count: 2)` and `.onTapGesture(count: 1)` on the same view (there's an in-code comment acknowledging the tradeoff: "Order matters: double-tap first so SwiftUI can disambiguate"), which forces SwiftUI to wait out the double-tap window before firing the single tap. Every photo-open feels like a beat of unresponsiveness. Fix: `.exclusively(before:)` gesture composition, or drop double-tap-to-enlarge since single-tap-open is the primary interaction.
+
+Also noted, not a bug: `DebugSeeder`-seeded pool mixes real bundled photos with plain numbered color-tile placeholders — fine for a dev build, worth confirming it's excluded from release/TestFlight builds.
 
 ### §D — IAP server verification  ⚪
 Native StoreKit is client-only. Build web `POST /api/iap-verify`: verify Apple receipt server-side → grant credits via the existing `addCredits()` path. Add App Store Server Notifications V2 webhook (parallel to `stripe-webhook`). Record IAP revenue into a table and merge into `admin-stats.ts:fetchRevenue()` so IAP money shows in the dashboard. StoreKit products mirror the 6 Stripe prices. Credit costs (keep client+server in sync): `ai_caption=1`, `ai_suggest=15`, `ai_chat=2`.
@@ -157,4 +166,4 @@ All native events also carry `metadata.platform = "ios"`. Owner account (`leesco
 
 ---
 
-_Maintenance: when a feature ships on either platform, update its matrix row + any §spec. Last full audit: 2026-07-01 — merged `feat/native-dashboard-analytics` into native `main` and pushed; fixed §F (AI-profile sync dead code path, `3f64afe`); shipped §B (EXIF capture) and duplicate-photo detection (pool-view only) as a same-day follow-up, both verified with a clean `iphonesimulator` build. Remaining open items (§A lightbox UI, §C Auto-Gen filters, §D IAP server verification, dump-carousel duplicate badge) are left for passes that need real UI/UX or payment-infra decisions rather than mechanical porting. Prior: 2026-06-22 (cloud layer integrated into iOS build, dashboard analytics wired, Instagram hand-off fixed)._
+_Maintenance: when a feature ships on either platform, update its matrix row + any §spec. Last full audit: 2026-07-01 — merged `feat/native-dashboard-analytics` into native `main` and pushed; fixed §F (AI-profile sync dead code path, `3f64afe`); shipped §B (EXIF capture) and duplicate-photo detection (pool-view only) as a same-day follow-up, both verified with a clean `iphonesimulator` build; ran a live simulator UI audit (boot + build + install + drive, not just code-read) and found §G — 3 real bugs (Appearance menu theme-blind, lightbox close button unresponsive, tap-gesture lag), not yet fixed. Remaining open items (§A lightbox UI, §C Auto-Gen filters, §D IAP server verification, §G's 3 bugs, dump-carousel duplicate badge) are left for a follow-up pass. Prior: 2026-06-22 (cloud layer integrated into iOS build, dashboard analytics wired, Instagram hand-off fixed)._
