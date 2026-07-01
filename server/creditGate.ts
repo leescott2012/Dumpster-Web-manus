@@ -85,7 +85,13 @@ export async function checkCredits(
   // deduction entirely. Auth + rate limit + daily $ budget still enforce —
   // those protect us from runaway costs. Remove or flip back to 0 to re-enable
   // per-user credit gating.
-  var creditsDisabled = process.env.DISABLE_CREDIT_LIMIT === "1";
+  //
+  // Hardened (backend security audit, 2026-07-01): this flag is now ignored in
+  // production regardless of its value, so a stray/misconfigured env var can't
+  // silently make every AI call free for every user. Still honored in
+  // preview/development for local testing.
+  var isProd = (process.env.VERCEL_ENV || process.env.NODE_ENV) === "production";
+  var creditsDisabled = !isProd && process.env.DISABLE_CREDIT_LIMIT === "1";
   if (!creditsDisabled) {
     var cost = COSTS[action] || 2;
     var result = await deductCredits(userId, action, cost);
