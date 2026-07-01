@@ -27,7 +27,7 @@ Canonical checklist mapping **every web feature** to its native (SwiftUI / iOS) 
 | Per-photo context menu | ✅ | `PhotoMenuSheet` |
 | Recycle bin / restore deleted | 🟡 | native has `UndoManager` (undo), not a persistent trash like web's `RecycleSheet` |
 | Bulk multi-select delete | 🟡 | selection exists for add-to-dump; bulk-delete path **(verify)** |
-| **Duplicate-photo detection** | ⚪ | no equivalent to web's `photoDupes.ts` — no dup-flag file/logic found on native at all (grepped `ios/DumpsterIOS` for "dup"/"duplicate") |
+| Duplicate-photo detection | 🟡 | ported 2026-07-01 (`PhotoDupes.swift`, direct port of `photoDupes.ts`) — amber border + "DUPE?" badge wired into `PhotoPoolView`/`PhotoCardView`. Not yet threaded into `DumpCardView` carousels (web shows the badge everywhere via one shared component + prop; native's dump-context call site would need the same set passed down — left out this pass) |
 | Local persistence | ✅ | SwiftData + Documents (vs web localStorage) |
 | "Find in Photos" | 🟢 | native has on-device Vision instead (see below) |
 
@@ -35,7 +35,7 @@ Canonical checklist mapping **every web feature** to its native (SwiftUI / iOS) 
 | Web feature | Native | Notes |
 |---|---|---|
 | Photo import | ✅ | `PhotosPicker` → `importPickedPhotos` |
-| **EXIF / PhotoMeta capture** (§B) | 🟡 | `DumpPhoto` *declares* all 14 fields + `metaLine()`, but **nothing populates them** — import creates bare records; no `ImageIO`/`PHAsset` extraction |
+| EXIF / PhotoMeta capture (§B) | ✅ | fixed 2026-07-01 (`PhotoEXIF.swift`) — populates all 14 `DumpPhoto` fields via `ImageIO` straight off the original bytes `PhotoStorageManager` already preserves; no PHAsset/Photo-Library permission needed |
 | IG Scrub (import media *from* Instagram) | ✅ | `ScrubService`, `SavedScrub`, `ScrubInstagramSheet` |
 | Cloud photo upload to Storage | ⚪ | native photos are device-local only |
 
@@ -111,10 +111,10 @@ The entire **GENIUSS admin block**: `/admin` dashboard (DAU/revenue/feature-usag
 ## Detailed porting specs (open items)
 
 ### §A — Lightbox info panel + map  ⚪
-Apple-Photos-style metadata card, revealed by **swipe-up** on native (vs web's (i) button). Sections (all conditional on data): day·date·time · filename · camera + format badge · lens/focal/f-stop · resolution + file size · exposure row (ISO, mm, ƒ, shutter) · **map at GPS coords**. Web uses Google Static Maps; **native should use MapKit** (free, no token). Blocked on §B (needs real EXIF first).
+Apple-Photos-style metadata card, revealed by **swipe-up** on native (vs web's (i) button). Sections (all conditional on data): day·date·time · filename · camera + format badge · lens/focal/f-stop · resolution + file size · exposure row (ISO, mm, ƒ, shutter) · **map at GPS coords**. Web uses Google Static Maps; **native should use MapKit** (free, no token). No longer blocked — §B shipped 2026-07-01, real EXIF is now on every newly-imported `DumpPhoto`. This is now a standalone SwiftUI view-building task (new card UI + MapKit), not a data-plumbing one — left for a pass with actual layout/gesture decisions rather than guessing them.
 
-### §B — EXIF / PhotoMeta capture  🟡
-`DumpPhoto` already has the fields + `metaLine()`; what's missing is **extraction**. In `importPickedPhotos`, before any downscale, read EXIF via `PHAsset` / `ImageIO` (`CGImageSourceCopyPropertiesAtIndex`) and populate `takenAt, lat, lng, camera, lens, iso, focalLength, fStop, shutterSpeed, imageFormat, orientation, pixelWidth/Height, fileSize`. **Order matters: extract before downsample** (downsampling strips EXIF). Feeds AI prompts (`metaLine`) and §A.
+### §B — EXIF / PhotoMeta capture  ✅ (done 2026-07-01)
+`PhotoEXIF.swift` reads `takenAt, lat, lng, camera, lens, iso, focalLength, fStop, shutterSpeed, imageFormat, orientation, pixelWidth/Height, fileSize` straight off the original `Data` via `ImageIO` (`CGImageSourceCopyPropertiesAtIndex`), called from `importPickedPhotos` right after `PhotoStorageManager.saveImageData` and before insert — no PHAsset fetch, no Photo Library permission needed, since the original bytes (preserved since `158bc07`) already carry any EXIF the source had. Feeds AI prompts (`metaLine`) and unblocks §A. Also backs duplicate-photo detection (fileSize + pixel dims).
 
 ### §C — Auto-Gen advanced filters  🟡
 Port `applyAutoGenFilters()` from web `AutoGenAdvanced.tsx`: date range (`DatePicker`), time-of-day window (hard — no-metadata photos excluded), category chips (multi-select, OR logic), mix mode (surprise = bypass filters; shuffle = randomize order), vibe note (freeform → AI `userHint`). **Hard rule:** photos already used in any dump are *always* excluded.
@@ -157,4 +157,4 @@ All native events also carry `metadata.platform = "ios"`. Owner account (`leesco
 
 ---
 
-_Maintenance: when a feature ships on either platform, update its matrix row + any §spec. Last full audit: 2026-07-01 — verified web/native are on the same commit for scan-taxonomy alignment (§ AI features); confirmed native `main` still lacks the 3 commits sitting on `feat/native-dashboard-analytics`; found §F (AI-profile sync dead code path) and the missing duplicate-detection feature by reading native source directly, not just grepping symbol presence. Prior: 2026-06-22 (cloud layer integrated into iOS build, dashboard analytics wired, Instagram hand-off fixed)._
+_Maintenance: when a feature ships on either platform, update its matrix row + any §spec. Last full audit: 2026-07-01 — merged `feat/native-dashboard-analytics` into native `main` and pushed; fixed §F (AI-profile sync dead code path, `3f64afe`); shipped §B (EXIF capture) and duplicate-photo detection (pool-view only) as a same-day follow-up, both verified with a clean `iphonesimulator` build. Remaining open items (§A lightbox UI, §C Auto-Gen filters, §D IAP server verification, dump-carousel duplicate badge) are left for passes that need real UI/UX or payment-infra decisions rather than mechanical porting. Prior: 2026-06-22 (cloud layer integrated into iOS build, dashboard analytics wired, Instagram hand-off fixed)._
