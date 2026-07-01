@@ -109,6 +109,62 @@ async function callAnthropic(apiKey: string, system: string, messages: AnyObj[])
   return (await r.json()) as AnyObj;
 }
 
+// SQL validation for query_database / write_database (backend security audit,
+// 2026-07-01). Previously these forwarded the model's `sql` string straight to
+// geniuss_read/geniuss_write with zero checks — a prompt-injection payload (e.g.
+// text embedded in a bug report GENIUSS later reads) could steer it into
+// destructive or exfiltrating queries under service_role. This is app-layer
+// defense-in-depth; geniuss_read/geniuss_write themselves were also hardened
+// with matching checks directly in Postgres (migration
+// harden_geniuss_read_write_sql_validation) so a bypass here isn't fatal.
+const WRITABLE_TABLES = ["profiles", "credit_transactions", "bug_reports", "photos", "dumps", "dump_photos", "activity_log"];
+
+function stripSqlComments(sql: string): string {
+  return sql.replace(/--.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
+function bareStatement(sql: string): string {
+  return stripSqlComments(sql).trim().replace(/;+\s*$/, "");
+}
+
+function isSingleStatement(sql: string): boolean {
+  return !sql.includes(";");
+}
+
+/** Returns an error string if `sql` isn't a safe single SELECT, else null. */
+function validateSelectSql(rawSql: string): string | null {
+  const sql = bareStatement(rawSql);
+  if (!sql) return "empty SQL";
+  if (!isSingleStatement(sql)) return "only a single statement is allowed (no semicolons/stacked queries)";
+  if (!/^select\s/i.test(sql)) return "query_database only accepts a single SELECT statement";
+  // Blocks writable CTEs (WITH x AS (DELETE ... RETURNING *) SELECT * FROM x) and
+  // any other write/DDL keyword smuggled into an otherwise-SELECT statement.
+  if (/\b(insert|update|delete|drop|alter|truncate|grant|revoke|create|into)\b/i.test(sql)) {
+    return "SELECT statements may not contain write/DDL keywords";
+  }
+  if (/api_key_/i.test(sql)) return "refusing to select api_key_* columns";
+  return null;
+}
+
+/** Returns an error string if `sql` isn't a safe single write, else null. */
+function validateWriteSql(rawSql: string): string | null {
+  const sql = bareStatement(rawSql);
+  if (!sql) return "empty SQL";
+  if (!isSingleStatement(sql)) return "only a single statement is allowed (no semicolons/stacked queries)";
+  const m = sql.match(/^(insert\s+into|update|delete\s+from)\s+"?([a-zA-Z_][a-zA-Z0-9_]*)"?/i);
+  if (!m) return "write_database only accepts a single INSERT/UPDATE/DELETE statement";
+  if (/\b(drop|alter|truncate|grant|revoke|create|select)\b/i.test(sql)) {
+    return "write statement contains disallowed keywords";
+  }
+  if (/api_key_/i.test(sql)) return "refusing to write api_key_* columns";
+  if (/\bauth\.users\b|\bauth\./i.test(sql)) return "refusing to write to the auth schema";
+  const table = m[2].toLowerCase();
+  if (!WRITABLE_TABLES.includes(table)) {
+    return "writes are only allowed to: " + WRITABLE_TABLES.join(", ") + " (got: " + table + ")";
+  }
+  return null;
+}
+
 let _stripe: Stripe | null = null;
 function stripeClient(): Stripe | null {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -210,11 +266,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             try {
               const sql = String(tu.input?.sql ?? "");
               if (tu.name === "query_database") {
-                const { data: d, error } = await supabase.rpc("geniuss_read", { q: sql });
-                out = error ? "ERROR: " + error.message : JSON.stringify(d ?? []).slice(0, 6000);
+                const validationError = validateSelectSql(sql);
+                if (validationError) {
+                  out = "ERROR: rejected — " + validationError;
+                } else {
+                  // Hard server-side cap regardless of what the model wrote — never
+                  // trust an LLM-supplied LIMIT.
+                  const capped = "SELECT * FROM (" + bareStatement(sql) + ") AS _geniuss_capped LIMIT 50";
+                  const { data: d, error } = await supabase.rpc("geniuss_read", { q: capped });
+                  out = error ? "ERROR: " + error.message : JSON.stringify(d ?? []).slice(0, 6000);
+                }
               } else if (tu.name === "write_database") {
-                const { data: d, error } = await supabase.rpc("geniuss_write", { q: sql });
-                out = error ? "ERROR: " + error.message : "OK — " + String(d);
+                const validationError = validateWriteSql(sql);
+                if (validationError) {
+                  out = "ERROR: rejected — " + validationError;
+                } else {
+                  const { data: d, error } = await supabase.rpc("geniuss_write", { q: bareStatement(sql) });
+                  out = error ? "ERROR: " + error.message : "OK — " + String(d);
+                }
               } else if (tu.name === "refund_payment") {
                 out = await doRefund(supabase, String(tu.input?.stripe_payment_id ?? ""),
                   typeof tu.input?.amount_cents === "number" ? tu.input.amount_cents : undefined);
