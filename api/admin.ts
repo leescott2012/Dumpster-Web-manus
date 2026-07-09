@@ -13,6 +13,7 @@ import adminUserDetail from "../server/handlers/admin-user-detail.js";
 import bugReport from "../server/handlers/bug-report.js";
 import geniusChat from "../server/handlers/genius-chat.js";
 import tts from "../server/handlers/tts.js";
+import { captureServerError } from "../server/sentry.js";
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>;
 
@@ -24,11 +25,19 @@ const ROUTES: Record<string, Handler> = {
   "tts": tts as Handler,
 };
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   const fn = String((req.query.fn as string | undefined) ?? "");
   const route = ROUTES[fn];
   if (!route) {
     return res.status(404).json({ error: `Unknown admin route: ${fn || "(none)"}` });
   }
-  return route(req, res);
+  // Error boundary: sub-handlers each self-catch, but await + capture here so a
+  // synchronous throw or an unawaited rejection from any route can't escape as an
+  // opaque 500 with no telemetry (bug-report in particular has no internal catch).
+  try {
+    return await route(req, res);
+  } catch (err) {
+    captureServerError(err, "admin-router", { fn });
+    if (!res.headersSent) res.status(500).json({ error: "Internal error" });
+  }
 }

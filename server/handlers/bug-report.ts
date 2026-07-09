@@ -15,6 +15,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getUserFromRequest } from "../creditGate.js";
 import { createClient } from "@supabase/supabase-js";
+import { captureServerError } from "../sentry.js";
 
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "",
@@ -34,10 +35,18 @@ interface BugReportBody {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method === "POST") return handlePost(req, res);
-  if (req.method === "GET")  return handleGet(req, res);
-  if (req.method === "PATCH") return handlePatch(req, res);
-  return res.status(405).end();
+  try {
+    if (req.method === "POST") return await handlePost(req, res);
+    if (req.method === "GET")  return await handleGet(req, res);
+    if (req.method === "PATCH") return await handlePatch(req, res);
+    return res.status(405).end();
+  } catch (err) {
+    // Every other admin handler self-captures; bug-report had no catch at all,
+    // so a thrown getUserFromRequest / getUserById / supabase call escaped with
+    // no Sentry signal. Capture and return a clean 500.
+    captureServerError(err, "bug-report", { method: req.method });
+    if (!res.headersSent) return res.status(500).json({ error: "Internal error" });
+  }
 }
 
 // ── POST: log a new bug ──────────────────────────────────────────────────────
