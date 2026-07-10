@@ -14,7 +14,7 @@ import PhotoContextMenu from "@/components/PhotoContextMenu";
 import FindOriginalSheet from "@/components/FindOriginalSheet";
 import DragGhost from "@/components/DragGhost";
 import type { Photo } from "@/lib/photoData";
-import { Plus, RotateCcw, Sparkles, Menu } from "lucide-react";
+import { Plus, Sparkles, Menu } from "lucide-react";
 import { toast } from "sonner";
 import { nanoid } from "nanoid";
 import AISuggestSheet, { type SuggestedCluster } from "@/components/AISuggestSheet";
@@ -798,17 +798,6 @@ function HomeContent() {
           onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.background = "#151515"; }}
         >
           <Plus size={16} /> New Dump
-        </button>
-        <button onClick={handleReset} style={{
-          display: "flex", alignItems: "center", gap: "8px",
-          background: "#151515", border: "1px solid #2a2a2a", borderRadius: "10px",
-          padding: "12px 20px", color: "#999", fontSize: "13px", fontWeight: 500,
-          cursor: "pointer", transition: "all 0.2s", fontFamily: "inherit", letterSpacing: "0.04em",
-        }}
-          onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#8a8a8a"; }}
-          onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; }}
-        >
-          <RotateCcw size={14} /> Reset All
         </button>
       </div>
 
