@@ -110,6 +110,9 @@ export function useCarouselState() {
   // Refs that always track latest state (for beforeunload backup)
   var dumpsRef = useRef(dumps);
   var poolRef = useRef(pool);
+  // Ids of photos uploaded in THIS session — shields them from being dropped
+  // when a cloud workspace load replaces state (see replaceState).
+  var sessionUploadIds = useRef<Set<string>>(new Set());
 
   // Gate: until IndexedDB hydration has run, the mount-time fallback effects
   // below must NOT write — otherwise they'd persist the initial (demo/empty)
@@ -232,7 +235,13 @@ export function useCarouselState() {
       for (cj = 0; cj < newDumps[ci].photos.length; cj++) cloudIds.add(newDumps[ci].photos[cj].id);
     }
     var localOnly = poolRef.current.filter(function(p) {
-      return p.url.startsWith("data:") && !cloudIds.has(p.id);
+      // data: URL = bytes not yet uploaded. sessionUploadIds = added this
+      // session — its bytes may already be in cloud Storage (https URL) while
+      // the pool list referencing it is still waiting on the debounced save;
+      // without this check the load drops exactly those photos (bug report
+      // 2026-07-10). Session-scoped so uploads rehydrated from IndexedDB still
+      // follow the cloud (deletes on other devices don't resurrect).
+      return (p.url.startsWith("data:") || sessionUploadIds.current.has(p.id)) && !cloudIds.has(p.id);
     });
     var mergedPool = localOnly.length > 0 ? newPool.concat(localOnly) : newPool;
     rawSetDumps(newDumps);
@@ -408,6 +417,7 @@ export function useCarouselState() {
   }, []);
 
   var addUploadedPhotos = useCallback(function(newPhotos: Photo[]) {
+    for (var i = 0; i < newPhotos.length; i++) sessionUploadIds.current.add(newPhotos[i].id);
     setPool(function(prev) { return prev.concat(newPhotos); });
   }, []);
 

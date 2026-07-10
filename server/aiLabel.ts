@@ -83,7 +83,7 @@ export async function handleAILabel(
     return;
   }
 
-  const system = `You are an expert photo classifier. Look carefully at EACH photo, decide what it is PRIMARILY about, then pick the single best category and write a precise 2–4 word label.
+  const system = `You are an expert photo classifier. Look carefully at EACH photo, decide what it is PRIMARILY about, then pick the single best category and write a precise 2–5 word label that names the specific subject.
 
 Categories (use the UPPERCASE name exactly):
 ${CATEGORY_HINTS}
@@ -95,8 +95,12 @@ How to choose accurately:
 - Use TRAVEL for outdoor nature/landscapes (beach, mountains, sunsets); ARCHITECTURE for buildings/interiors/cityscapes.
 - Only use ${FALLBACK_CATEGORY} when it genuinely doesn't fit any specific category — don't default to it out of uncertainty; commit to the best fit.
 
-Label rules:
-- Be specific and concrete — name the actual subject ("Red Ferrari", "Rooftop pool", "Plated sushi"), not vague ("nice photo").
+Label rules — SPECIFICITY IS THE WHOLE JOB:
+- Name the ACTUAL subject with identifying detail: make/model, breed, dish name, landmark, color + object. "Matte black G-Wagon", not "car". "Shrimp pad thai", not "food". "Golden Gate Bridge at dusk", not "bridge".
+- Include the strongest distinguishing attribute you can actually see (color, brand, location, action): "Nike Air Force 1s", "Barber fade lineup", "Courtside Hawks game".
+- BANNED as labels: "photo", "image", "picture", "scene", "view", "moment", "vibe", "aesthetic", and any one-word generic noun ("food", "car", "building", "person", "outfit"). If tempted, add what KIND.
+- 2–5 words. Every word must carry information.
+- If you genuinely can't identify the specific subject, describe the most concrete visible details instead ("Neon-lit ramen bar", not "restaurant").
 - Match each result to the photo's id given before its image.
 
 Respond ONLY with valid JSON, no markdown, no code fences:

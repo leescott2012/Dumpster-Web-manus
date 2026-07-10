@@ -37,7 +37,7 @@ import GuidedTour, { isTourCompleted } from "@/components/GuidedTour";
 import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions, archiveCaptionsByText } from "@/lib/captionPool";
-import { findDuplicatePhotoIds } from "@/lib/photoDupes";
+import { findDuplicatePhotoIds, hashMissingPhotos } from "@/lib/photoDupes";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
@@ -79,12 +79,28 @@ function HomeContent() {
   }, [dumps, archivedIdSet, archiveDump, unarchiveDump]);
 
   // Possible-duplicate photo ids, computed across the whole workspace (pool +
-  // every dump) so a re-uploaded photo is flagged wherever it sits.
-  var duplicatePhotoIds = useMemo(function() {
+  // every dump) so a re-uploaded photo is flagged wherever it sits. EXIF
+  // byte-signature matches are instant; perceptual (aHash) matches land a
+  // moment later as photos are hashed in the background (catches re-encoded
+  // uploads whose bytes differ — mobile Safari does this on every upload).
+  var hashCache = useRef<Map<string, string>>(new Map());
+  var [hashVersion, setHashVersion] = useState(0);
+  var allWorkspacePhotos = useMemo(function() {
     var all = pool.slice();
     for (var i = 0; i < dumps.length; i++) all = all.concat(dumps[i].photos);
-    return findDuplicatePhotoIds(all);
+    return all;
   }, [pool, dumps]);
+  useEffect(function() {
+    var cancelled = false;
+    hashMissingPhotos(allWorkspacePhotos, hashCache.current).then(function(added) {
+      if (added && !cancelled) setHashVersion(function(v) { return v + 1; });
+    });
+    return function() { cancelled = true; };
+  }, [allWorkspacePhotos]);
+  var duplicatePhotoIds = useMemo(function() {
+    return findDuplicatePhotoIds(allWorkspacePhotos, hashCache.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allWorkspacePhotos, hashVersion]);
 
   var { dragState, updateDragPosition, endDrag } = useDrag();
 
