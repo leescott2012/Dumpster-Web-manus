@@ -268,7 +268,7 @@ export default function DumpChatSheet({
             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", color: "#666",
+            cursor: "pointer", color: "#8a8a8a",
           }}>
             <X size={15} />
           </button>
@@ -414,7 +414,7 @@ export default function DumpChatSheet({
                 display: "flex", alignItems: "center", gap: 8,
               }}>
                 <Loader size={13} style={{ animation: "spin 0.8s linear infinite" }} color="var(--accent)" />
-                <span style={{ fontSize: 12, color: "#666" }}>thinking...</span>
+                <span style={{ fontSize: 12, color: "#8a8a8a" }}>thinking...</span>
               </div>
             </div>
           )}

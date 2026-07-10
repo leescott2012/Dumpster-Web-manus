@@ -203,7 +203,7 @@ export default function AutoGenAdvanced({
           {/* Permanent hard rule — surfaced so users know why "used" photos
               never show up in suggestions. */}
           <div style={{
-            fontSize: 10, color: "#666",
+            fontSize: 10, color: "#8a8a8a",
             background: "rgba(255,255,255,0.02)",
             border: "1px solid #1e1e1e",
             borderRadius: 8, padding: "8px 10px",
@@ -343,7 +343,7 @@ export default function AutoGenAdvanced({
               style={{
                 display: "inline-flex", alignItems: "center", gap: 4,
                 background: "transparent", border: "none",
-                color: "#666", fontSize: 11, fontWeight: 600,
+                color: "#8a8a8a", fontSize: 11, fontWeight: 600,
                 cursor: "pointer", fontFamily: "inherit",
                 alignSelf: "flex-end",
               }}
@@ -384,7 +384,7 @@ function CheckboxRow({
         <div style={{ fontSize: 12, fontWeight: 600, color: checked ? "#fff" : "#ccc" }}>
           {label}
         </div>
-        <div style={{ fontSize: 10, color: "#666", marginTop: 1, lineHeight: 1.3 }}>
+        <div style={{ fontSize: 10, color: "#8a8a8a", marginTop: 1, lineHeight: 1.3 }}>
           {hint}
         </div>
       </div>

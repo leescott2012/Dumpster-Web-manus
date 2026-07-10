@@ -257,7 +257,7 @@ export default function AISuggestSheet({
               <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
                 Auto Gen
               </div>
-              <div style={{ fontSize: 11, color: "#666", marginTop: 1 }}>
+              <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 1 }}>
                 Claude Vision · {photosToAnalyze.length} photos
               </div>
             </div>
@@ -266,7 +266,7 @@ export default function AISuggestSheet({
             width: 32, height: 32, borderRadius: "50%",
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", color: "#666",
+            cursor: "pointer", color: "#8a8a8a",
           }}>
             <X size={16} />
           </button>
@@ -289,7 +289,7 @@ export default function AISuggestSheet({
               <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 6 }}>
                 Auto-arrange one dump
               </div>
-              <div style={{ fontSize: 13, color: "#666", lineHeight: 1.6, maxWidth: 300, margin: "0 auto 24px" }}>
+              <div style={{ fontSize: 13, color: "#8a8a8a", lineHeight: 1.6, maxWidth: 300, margin: "0 auto 24px" }}>
                 Claude picks the best 2–20 photos from your pool and sequences them into a single dump.
               </div>
 
@@ -306,7 +306,7 @@ export default function AISuggestSheet({
                 <div style={{
                   padding: "14px 18px", borderRadius: 10,
                   background: "#1a1a1a", border: "1px solid #2a2a2a",
-                  color: "#666", fontSize: 13,
+                  color: "#8a8a8a", fontSize: 13,
                 }}>
                   Add at least 2 photos to the pool first.
                 </div>
@@ -409,7 +409,7 @@ export default function AISuggestSheet({
                   {/* Filter result preview — only when filters actually drop something */}
                   {filteredOutCount > 0 && (
                     <div style={{
-                      fontSize: 11, color: "#666",
+                      fontSize: 11, color: "#8a8a8a",
                       marginBottom: 14, letterSpacing: "0.02em",
                     }}>
                       Filters match <span style={{ color: "var(--accent)", fontWeight: 700 }}>{filteredPool.length}</span> of {poolPhotos.length} photos
@@ -439,7 +439,7 @@ export default function AISuggestSheet({
                       background: filteredPool.length < 2 ? "#2a2a2a" : "var(--accent)",
                       border: "none", borderRadius: 10,
                       padding: "13px 28px",
-                      color: filteredPool.length < 2 ? "#666" : "#000",
+                      color: filteredPool.length < 2 ? "#8a8a8a" : "#000",
                       fontSize: 14, fontWeight: 700,
                       cursor: filteredPool.length < 2 ? "default" : "pointer",
                       letterSpacing: "0.02em", fontFamily: "inherit",
@@ -514,7 +514,7 @@ export default function AISuggestSheet({
                     {clusterPhotos.length} photos
                   </div>
                 </div>
-                <div style={{ fontSize: 12, color: "#666", marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: "#8a8a8a", marginBottom: 16 }}>
                   {cluster.subtitle}
                 </div>
 

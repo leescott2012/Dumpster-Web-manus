@@ -183,7 +183,7 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#e8e8e8", letterSpacing: "-0.01em" }}>
                       {f.title}
                     </div>
-                    <div style={{ fontSize: 11, color: "#666", marginTop: 1 }}>
+                    <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 1 }}>
                       {f.desc}
                     </div>
                   </div>
@@ -244,7 +244,7 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
               onClick={dismiss}
               style={{
                 width: "100%", padding: "12px 20px",
-                background: "transparent", color: "#666",
+                background: "transparent", color: "#8a8a8a",
                 border: "none", borderRadius: 12,
                 fontSize: 12, fontWeight: 500, fontFamily: "inherit",
                 cursor: "pointer", transition: "all 0.15s",

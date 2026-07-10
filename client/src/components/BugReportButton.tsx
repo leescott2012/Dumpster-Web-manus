@@ -229,7 +229,7 @@ export default function BugReportButton() {
                   style={{
                     flex: 1, padding: "12px 16px",
                     background: message.trim() && !sending ? "var(--accent)" : "#2a2a2a",
-                    color: message.trim() && !sending ? "#000" : "#666",
+                    color: message.trim() && !sending ? "#000" : "#8a8a8a",
                     border: "none", borderRadius: 12,
                     fontSize: 13, fontWeight: 800, fontFamily: "inherit",
                     cursor: sending || !message.trim() ? "default" : "pointer",

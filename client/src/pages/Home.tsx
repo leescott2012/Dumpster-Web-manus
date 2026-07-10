@@ -678,7 +678,7 @@ function HomeContent() {
         <h1 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.1, color: "#fff", marginBottom: "16px" }}>
           Build Your <span style={{ color: "var(--accent)" }}>Dumps</span>
         </h1>
-        <p style={{ fontSize: "15px", color: "#666", maxWidth: "640px", lineHeight: 1.7 }}>
+        <p style={{ fontSize: "15px", color: "#8a8a8a", maxWidth: "640px", lineHeight: 1.7 }}>
           Rearrange photos, build new dumps, and experiment with different flows.
           Tap a photo to select it. Tap + to add from the pool.
         </p>
@@ -691,7 +691,7 @@ function HomeContent() {
             return (
               <span key={pill.label} style={{
                 background: "#1a1a1a", border: "1px solid #1e1e1e", borderRadius: "100px",
-                padding: "5px 14px", fontSize: "11px", color: "#666", letterSpacing: "0.04em",
+                padding: "5px 14px", fontSize: "11px", color: "#8a8a8a", letterSpacing: "0.04em",
               }}>
                 <strong style={{ color: "#e8e8e8", fontWeight: 600 }}>{pill.value}</strong> {pill.label}
               </span>
@@ -740,7 +740,7 @@ function HomeContent() {
             style={{
               display: "flex", alignItems: "center", gap: 8,
               background: "transparent", border: "none", cursor: "pointer",
-              color: "#666", fontSize: "12px", fontWeight: 700, fontFamily: "inherit",
+              color: "#8a8a8a", fontSize: "12px", fontWeight: 700, fontFamily: "inherit",
               letterSpacing: "0.08em", textTransform: "uppercase", padding: "8px 0",
             }}
           >
@@ -805,7 +805,7 @@ function HomeContent() {
           padding: "12px 20px", color: "#999", fontSize: "13px", fontWeight: 500,
           cursor: "pointer", transition: "all 0.2s", fontFamily: "inherit", letterSpacing: "0.04em",
         }}
-          onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#666"; }}
+          onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#8a8a8a"; }}
           onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; }}
         >
           <RotateCcw size={14} /> Reset All
@@ -825,7 +825,7 @@ function HomeContent() {
           <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
           <div style={{
             fontSize: 11, fontWeight: 700, letterSpacing: "0.35em",
-            textTransform: "uppercase" as const, color: "#666",
+            textTransform: "uppercase" as const, color: "#8a8a8a",
             flexShrink: 0,
           }}>
             POOL
@@ -848,7 +848,7 @@ function HomeContent() {
           <h2 style={{ fontSize: "clamp(20px, 2.5vw, 28px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: 4 }}>
             {poolTab === "photos" ? "Available Photos" : "Caption Library"}
           </h2>
-          <div style={{ fontSize: 14, color: "#666", fontStyle: "italic" as const }}>
+          <div style={{ fontSize: 14, color: "#8a8a8a", fontStyle: "italic" as const }}>
             {poolTab === "photos"
               ? pool.length + " available · " + dumps.reduce(function(s, d) { return s + d.photos.length; }, 0) + " in dumps"
               : captionCount + " captions in library"
@@ -895,7 +895,7 @@ function HomeContent() {
           your privacy policy"). */}
       <footer style={{
         maxWidth: "1100px", margin: "0 auto", padding: "40px 32px",
-        textAlign: "center", color: "#666", fontSize: "12px", borderTop: "1px solid #1e1e1e",
+        textAlign: "center", color: "#8a8a8a", fontSize: "12px", borderTop: "1px solid #1e1e1e",
         display: "flex", flexDirection: "column", gap: 10, alignItems: "center",
       }}>
         <div style={{ color: "#888", letterSpacing: "0.02em" }}>

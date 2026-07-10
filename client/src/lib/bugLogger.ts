@@ -90,7 +90,7 @@ function isDupe(args: BugInput): boolean {
   _recentSignatures.set(sig, now);
   // Cleanup occasionally
   if (_recentSignatures.size > 50) {
-    for (const [k, v] of _recentSignatures) if (now - v > 60_000) _recentSignatures.delete(k);
+    _recentSignatures.forEach((v, k) => { if (now - v > 60_000) _recentSignatures.delete(k); });
   }
   return now - last < 5_000;
 }

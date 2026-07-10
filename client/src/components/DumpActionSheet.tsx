@@ -143,7 +143,7 @@ export default function DumpActionSheet({
               width: 32, height: 32, borderRadius: "50%", flexShrink: 0, marginLeft: 12,
               background: "#1a1a1a", border: "1px solid #2a2a2a",
               display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: "#666",
+              cursor: "pointer", color: "#8a8a8a",
             }}
           >
             <X size={15} />
@@ -155,7 +155,7 @@ export default function DumpActionSheet({
           display: "flex", alignItems: "center", gap: 12,
           padding: "14px 24px", borderBottom: "1px solid #1a1a1a",
         }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#666", letterSpacing: "0.06em", marginRight: "auto" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#8a8a8a", letterSpacing: "0.06em", marginRight: "auto" }}>
             RATE THIS DUMP
           </div>
           <button
@@ -168,7 +168,7 @@ export default function DumpActionSheet({
               background: currentRating === "up" ? "rgba(74,222,128,0.15)" : "#1a1a1a",
               border: "1px solid " + (currentRating === "up" ? "rgba(74,222,128,0.4)" : "#2a2a2a"),
               display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: currentRating === "up" ? "#4ade80" : "#666",
+              cursor: "pointer", color: currentRating === "up" ? "#4ade80" : "#8a8a8a",
               transition: "all 0.15s",
             }}
           >
@@ -191,7 +191,7 @@ export default function DumpActionSheet({
               background: currentRating === "down" ? "rgba(239,68,68,0.15)" : "#1a1a1a",
               border: "1px solid " + (currentRating === "down" ? "rgba(239,68,68,0.4)" : "#2a2a2a"),
               display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: currentRating === "down" ? "#ef4444" : "#666",
+              cursor: "pointer", color: currentRating === "down" ? "#ef4444" : "#8a8a8a",
               transition: "all 0.15s",
             }}
           >

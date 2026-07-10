@@ -124,7 +124,7 @@ export default function DumpStrip({
               />
             </div>
           )}
-          <div style={{ fontSize: "14px", color: "#666", fontStyle: "italic" }}>
+          <div style={{ fontSize: "14px", color: "#8a8a8a", fontStyle: "italic" }}>
             {dump.subtitle}
             {dump.photos.length > 0 && (
               <span style={{ marginLeft: "12px", color: "#999", fontStyle: "normal", fontSize: "12px" }}>
@@ -147,10 +147,10 @@ export default function DumpStrip({
                 width: 32, height: 32, borderRadius: 8,
                 background: "transparent", border: "1px solid #2a2a2a",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", color: "#666", transition: "all 0.15s",
+                cursor: "pointer", color: "#8a8a8a", transition: "all 0.15s",
               }}
               onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "rgba(var(--accent-rgb),0.06)"; }}
-              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; e.currentTarget.style.background = "transparent"; }}
+              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#8a8a8a"; e.currentTarget.style.background = "transparent"; }}
             >
               <MoreHorizontal size={15} />
             </button>
@@ -329,7 +329,7 @@ export default function DumpStrip({
                 <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase" as const, marginBottom: "4px" }}>
                   Add More
                 </div>
-                <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.5, fontWeight: 400, letterSpacing: 0 }}>
+                <div style={{ fontSize: "10px", color: "#8a8a8a", lineHeight: 1.5, fontWeight: 400, letterSpacing: 0 }}>
                   Upload from your device
                 </div>
               </div>
@@ -360,11 +360,11 @@ export default function DumpStrip({
             style={{
               width: "200px", height: "260px", borderRadius: "10px", border: "2px dashed #2a2a2a",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              color: "#666", fontSize: "13px", textAlign: "center", flexShrink: 0, cursor: "pointer",
+              color: "#8a8a8a", fontSize: "13px", textAlign: "center", flexShrink: 0, cursor: "pointer",
               transition: "all 0.2s", background: "rgba(255,255,255,0.02)",
             }}
             onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "rgba(var(--accent-rgb),0.05)"; }}
-            onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; e.currentTarget.style.background = "rgba(255,255,255,0.02)"; }}
+            onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#8a8a8a"; e.currentTarget.style.background = "rgba(255,255,255,0.02)"; }}
           >
             <Plus size={32} strokeWidth={1.5} />
             <span style={{ marginTop: "8px", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>Add Photos</span>

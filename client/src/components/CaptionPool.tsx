@@ -235,7 +235,7 @@ export default function CaptionPool() {
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
-                  fontSize: 13, color: c.banned ? "#666" : "#e8e8e8",
+                  fontSize: 13, color: c.banned ? "#8a8a8a" : "#e8e8e8",
                   textDecoration: c.banned ? "line-through" : "none",
                   lineHeight: 1.55, wordBreak: "break-word" as const,
                 }}>
@@ -262,16 +262,16 @@ export default function CaptionPool() {
                     <RotateCcw size={14} />
                   </button>
                 )}
-                <button onClick={() => handleCopy(c.text, c.id)} title={c.archived ? "Copy" : "Copy & mark used"} style={iconBtnStyle(copiedId === c.id ? "#22c55e" : "#666")}>
+                <button onClick={() => handleCopy(c.text, c.id)} title={c.archived ? "Copy" : "Copy & mark used"} style={iconBtnStyle(copiedId === c.id ? "#22c55e" : "#8a8a8a")}>
                   {copiedId === c.id ? <Check size={14} /> : <Copy size={14} />}
                 </button>
-                <button onClick={() => handleFavorite(c.id)} title={c.favorited ? "Unfavorite" : "Favorite"} style={iconBtnStyle(c.favorited ? "var(--accent)" : "#666")}>
+                <button onClick={() => handleFavorite(c.id)} title={c.favorited ? "Unfavorite" : "Favorite"} style={iconBtnStyle(c.favorited ? "var(--accent)" : "#8a8a8a")}>
                   <Heart size={14} fill={c.favorited ? "var(--accent)" : "none"} />
                 </button>
-                <button onClick={() => handleBan(c.id)} title={c.banned ? "Unban" : "Ban"} style={iconBtnStyle(c.banned ? "#ef4444" : "#666")}>
+                <button onClick={() => handleBan(c.id)} title={c.banned ? "Unban" : "Ban"} style={iconBtnStyle(c.banned ? "#ef4444" : "#8a8a8a")}>
                   <Ban size={14} />
                 </button>
-                <button onClick={() => handleRemove(c.id)} title="Delete" style={iconBtnStyle("#666")}>
+                <button onClick={() => handleRemove(c.id)} title="Delete" style={iconBtnStyle("#8a8a8a")}>
                   <Trash2 size={14} />
                 </button>
               </div>

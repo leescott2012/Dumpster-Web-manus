@@ -130,7 +130,7 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", color: "#666",
+            cursor: "pointer", color: "#8a8a8a",
           }}>
             <X size={15} />
           </button>
@@ -154,7 +154,7 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
             <div style={{ textAlign: "right" }}>
               {user && profile && (
                 <>
-                  <div style={{ fontSize: 11, color: "#666", display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
+                  <div style={{ fontSize: 11, color: "#8a8a8a", display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
                     <Clock size={10} /> {"Resets in " + hoursUntilReset + "h"}
                   </div>
                   <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>
@@ -198,7 +198,7 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 40px" }}>
           {tab === "credits" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ fontSize: 12, color: "#666", marginBottom: 4, lineHeight: 1.6 }}>
+              <div style={{ fontSize: 12, color: "#8a8a8a", marginBottom: 4, lineHeight: 1.6 }}>
                 Credits let you use AI features. Free users get 15/day, Pro gets 200/day. Buy more anytime.
               </div>
 
@@ -269,14 +269,14 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#4ade80" }}>
                       {isLifetime ? "Lifetime Pro" : "Pro Active"}
                     </div>
-                    <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 2 }}>
                       200 daily credits, import your own API keys, no watermarks
                     </div>
                   </div>
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize: 12, color: "#666", marginBottom: 4, lineHeight: 1.6 }}>
+                  <div style={{ fontSize: 12, color: "#8a8a8a", marginBottom: 4, lineHeight: 1.6 }}>
                     Unlock unlimited dumps, 200 daily AI credits, premium models, import your own API keys, and more.
                   </div>
 

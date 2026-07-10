@@ -160,7 +160,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", color: "#666",
+            cursor: "pointer", color: "#8a8a8a",
           }}>
             <X size={15} />
           </button>
@@ -271,7 +271,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
                 </button>
                 <button
                   onClick={handleBack}
-                  style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 100, padding: "4px 12px", fontSize: 11, color: "#666", cursor: "pointer", fontFamily: "inherit", marginLeft: "auto" }}
+                  style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 100, padding: "4px 12px", fontSize: 11, color: "#8a8a8a", cursor: "pointer", fontFamily: "inherit", marginLeft: "auto" }}
                 >
                   ← Back
                 </button>

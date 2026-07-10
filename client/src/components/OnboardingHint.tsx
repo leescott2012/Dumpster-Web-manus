@@ -50,7 +50,7 @@ export default function OnboardingHint() {
           right: "8px",
           background: "transparent",
           border: "none",
-          color: "#666",
+          color: "#8a8a8a",
           cursor: "pointer",
           padding: "4px",
         }}
@@ -77,7 +77,7 @@ export default function OnboardingHint() {
       <div
         style={{
           fontSize: "10px",
-          color: "#666",
+          color: "#8a8a8a",
           marginTop: "10px",
           textAlign: "center",
         }}

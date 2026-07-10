@@ -1082,7 +1082,7 @@ export default function Admin() {
               cpuUsage: 12,
               memoryUsage: 24,
               synapseLatency: 18,
-              satelliteStatus: 'online'
+              satelliteStatus: 'secured'
             }}
           />
 

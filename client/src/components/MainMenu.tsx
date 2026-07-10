@@ -780,7 +780,7 @@ function CloudSyncBadge({ signedIn }: { signedIn: boolean }) {
     );
   }
   return (
-    <span title="Local-only on this device. Sign in to sync." style={{ display: "inline-flex", alignItems: "center", color: "#666" }}>
+    <span title="Local-only on this device. Sign in to sync." style={{ display: "inline-flex", alignItems: "center", color: "#8a8a8a" }}>
       <CloudOff size={12} strokeWidth={2.2} />
     </span>
   );

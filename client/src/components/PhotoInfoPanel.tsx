@@ -196,7 +196,7 @@ export default function PhotoInfoPanel({ photo }: PhotoInfoPanelProps) {
       )}
 
       {!hasAnyExif && (
-        <div style={{ color: "#666", fontSize: 12, marginTop: 4 }}>
+        <div style={{ color: "#8a8a8a", fontSize: 12, marginTop: 4 }}>
           No EXIF data — this photo was likely a screenshot, edited, or stripped.
         </div>
       )}
@@ -215,7 +215,7 @@ function Stat({ label, value }: { label: string; value: string }) {
     }}>
       {label && (
         <div style={{
-          fontSize: 9, fontWeight: 700, color: "#666",
+          fontSize: 9, fontWeight: 700, color: "#8a8a8a",
           letterSpacing: "0.1em", textTransform: "uppercase" as const,
         }}>
           {label}

@@ -224,7 +224,7 @@ export default function DumpShareSheet({ dump, open, onClose, onArchive }: DumpS
               <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
                 {dump.title}
               </div>
-              <div style={{ fontSize: 11, color: "#666", marginTop: 1 }}>
+              <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 1 }}>
                 {dump.photos.length} photos · Export for Instagram
               </div>
             </div>
@@ -233,7 +233,7 @@ export default function DumpShareSheet({ dump, open, onClose, onArchive }: DumpS
             width: 32, height: 32, borderRadius: "50%",
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", color: "#666",
+            cursor: "pointer", color: "#8a8a8a",
           }}>
             <X size={16} />
           </button>
@@ -244,7 +244,7 @@ export default function DumpShareSheet({ dump, open, onClose, onArchive }: DumpS
 
           {/* Photo grid — numbered in carousel order */}
           <div style={{
-            fontSize: 11, fontWeight: 700, color: "#666",
+            fontSize: 11, fontWeight: 700, color: "#8a8a8a",
             letterSpacing: "0.12em", textTransform: "uppercase",
             marginBottom: 12,
           }}>
@@ -347,7 +347,7 @@ export default function DumpShareSheet({ dump, open, onClose, onArchive }: DumpS
           {hasCaptions && (
             <>
               <div style={{
-                fontSize: 11, fontWeight: 700, color: "#666",
+                fontSize: 11, fontWeight: 700, color: "#8a8a8a",
                 letterSpacing: "0.12em", textTransform: "uppercase",
                 marginBottom: 12,
               }}>
@@ -380,7 +380,7 @@ export default function DumpShareSheet({ dump, open, onClose, onArchive }: DumpS
                       onClick={() => handleCopy(cap, i)}
                       style={{
                         background: "transparent", border: "none", cursor: "pointer",
-                        color: copiedIdx === i ? "#22c55e" : "#666",
+                        color: copiedIdx === i ? "#22c55e" : "#8a8a8a",
                         padding: 4, display: "flex", alignItems: "center",
                         flexShrink: 0, transition: "color 0.15s",
                       }}
