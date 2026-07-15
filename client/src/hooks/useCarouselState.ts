@@ -3,6 +3,7 @@ import { INITIAL_DUMPS, INITIAL_POOL, IS_OWNER, type Dump, type Photo } from "@/
 import { nanoid } from "nanoid";
 import type { SuggestedCluster } from "@/components/AISuggestSheet";
 import { idbGet, idbSet, idbDel, idbFlush } from "@/lib/localStore";
+import { normDumpId } from "@/lib/workspaceSync";
 
 // ── localStorage persistence ───────────────────────────────────────────────
 
@@ -389,8 +390,11 @@ export function useCarouselState() {
       if (!dump) return prev;
       var dumpPhotos = dump.photos.slice();
       setPool(function(prevPool) { return prevPool.concat(dumpPhotos); });
-      // Drop any archive marker for the deleted dump so the set can't leak ids.
-      setArchived(function(prevIds) { return prevIds.filter(function(id) { return id !== dumpId; }); });
+      // Drop any archive marker for the deleted dump so the set can't leak ids
+      // (both the raw id and its normalized cloud twin).
+      normDumpId(dumpId).catch(function() { return dumpId; }).then(function(n) {
+        setArchived(function(prevIds) { return prevIds.filter(function(id) { return id !== dumpId && id !== n; }); });
+      });
       return prev.filter(function(d) { return d.id !== dumpId; }).map(function(d, i) {
         return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
       });
@@ -652,11 +656,45 @@ export function useCarouselState() {
 
   var archiveDump = useCallback(function(dumpId: string) {
     setArchived(function(prev) { return prev.indexOf(dumpId) === -1 ? prev.concat([dumpId]) : prev; });
+    // Cloud sync rewrites non-UUID dump ids (api/workspace.ts normId), so also
+    // store the id this dump will carry after the next cloud reload — without
+    // the twin, a re-sign-in resurrects the dump (bug report 2026-07-14).
+    normDumpId(dumpId).then(function(n) {
+      if (n === dumpId) return;
+      setArchived(function(prev) { return prev.indexOf(n) === -1 ? prev.concat([n]) : prev; });
+    }).catch(function() { /* keep raw id only */ });
   }, [setArchived]);
 
   var unarchiveDump = useCallback(function(dumpId: string) {
-    setArchived(function(prev) { return prev.filter(function(id) { return id !== dumpId; }); });
+    normDumpId(dumpId).catch(function() { return dumpId; }).then(function(n) {
+      setArchived(function(prev) { return prev.filter(function(id) { return id !== dumpId && id !== n; }); });
+    });
   }, [setArchived]);
+
+  // Merge cloud-loaded archive ids into the local list (union — id-level
+  // dedup; ids are already normalized by the save path).
+  var mergeArchivedDumpIds = useCallback(function(ids: string[]) {
+    if (!Array.isArray(ids) || ids.length === 0) return;
+    setArchived(function(prev) {
+      var have = new Set(prev);
+      var add = ids.filter(function(id) { return typeof id === "string" && !have.has(id); });
+      return add.length > 0 ? prev.concat(add) : prev;
+    });
+  }, [setArchived]);
+
+  // One-time heal: archive entries saved before id normalization existed hold
+  // only the raw local id — add each entry's normalized twin so dumps reloaded
+  // from the cloud (which carry normalized ids) still count as archived.
+  useEffect(function() {
+    var ids = archivedDumpIds;
+    if (ids.length === 0) return;
+    Promise.all(ids.map(function(id) { return normDumpId(id).catch(function() { return id; }); })).then(function(norms) {
+      var have = new Set(ids);
+      var add = norms.filter(function(n) { return !have.has(n); });
+      if (add.length > 0) mergeArchivedDumpIds(add);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Rate a dump thumbs up/down (or clear)
   var rateDump = useCallback(function(dumpId: string, rating: "up" | "down" | null) {
@@ -676,6 +714,6 @@ export function useCarouselState() {
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto,
     setDumpChatHistory,
-    archivedDumpIds, archiveDump, unarchiveDump,
+    archivedDumpIds, archiveDump, unarchiveDump, mergeArchivedDumpIds,
   };
 }

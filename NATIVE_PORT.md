@@ -23,7 +23,7 @@ Canonical checklist mapping **every web feature** to its native (SwiftUI / iOS) 
 | Dumps (carousels) create/arrange/rename | ✅ | `DumpCardView`, `DumpMenuSheet` |
 | Drag-and-drop reorder | ✅ | native gestures |
 | Lightbox (fullscreen viewer) | ✅ | `LightboxView` |
-| **Lightbox info panel + map** (§A) | ⚪ | `LightboxView` is photo-only (84 lines, no metadata card, no MapKit) |
+| **Lightbox info panel + map** (§A) | ✅ | done 2026-07-11 — (i) toggle + `PhotoInfoPanel` in `LightboxView.swift`, direct port of `PhotoInfoPanel.tsx` (date header, camera card + format badge, exposure stat row, MapKit map + coords, no-EXIF fallback). Used web's (i)-button affordance, not the swipe-up §A proposed. Build verified; live tap-through pending |
 | Per-photo context menu | ✅ | `PhotoMenuSheet` |
 | Recycle bin / restore deleted | 🟡 | native has `UndoManager` (undo), not a persistent trash like web's `RecycleSheet` |
 | Bulk multi-select delete | 🟡 | selection exists for add-to-dump; bulk-delete path **(verify)** |
@@ -162,6 +162,32 @@ Fix applied: added a private `scheduleCloudSync()` (reads `AuthManager.shared.us
 - `dump_exported` `{photo_count}` — `DumpCardView.shareDump`.
 
 All native events also carry `metadata.platform = "ios"`. Owner account (`leescott2019@gmail.com` = `77517979-e0c7-4427-8afd-cc006e906df5`) is excluded to match web's `IS_OWNER` rule. **Open:** runtime confirmation (needs an interactive magic-link sign-in, then verify rows in `activity_log`).
+
+### §I — Line-by-line UI parity audit (2026-07-11)
+Three parallel deep reads of web `client/src/components` vs native Views, implementation-level (not grep). New findings beyond the matrix above; web = source of truth unless marked.
+
+**Corrections to earlier rows/specs:**
+- Bulk multi-select delete: was 🟡 "(verify)" → actually **⚪ none**. Native selection is add-to-dump only; web has full deleteMode (banner, red badges, floating "Delete (N)").
+- OAuth: confirmed **⚪** — native is magic-link only by design (`AuthManager` header comment); web AuthSheet has Apple/Google/Facebook.
+- Lifetime IAP: confirmed **⚪** — no lifetime product in `Configuration.storekit`/`SubscriptionManager` (web sells $19.99 lifetime w/ slot counter).
+- Recycle bin row premise was wrong: web `RecycleSheet` is a photo **swap** tool, not a trash. Neither platform has persistent trash; native's snapshot `UndoManager` makes it *ahead* on structural undo (hard-deleted photos unrecoverable on both).
+- §G's retheme list names `SocialMediaTabView` — **it doesn't exist**. Native cabinet has 5 tabs; web MainMenu has 6 (native is missing SOCIAL MEDIA "Connect & export" entirely).
+
+**High-severity gaps (user-visible):**
+1. Pool photos on native have **no context menu** ("..." gated `isDumpContext`) and **no single-select state** — Delete/Crop/Save unreachable from pool; web has full menu + accent-border select.
+2. **No persistent caption bubble on dump cards** — web shows always-on caption carousel (vibe, copy, prev/next); native captions vanish when the transient overlay closes.
+3. **No caption-configuration sheet** — web CaptionSheet has dump picker, prompt, title/category overrides, 4 tones, taste pill, regenerate; native generates blind from the menu.
+4. **Share/export**: native fires bare `UIActivityViewController`; web DumpShareSheet has numbered order grid, per-photo save states, caption copy, archive-after-save.
+5. **Credit economy diverges**: web 15/day resetting (Pro 200/day), per-action costs (3/25/1/12) + costs table + OutOfCreditsOverlay; native one-time 10 starter credits, flat 1-credit per action, no reset timer, no out-of-credits overlay. Server charges real costs — native UI misrepresents them.
+6. **Legal links not tappable on native SignInView** (plain Text) — App Store 3.1.2/5.1.1 review risk. PaywallView links point to external dumpster.app URLs.
+7. **Lightbox trigger inverted**: web double-tap opens lightbox / single tap selects; native single tap opens lightbox. Selection ordinals (web shows pick order 1,2,3…) missing on native.
+8. **Dump rating (thumbs up/down → Valet auto-message) absent** on native; favorite in dump menu gated to AI dumps only (web: any dump). Archive row missing from native dump menu.
+9. **Auto-Gen fundamentally diverges**: web = one dump, 2–20 photos or AUTO, advanced filters (§C); native = up to 3 dumps, no AUTO, no filters.
+10. **Error UX**: native leaks raw `localizedDescription` in DumpChatSheet, silently `print`s caption-gen failures; web routes everything through `friendlyError` + ErrorToaster.
+
+**Medium/low (behavior + polish):** no favorite star/starred filter/starred-first sort on pool; no video badge or reachable Videos filter (PoolFilterMenu built but unused — pool uses a 3-option confirmationDialog; "Sort by Newest" is an empty closure); used-photo overlay dead code + no "DUMP NN" label in used view; no drag-ghost/drag-over states on pool cards; caption pool missing All/AI/Custom chips + Used tab + restore, auto-add adds 1 vs web's 3, custom captions mis-tagged with selected style instead of "custom"; empty-dump "Add More" routes to pool instead of device picker; delete-dump confirm (native) vs instant (web); Valet naming ("Chat with AI"), assorted copy drift throughout; `SubscriptionManager.swift:94-98` hardcodes `isPro = true` via `|| true` in a DEBUG-adjacent path — verify it can't ship.
+
+**Native ahead (no action):** title approve/regenerate, progress bar + PEAK badge, vibe-mismatch warning, AI badge, Huji filter, provider status chip, snapshot undo, explicit no-API-key state.
 
 ---
 

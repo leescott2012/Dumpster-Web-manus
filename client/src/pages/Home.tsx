@@ -41,7 +41,7 @@ import { findDuplicatePhotoIds, hashMissingPhotos } from "@/lib/photoDupes";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
-import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud } from "@/lib/workspaceSync";
+import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, saveArchivedDumpIds } from "@/lib/workspaceSync";
 import { scanPhotos } from "@/lib/aiLabel";
 import { track } from "@/lib/analytics";
 
@@ -54,7 +54,7 @@ function HomeContent() {
     toggleFavorite, toggleDumpFavorite, addUploadedPhotos, replacePhotoUrl, applyPhotoLabels, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto, setDumpChatHistory,
-    archivedDumpIds, archiveDump, unarchiveDump,
+    archivedDumpIds, archiveDump, unarchiveDump, mergeArchivedDumpIds,
   } = useCarouselState();
 
   // Split dumps into the active list (shown up top) and the archived list
@@ -201,7 +201,12 @@ function HomeContent() {
     loadWorkspace(user.id).then(function (ws) {
       if (ws) replaceState(ws.dumps, ws.pool);
     }).catch(function () { /* stay device-local */ });
-  }, [user, replaceState]);
+    // Archive state syncs separately (small id list in user_workspaces) so
+    // archived dumps stay archived across re-sign-ins and devices.
+    loadArchivedDumpIds(user.id).then(function (ids) {
+      if (ids) mergeArchivedDumpIds(ids);
+    }).catch(function () { /* stay device-local */ });
+  }, [user, replaceState, mergeArchivedDumpIds]);
 
   // Push workspace changes to the cloud (debounced) + flush on tab close.
   useEffect(function () {
@@ -214,6 +219,17 @@ function HomeContent() {
     window.addEventListener("beforeunload", onUnload);
     return function () { window.removeEventListener("beforeunload", onUnload); };
   }, [user, dumps, pool]);
+
+  // Push archive-state changes (debounced full-list replace, so unarchive
+  // propagates too). ponytail: last-write-wins across devices; per-id merge if
+  // simultaneous multi-device archiving ever matters.
+  useEffect(function () {
+    if (!user) return;
+    var uid = user.id;
+    if (workspaceLoadedRef.current !== uid) return;
+    var t = setTimeout(function () { saveArchivedDumpIds(uid, archivedDumpIds); }, 2000);
+    return function () { clearTimeout(t); };
+  }, [user, archivedDumpIds]);
 
   // ── Clear demo/stock content on sign-in.
   // All users share the same localStorage keys (IS_OWNER is build-time, not

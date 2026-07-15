@@ -211,3 +211,66 @@ export function flushWorkspaceSave(): void {
   var p = _pending; _pending = null;
   if (p) saveWorkspaceNow(p.userId, p.dumps, p.pool);
 }
+
+// ── Archived dump ids ────────────────────────────────────────────────────────
+// Archive state lives client-side as an id list (useCarouselState). Two things
+// used to lose it on re-sign-in:
+//   1. /api/workspace rewrites non-UUID dump ids via normId(), so after a cloud
+//      reload the dumps carry UUIDs the local archive list doesn't contain.
+//   2. The list itself never left the device.
+// normDumpId mirrors the server's normId so the client can store the id a dump
+// WILL have after sync; the list itself is persisted per-user in the otherwise
+// retired user_workspaces table (RLS already scopes rows to auth.uid()).
+
+var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Client mirror of api/workspace.ts normId() — must stay byte-identical. */
+export async function normDumpId(id: string): Promise<string> {
+  if (UUID_RE.test(id)) return id.toLowerCase();
+  var buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode("dumpster:" + id));
+  var bytes = new Uint8Array(buf);
+  var h = "";
+  for (var i = 0; i < bytes.length; i++) h += bytes[i].toString(16).padStart(2, "0");
+  return (
+    h.slice(0, 8) + "-" + h.slice(8, 12) + "-5" + h.slice(13, 16) + "-" +
+    ((parseInt(h.slice(16, 18), 16) & 0x3f) | 0x80).toString(16) + h.slice(18, 20) +
+    "-" + h.slice(20, 32)
+  );
+}
+
+/** Pull the user's archived dump ids from the cloud. Null = none saved / error. */
+export async function loadArchivedDumpIds(userId: string | null): Promise<string[] | null> {
+  if (!syncEnabled(userId)) return null;
+  try {
+    var res = await supabase.from("user_workspaces").select("dumps_json").eq("id", userId).maybeSingle();
+    if (res.error || !res.data) return null;
+    var j = res.data.dumps_json as { archivedDumpIds?: unknown } | unknown[] | null;
+    if (j && !Array.isArray(j) && Array.isArray((j as { archivedDumpIds?: unknown }).archivedDumpIds)) {
+      return ((j as { archivedDumpIds: unknown[] }).archivedDumpIds).filter(function (x) { return typeof x === "string"; }) as string[];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Replace the user's cloud archive list. Last write wins (single-user data). */
+export async function saveArchivedDumpIds(userId: string | null, ids: string[]): Promise<void> {
+  if (!syncEnabled(userId)) return;
+  try {
+    // Preserve whatever legacy blob sits in dumps_json (old JSON-sync arrays).
+    var cur = await supabase.from("user_workspaces").select("dumps_json").eq("id", userId).maybeSingle();
+    var existing = cur.data ? cur.data.dumps_json : null;
+    var next: Record<string, unknown> =
+      existing && typeof existing === "object" && !Array.isArray(existing)
+        ? Object.assign({}, existing as Record<string, unknown>)
+        : existing != null ? { legacyDumps: existing } : {};
+    next.archivedDumpIds = ids;
+    var up = await supabase.from("user_workspaces").upsert({
+      id: userId, dumps_json: next, updated_at: new Date().toISOString(),
+    });
+    if (up.error) console.warn("[workspaceSync] archived-ids save failed:", up.error.message);
+  } catch (e) {
+    console.warn("[workspaceSync] archived-ids save failed:", e);
+  }
+}
