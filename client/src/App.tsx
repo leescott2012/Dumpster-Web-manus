@@ -8,8 +8,6 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { installGlobalBugHandlers } from "./lib/bugLogger";
 import Home from "./pages/Home";
 import LandingPage from "./pages/LandingPage";
-import LandingPageV2 from "./pages/LandingPageV2";
-import LandingPageV3 from "./pages/LandingPageV3";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Admin from "./pages/Admin";
@@ -43,8 +41,6 @@ function Router() {
       <Route path="/terms" component={Terms} />
       <Route path="/admin" component={Admin} />
       <Route path="/app" component={Home} />
-      <Route path="/v2" component={LandingPageV2} />
-      <Route path="/v3" component={LandingPageV3} />
       <Route path="/" component={RootGate} />
       <Route component={Home} />
     </Switch>
