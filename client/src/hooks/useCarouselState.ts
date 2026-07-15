@@ -13,6 +13,11 @@ var SK_POOL  = IS_OWNER ? "dumpster_state_pool_owner" : "dumpster_state_pool_gue
 // so the many field-by-field dump reconstructions below can't accidentally drop
 // the archived state on a reorder/move.
 var SK_ARCHIVED = IS_OWNER ? "dumpster_state_archived_owner" : "dumpster_state_archived_guest";
+// Ids of photos the user has confirmed are NOT duplicates, despite matching
+// another photo's signature/hash. Tracked as a small id list (same reasoning
+// as SK_ARCHIVED) so it survives the photo-object reconstructions elsewhere
+// in this file untouched, and persists across sessions (bug report 2026-07-10).
+var SK_DUPE_DISMISSED = IS_OWNER ? "dumpster_state_dupe_dismissed_owner" : "dumpster_state_dupe_dismissed_guest";
 
 function loadSaved<T>(key: string): T | null {
   try {
@@ -101,6 +106,12 @@ export function useCarouselState() {
   // the main list; still in `dumps` so their photos/captions aren't lost.
   var [archivedDumpIds, rawSetArchived] = useState<string[]>(function() {
     var saved = loadSaved<string[]>(SK_ARCHIVED);
+    return Array.isArray(saved) ? saved : [];
+  });
+
+  // Ids of photos the user dismissed as "Not a duplicate" from the flagged badge.
+  var [dupeDismissedIds, rawSetDupeDismissed] = useState<string[]>(function() {
+    var saved = loadSaved<string[]>(SK_DUPE_DISMISSED);
     return Array.isArray(saved) ? saved : [];
   });
 
@@ -665,6 +676,20 @@ export function useCarouselState() {
     }).catch(function() { /* keep raw id only */ });
   }, [setArchived]);
 
+  var setDupeDismissed = useCallback(function(action: string[] | ((prev: string[]) => string[])) {
+    rawSetDupeDismissed(function(prev) {
+      var next = typeof action === "function" ? (action as (p: string[]) => string[])(prev) : action;
+      persist(SK_DUPE_DISMISSED, next);
+      return next;
+    });
+  }, []);
+
+  // Mark a flagged photo as "not actually a duplicate" — excluded from the
+  // dup badge from now on, persisted per photo (bug report 2026-07-10).
+  var dismissDuplicate = useCallback(function(photoId: string) {
+    setDupeDismissed(function(prev) { return prev.indexOf(photoId) === -1 ? prev.concat([photoId]) : prev; });
+  }, [setDupeDismissed]);
+
   var unarchiveDump = useCallback(function(dumpId: string) {
     normDumpId(dumpId).catch(function() { return dumpId; }).then(function(n) {
       setArchived(function(prev) { return prev.filter(function(id) { return id !== dumpId && id !== n; }); });
@@ -715,5 +740,6 @@ export function useCarouselState() {
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto,
     setDumpChatHistory,
     archivedDumpIds, archiveDump, unarchiveDump, mergeArchivedDumpIds,
+    dupeDismissedIds, dismissDuplicate,
   };
 }

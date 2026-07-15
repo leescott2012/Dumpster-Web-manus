@@ -55,6 +55,7 @@ function HomeContent() {
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto, setDumpChatHistory,
     archivedDumpIds, archiveDump, unarchiveDump, mergeArchivedDumpIds,
+    dupeDismissedIds, dismissDuplicate,
   } = useCarouselState();
 
   // Split dumps into the active list (shown up top) and the archived list
@@ -98,9 +99,11 @@ function HomeContent() {
     return function() { cancelled = true; };
   }, [allWorkspacePhotos]);
   var duplicatePhotoIds = useMemo(function() {
-    return findDuplicatePhotoIds(allWorkspacePhotos, hashCache.current);
+    var raw = findDuplicatePhotoIds(allWorkspacePhotos, hashCache.current);
+    for (var i = 0; i < dupeDismissedIds.length; i++) raw.delete(dupeDismissedIds[i]);
+    return raw;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allWorkspacePhotos, hashVersion]);
+  }, [allWorkspacePhotos, hashVersion, dupeDismissedIds]);
 
   var { dragState, updateDragPosition, endDrag } = useDrag();
 
@@ -1018,11 +1021,13 @@ function HomeContent() {
         photo={contextMenu ? contextMenu.photo : null}
         position={contextMenu ? contextMenu.position : null}
         dumpId={contextMenu ? contextMenu.dumpId : undefined}
+        isDuplicate={Boolean(contextMenu && duplicatePhotoIds.has(contextMenu.photo.id))}
         onClose={function() { setContextMenu(null); setSelectedPhotoId(null); }}
         onRemove={handleRemove}
         onToggleFavorite={toggleFavorite}
         onRecycle={function(photoId, dumpId) { setRecyclePhotoId(photoId); setRecycleDumpId(dumpId); setContextMenu(null); setSelectedPhotoId(null); }}
         onFindOriginal={function(photo) { setFindOriginalPhoto(photo); setContextMenu(null); setSelectedPhotoId(null); }}
+        onDismissDuplicate={function(photoId) { dismissDuplicate(photoId); setContextMenu(null); setSelectedPhotoId(null); toast("Won't flag this one again"); }}
       />
       <FindOriginalSheet photo={findOriginalPhoto} onClose={function() { setFindOriginalPhoto(null); }} />
       <RecycleSheet

@@ -1,6 +1,7 @@
 /*
  * PhotoContextMenu — triggered by "..." dots button
- * Shows: Favorite/Unfavorite, Recycle (dump photos only), Remove
+ * Shows: Favorite/Unfavorite, Recycle (dump photos only), Not a Duplicate
+ * (flagged photos only), Remove
  */
 import type { Photo } from "@/lib/photoData";
 
@@ -8,15 +9,19 @@ interface PhotoContextMenuProps {
   photo: Photo | null;
   position: { x: number; y: number } | null;
   dumpId?: string;
+  /** True when this photo is currently flagged with the "Dupe?" badge. */
+  isDuplicate?: boolean;
   onClose: () => void;
   onRemove: (photoId: string) => void;
   onToggleFavorite: (photoId: string) => void;
   onRecycle?: (photoId: string, dumpId: string) => void;
   onFindOriginal?: (photo: Photo) => void;
+  /** Dismiss the duplicate flag for this photo — shown only when isDuplicate. */
+  onDismissDuplicate?: (photoId: string) => void;
 }
 
 export default function PhotoContextMenu({
-  photo, position, dumpId, onClose, onRemove, onToggleFavorite, onRecycle, onFindOriginal,
+  photo, position, dumpId, isDuplicate, onClose, onRemove, onToggleFavorite, onRecycle, onFindOriginal, onDismissDuplicate,
 }: PhotoContextMenuProps) {
   if (!photo || !position) return null;
 
@@ -74,6 +79,16 @@ export default function PhotoContextMenu({
             onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
           >
             {"♻️ Recycle"}
+          </button>
+        )}
+
+        {isDuplicate && onDismissDuplicate && (
+          <button style={itemStyle}
+            onClick={function() { onDismissDuplicate(photo.id); onClose(); }}
+            onMouseEnter={function(e) { e.currentTarget.style.background = "#1a1a1a"; }}
+            onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
+          >
+            {"✓ Not a duplicate"}
           </button>
         )}
 
