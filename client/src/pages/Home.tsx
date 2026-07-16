@@ -15,7 +15,7 @@ import PhotoContextMenu from "@/components/PhotoContextMenu";
 import FindOriginalSheet from "@/components/FindOriginalSheet";
 import DragGhost from "@/components/DragGhost";
 import type { Photo } from "@/lib/photoData";
-import { Plus, Sparkles, Menu } from "lucide-react";
+import { Plus, Sparkles, Menu, Users } from "lucide-react";
 import { toast } from "sonner";
 import { nanoid } from "nanoid";
 import AISuggestSheet, { type SuggestedCluster } from "@/components/AISuggestSheet";
@@ -31,6 +31,7 @@ import CaptionPool from "@/components/CaptionPool";
 import AuthSheet from "@/components/AuthSheet";
 import UsernameGateModal from "@/components/UsernameGateModal";
 import NotificationBell from "@/components/NotificationBell";
+import ConnectionsPanel from "@/components/ConnectionsPanel";
 import CreditsSheet from "@/components/CreditsSheet";
 import BugReportButton from "@/components/BugReportButton";
 import CreditsBadge from "@/components/CreditsBadge";
@@ -125,6 +126,7 @@ function HomeContent() {
     photo: Photo; position: { x: number; y: number }; dumpId?: string;
   } | null>(null);
   var [menuOpen, setMenuOpen] = useState(false);
+  var [connectionsOpen, setConnectionsOpen] = useState(false);
   var [poolTab, setPoolTab] = useState<PoolTab>("photos");
   var [captionCount, setCaptionCount] = useState<number>(function() { return loadCaptions().length; });
   // Refresh caption count when the tab changes (in case caps were added)
@@ -732,6 +734,20 @@ function HomeContent() {
             onCreditsClick={function() { setCreditsSheetOpen(true); }}
             onAuthClick={function() { setAuthSheetOpen(true); }}
           />
+          {user && (
+            <button
+              onClick={function(e) { e.stopPropagation(); setConnectionsOpen(true); }}
+              aria-label="Connections"
+              style={{
+                width: 36, height: 36, borderRadius: 9,
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", color: "#e8e8e8", transition: "all 0.15s",
+              }}
+            >
+              <Users size={16} />
+            </button>
+          )}
           {user && <NotificationBell />}
           <button
             onClick={function(e) { e.stopPropagation(); setMenuOpen(true); }}
@@ -1121,6 +1137,13 @@ function HomeContent() {
         open={!!user && !!profile && !profile.username}
         onDone={function() { refreshProfile(); }}
       />
+      {user && (
+        <ConnectionsPanel
+          open={connectionsOpen}
+          onClose={function() { setConnectionsOpen(false); }}
+          myUserId={user.id}
+        />
+      )}
       <CreditsSheet
         open={creditsSheetOpen}
         onClose={function() { setCreditsSheetOpen(false); }}
