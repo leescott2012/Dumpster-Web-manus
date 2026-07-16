@@ -45,7 +45,7 @@ const CATEGORY_HINTS = [
   "LIFESTYLE — everyday / anything that doesn't clearly fit above (default)",
 ].join("\n");
 
-function readBody(req: IncomingMessage): Promise<string> {
+export function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     req.on("data", (c: Buffer) => chunks.push(c));
@@ -54,9 +54,17 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+export interface AILabelBody { photos?: LabelPhotoInput[]; auto?: boolean }
+
+/**
+ * `preParsedBody` lets the route wrapper read+parse the body itself first (to
+ * decide free vs. paid credit gating via the `auto` flag) without this
+ * function trying to re-read an already-consumed request stream.
+ */
 export async function handleAILabel(
   req: IncomingMessage,
-  res: ServerResponse
+  res: ServerResponse,
+  preParsedBody?: AILabelBody
 ): Promise<void> {
   if (req.method !== "POST") {
     res.writeHead(405, { "Content-Type": "application/json" });
@@ -73,8 +81,7 @@ export async function handleAILabel(
 
   let photos: LabelPhotoInput[];
   try {
-    const body = await readBody(req);
-    const parsed = JSON.parse(body);
+    const parsed = preParsedBody ?? JSON.parse(await readBody(req));
     photos = Array.isArray(parsed.photos) ? parsed.photos.slice(0, MAX_PHOTOS) : [];
   } catch {
     res.writeHead(400, { "Content-Type": "application/json" });
