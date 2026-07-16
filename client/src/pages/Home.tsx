@@ -5,6 +5,7 @@
  * No rules, no onboarding hints. App name: Dumpster.
  */
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { DragProvider, useDrag } from "@/contexts/DragContext";
 import { useCarouselState } from "@/hooks/useCarouselState";
 import DumpStrip from "@/components/DumpStrip";
@@ -42,8 +43,17 @@ import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
 import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, saveArchivedDumpIds } from "@/lib/workspaceSync";
-import { scanPhotos } from "@/lib/aiLabel";
+import { scanPhotos, autoScanPhotos } from "@/lib/aiLabel";
 import { track } from "@/lib/analytics";
+import { logBug } from "@/lib/bugLogger";
+
+// Mirror of CATEGORIES in server/aiLabel.ts — used to decide whether a pool
+// photo's existing category is a real AI label or a stale/legacy value that
+// should be re-scanned. Keep in sync with the server list.
+var VALID_CATEGORIES = [
+  "AUTOMOTIVE", "SELFIE", "NIGHTLIFE", "DINING", "FITNESS", "TRAVEL",
+  "ARCHITECTURE", "ART", "FASHION", "STUDIO", "CULTURE", "LIFESTYLE",
+];
 
 function HomeContent() {
   var {
@@ -173,7 +183,7 @@ function HomeContent() {
   var [creditsSheetOpen, setCreditsSheetOpen] = useState(false);
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
   var [demoBannerVisible, setDemoBannerVisible] = useState(false);
-  var { user, canAfford } = useAuth();
+  var { user, canAfford, refreshProfile } = useAuth();
 
   // ── AI profile sync — merge captions/taste/rules from cloud on sign-in.
   // Photos and workspace (dumps + pool) are device-local for beta.
@@ -578,14 +588,18 @@ function HomeContent() {
   }, [addUploadedPhotos, replacePhotoUrl, user]);
 
   // Scan pool photos with AI and auto-label them (category + short alt). Only
-  // scans photos that haven't been labeled yet ("" or "Uploaded" category),
+  // scans photos that haven't been labeled yet ("" or "Uploaded" category) or
+  // whose category predates the current taxonomy (e.g. "Object", "Party",
+  // "City" — stale values written by the native app's old filename-guessing
+  // labeler before it switched to server-side Claude Vision on 2026-07-10);
   // skips videos, and applies labels incrementally as each batch returns.
   var handleScanPhotos = useCallback(function() {
     if (scanning) return;
     if (!user) { setAuthSheetOpen(true); toast("Sign in to scan photos"); return; }
     var toScan = pool.filter(function(p) {
       if (p.category === "Video") return false;
-      return p.category === "" || p.category === "Uploaded";
+      if (p.category === "" || p.category === "Uploaded") return true;
+      return VALID_CATEGORIES.indexOf(p.category.toUpperCase()) === -1;
     });
     if (toScan.length === 0) { toast("All photos are already labeled"); return; }
 
@@ -596,12 +610,56 @@ function HomeContent() {
       .then(function(all) {
         track("photos_scanned", { count: all.length });
         toast("Labeled " + all.length + (all.length === 1 ? " photo" : " photos"));
+        // Credits were deducted server-side (creditGate) — refetch so the
+        // header pill doesn't show a stale balance until next reload.
+        refreshProfile();
       })
       .catch(function(e) {
         toast(e && e.message ? e.message : "Scan failed — try again");
       })
       .then(function() { setScanning(false); });
-  }, [scanning, user, pool, applyPhotoLabels]);
+  }, [scanning, user, pool, applyPhotoLabels, refreshProfile]);
+
+  // Auto-heal loop: photos stuck with a stale/legacy category (e.g. "Object",
+  // written by the native app's old filename-guessing labeler before it moved
+  // to server-side Claude Vision) get silently re-scanned at NO charge to the
+  // user's credits, wherever they live (pool or already in a dump — see
+  // applyPhotoLabels). The fix is logged to the bug bin in the same call that
+  // makes it, closing the loop without a separate admin step. Runs once per
+  // session — autoHealTriggeredRef guards against re-firing as state settles.
+  var autoHealTriggeredRef = useRef(false);
+  useEffect(function() {
+    if (!user || autoHealTriggeredRef.current) return;
+    var stale = allWorkspacePhotos.filter(function(p) {
+      if (p.category === "Video") return false;
+      if (p.category === "" || p.category === "Uploaded") return true;
+      return VALID_CATEGORIES.indexOf(p.category.toUpperCase()) === -1;
+    });
+    if (stale.length === 0) return;
+    autoHealTriggeredRef.current = true;
+
+    var before = stale.map(function(p) { return { id: p.id, category: p.category }; });
+    var input = stale.map(function(p) { return { id: p.id, url: p.url }; });
+    autoScanPhotos(input, function(labels) { applyPhotoLabels(labels); })
+      .then(function(all) {
+        track("photos_auto_relabeled", { count: all.length });
+        logBug({
+          source: "auto-relabel",
+          message: "Auto re-scanned " + all.length + " photo(s) stuck with a stale/legacy category — no charge to the user.",
+          context: { before: before, after: all },
+          status: "fixed",
+          silent: true,
+        });
+      })
+      .catch(function(e) {
+        logBug({
+          source: "auto-relabel",
+          message: "Auto re-scan failed: " + (e && e.message ? e.message : "unknown error"),
+          context: { attempted: before },
+          silent: true,
+        });
+      });
+  }, [user, allWorkspacePhotos, applyPhotoLabels]);
 
   var handleAICreateDumps = useCallback(function(clusters: SuggestedCluster[]) {
     createDumpsFromSuggestions(clusters);
@@ -735,30 +793,37 @@ function HomeContent() {
         </div>
       </header>
 
-      {/* Dump Strips (active, non-archived) */}
-      {activeDumps.map(function(dump) {
-        return (
-          <div key={dump.id} style={{
-            position: "relative",
-            zIndex: (selectionMode || deleteMode) ? 50 : "auto",
-            opacity: (selectionMode || deleteMode) ? 0.3 : 1,
-            transition: "opacity 0.3s",
-            pointerEvents: (selectionMode || deleteMode) ? "none" : "auto",
-          }}>
-            <DumpStrip
-              dump={dump} selectedPhotoId={selectedPhotoId}
-              onSelectPhoto={handleSelectPhoto} onDotsClick={handleDotsClick}
-              onDoubleTapPhoto={handleDoubleTapPhoto} onDropPhoto={handleDropOnDump}
-              onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
-              onRenameDump={renameDump} onPlusClick={handlePlusClick}
-              onMenuClick={function(dumpId) { setActionSheetDumpId(dumpId); }}
-              onCaptionClick={function(dumpId) { if (creditGate("ai_caption")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
-              onUploadFromDevice={handleUploadPhotos}
-              isCustom={!originalDumpIds.includes(dump.id)}
-            />
-          </div>
-        );
-      })}
+      {/* Dump Strips (active, non-archived). AnimatePresence + layout gives
+          archiving a "pop" exit (scale/fade out, remaining cards reflow up)
+          instead of an instant vanish. */}
+      <AnimatePresence initial={false}>
+        {activeDumps.map(function(dump) {
+          return (
+            <motion.div key={dump.id} layout
+              exit={{ opacity: 0, scale: 0.85, y: 12 }}
+              transition={{ duration: 0.25, ease: "easeIn" }}
+              style={{
+                position: "relative",
+                zIndex: (selectionMode || deleteMode) ? 50 : "auto",
+                opacity: (selectionMode || deleteMode) ? 0.3 : 1,
+                transition: "opacity 0.3s",
+                pointerEvents: (selectionMode || deleteMode) ? "none" : "auto",
+              }}>
+              <DumpStrip
+                dump={dump} selectedPhotoId={selectedPhotoId}
+                onSelectPhoto={handleSelectPhoto} onDotsClick={handleDotsClick}
+                onDoubleTapPhoto={handleDoubleTapPhoto} onDropPhoto={handleDropOnDump}
+                onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
+                onRenameDump={renameDump} onPlusClick={handlePlusClick}
+                onMenuClick={function(dumpId) { setActionSheetDumpId(dumpId); }}
+                onCaptionClick={function(dumpId) { if (creditGate("ai_caption")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
+                onUploadFromDevice={handleUploadPhotos}
+                isCustom={!originalDumpIds.includes(dump.id)}
+              />
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
 
       {/* Archived dumps — collapsed by default so saved dumps stay out of the
           way but remain one tap from being restored. */}

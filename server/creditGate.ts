@@ -116,3 +116,36 @@ export async function checkCredits(
 
   return { userId: userId, proceed: true };
 }
+
+/**
+ * Same gates as checkCredits (auth, rate limit, daily budget) but skips the
+ * per-user credit deduction — for system-initiated actions that shouldn't
+ * cost the user anything (e.g. auto re-labeling a photo stuck with a stale
+ * pre-taxonomy category like "Object"). Real spend still counts against the
+ * daily $ budget so the circuit breaker stays honest.
+ */
+export async function checkAutoCredits(
+  req: IncomingMessage,
+  res: ServerResponse,
+  action: string
+): Promise<{ userId: string | null; proceed: boolean }> {
+  var userId = await getUserFromRequest(req);
+  if (!userId) {
+    res.writeHead(401, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Sign in required.", code: "auth_required" }));
+    return { userId: null, proceed: false };
+  }
+
+  var rlOk = await enforceRateLimit(req, res, action, userId);
+  if (!rlOk) return { userId: userId, proceed: false };
+
+  var budgetOk = await checkBudget(res);
+  if (!budgetOk) return { userId: userId, proceed: false };
+
+  recordCost(action).catch(function(e) {
+    console.warn("[creditGate] recordCost failed:", e);
+    captureServerError(e, "creditGate.recordCost", { action: action, userId: userId });
+  });
+
+  return { userId: userId, proceed: true };
+}

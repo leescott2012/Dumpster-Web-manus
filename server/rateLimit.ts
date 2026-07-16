@@ -30,6 +30,7 @@ function getRedis(): Redis | null {
 var LIMITS: Record<string, { count: number; window: "10 m" | "1 m" | "1 h" }> = {
   ai_suggest:  { count: 5,  window: "10 m" }, // heavy: Claude vision with up to 20 images
   ai_label:    { count: 8,  window: "10 m" }, // heavy: Claude Sonnet vision, up to 12 images/batch
+  ai_label_auto: { count: 3, window: "10 m" }, // system auto-heal of stale/legacy categories — tighter, no user action behind it
   ai_caption:  { count: 20, window: "10 m" },
   ai_chat:     { count: 30, window: "10 m" },
   ai_recycle:  { count: 10, window: "10 m" },

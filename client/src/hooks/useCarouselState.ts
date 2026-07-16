@@ -463,8 +463,11 @@ export function useCarouselState() {
     });
   }, []);
 
-  // Apply AI scan results — set category (+ alt label) on matching photos in
-  // the pool. Used by the Pool "Scan" button. Unmatched ids are ignored.
+  // Apply AI scan results — set category (+ alt label) on matching photos,
+  // wherever they live (pool AND already-placed-in-a-dump). A photo's category
+  // is a property of the photo itself, not of which list it's currently in, so
+  // a stale/legacy label (e.g. "Object") needs fixing in both places or the
+  // dump-carousel copy never heals. Unmatched ids are ignored.
   var applyPhotoLabels = useCallback(function(labels: Array<{ id: string; category: string; label: string }>) {
     if (!labels || labels.length === 0) return;
     var byId: Record<string, { category: string; label: string }> = {};
@@ -478,6 +481,22 @@ export function useCarouselState() {
         return { ...p, category: l.category || p.category, alt: l.label || p.alt };
       });
       return changed ? next : prev;
+    });
+    setDumps(function(prev) {
+      var anyChanged = false;
+      var next = prev.map(function(d) {
+        var dumpChanged = false;
+        var photos = d.photos.map(function(p) {
+          var l = byId[p.id];
+          if (!l) return p;
+          dumpChanged = true;
+          return { ...p, category: l.category || p.category, alt: l.label || p.alt };
+        });
+        if (!dumpChanged) return d;
+        anyChanged = true;
+        return { ...d, photos: photos };
+      });
+      return anyChanged ? next : prev;
     });
   }, []);
 

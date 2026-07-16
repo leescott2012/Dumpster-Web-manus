@@ -27,6 +27,12 @@ export interface BugInput {
    * everyday minor errors don't spam the UI. Default false (show toast).
    */
   silent?:     boolean;
+  /**
+   * Set to "fixed" when logging a report for something the system already
+   * resolved in the same call (e.g. auto-relabel) — closes the loop without
+   * needing a separate admin PATCH. Omit for anything that still needs eyes.
+   */
+  status?:     "fixed";
 }
 
 export interface BugToastPayload {
@@ -77,6 +83,7 @@ function buildBody(args: BugInput) {
     user_agent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
     viewport:   typeof window !== "undefined" ? `${window.innerWidth}x${window.innerHeight}` : undefined,
     context:    args.context,
+    status:     args.status,
   };
 }
 

@@ -36,6 +36,7 @@ var COST_CENTS: Record<string, number> = {
   ai_chat: 1,
   ai_recycle: 3,
   ig_scrub: 5,
+  ai_label_auto: 12, // free to the user, but real Claude cost — still counts against the daily budget
 };
 
 function todayKey(): string {

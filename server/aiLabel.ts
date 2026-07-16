@@ -20,23 +20,28 @@ const MAX_PHOTOS = 12; // per request — client chunks larger sets
 // Keep this list in sync with dumpster/ios/.../PhotoAnalyzer.swift. Fallback is
 // LIFESTYLE (same as native's default).
 const CATEGORIES = [
-  "AUTOMOTIVE", "PORTRAIT", "NIGHTLIFE", "DINING", "FITNESS", "TRAVEL",
-  "ARCHITECTURE", "ART", "FASHION", "STUDIO", "LIFESTYLE",
+  "AUTOMOTIVE", "SELFIE", "NIGHTLIFE", "DINING", "FITNESS", "TRAVEL",
+  "ARCHITECTURE", "ART", "FASHION", "STUDIO", "CULTURE", "LIFESTYLE",
 ];
 const FALLBACK_CATEGORY = "LIFESTYLE";
 
 // Hints so Claude maps the same way native's keyword→category map does.
+// No separate PORTRAIT bucket: a posed/styled photo of a person is a fashion
+// moment (what they're wearing is the point) — folded into FASHION. Only a
+// self-taken shot gets its own category (SELFIE), since that's a distinct,
+// visually-detectable framing, not a styling choice.
 const CATEGORY_HINTS = [
   "AUTOMOTIVE — cars, vehicles, rims, engines, dashboards",
-  "PORTRAIT — people, faces, selfies, headshots, crowds",
+  "SELFIE — self-taken: arm's-length shot, front camera, mirror photo — the giveaway is the visible arm/phone/mirror reflection, or the framing angle only a self-shot produces",
   "NIGHTLIFE — bars, clubs, parties, drinks, concerts, neon",
   "DINING — food, meals, restaurants, coffee, plated dishes",
   "FITNESS — gym, workouts, sports, athletes, training",
   "TRAVEL — beaches, nature, landscapes, sunsets, mountains, water",
   "ARCHITECTURE — buildings, interiors, cities, rooms, structures",
   "ART — paintings, galleries, sculpture, museums, exhibitions",
-  "FASHION — outfits, clothing, style, accessories, shoes",
+  "FASHION — outfits, clothing, style, accessories, shoes, AND any posed/styled photo of a person taken by someone else (headshots, formal portraits) — what they're wearing is always part of the shot",
   "STUDIO — product shots, controlled/studio lighting, flat lays",
+  "CULTURE — crowds, gatherings, festivals, sports/concert audiences, ceremonies, public events (the event/group is the subject, not one styled person)",
   "LIFESTYLE — everyday / anything that doesn't clearly fit above (default)",
 ].join("\n");
 
@@ -90,7 +95,7 @@ ${CATEGORY_HINTS}
 
 How to choose accurately:
 - Judge by the PRIMARY subject — what the photo is really about — not incidental background. A latte on a cafe table is DINING even if a building shows through the window.
-- Activity/context beats "there is a person in it". A person mid-workout is FITNESS; a person in clubwear under neon is NIGHTLIFE; a styled outfit shot is FASHION; a clean selfie/headshot is PORTRAIT.
+- Activity/context beats "there is a person in it". A person mid-workout is FITNESS; a person in clubwear under neon is NIGHTLIFE; a posed shot taken by someone else — outfit, headshot, formal photo — is FASHION; only a self-taken arm's-length/mirror/front-camera shot is SELFIE; a crowd/audience/gathering where no single styled person is the subject is CULTURE.
 - Use STUDIO only for product/object shots on a controlled or seamless background (e-commerce look), not real-world scenes.
 - Use TRAVEL for outdoor nature/landscapes (beach, mountains, sunsets); ARCHITECTURE for buildings/interiors/cityscapes.
 - Only use ${FALLBACK_CATEGORY} when it genuinely doesn't fit any specific category — don't default to it out of uncertainty; commit to the best fit.

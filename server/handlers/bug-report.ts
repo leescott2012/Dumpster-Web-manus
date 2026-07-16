@@ -32,6 +32,11 @@ interface BugReportBody {
   user_agent?: string;
   viewport?:  string;
   context?:   unknown;
+  /** Only "fixed" is honored here — for self-resolving system reports (e.g.
+   *  auto-relabel) that log the fix in the same call that made it. Anything
+   *  else falls back to the DB default ("new"); this is not a general status
+   *  override for user-filed reports. */
+  status?:    string;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -68,20 +73,24 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
   // Hard caps on text lengths so a runaway loop can't blow up storage.
   const truncate = (s: string | undefined, n: number) => (s ?? "").slice(0, n);
 
+  const row: Record<string, unknown> = {
+    user_id:    userId,
+    email,
+    source:     truncate(body.source,   80),
+    message:    truncate(body.message,  2000),
+    error_code: truncate(body.error_code, 200) || null,
+    stack:      truncate(body.stack,    8000) || null,
+    url:        truncate(body.url,      2000) || null,
+    user_agent: truncate(body.user_agent, 500) || null,
+    viewport:   truncate(body.viewport, 32) || null,
+    context:    body.context ?? null,
+  };
+  // Self-resolving reports only — see BugReportBody.status comment.
+  if (body.status === "fixed") row.status = "fixed";
+
   const { data, error } = await supabaseAdmin
     .from("bug_reports")
-    .insert({
-      user_id:    userId,
-      email,
-      source:     truncate(body.source,   80),
-      message:    truncate(body.message,  2000),
-      error_code: truncate(body.error_code, 200) || null,
-      stack:      truncate(body.stack,    8000) || null,
-      url:        truncate(body.url,      2000) || null,
-      user_agent: truncate(body.user_agent, 500) || null,
-      viewport:   truncate(body.viewport, 32) || null,
-      context:    body.context ?? null,
-    })
+    .insert(row)
     .select("id")
     .single();
 
