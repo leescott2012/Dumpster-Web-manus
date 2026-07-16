@@ -30,6 +30,7 @@ import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
 import AuthSheet from "@/components/AuthSheet";
 import UsernameGateModal from "@/components/UsernameGateModal";
+import NotificationBell from "@/components/NotificationBell";
 import CreditsSheet from "@/components/CreditsSheet";
 import BugReportButton from "@/components/BugReportButton";
 import CreditsBadge from "@/components/CreditsBadge";
@@ -731,6 +732,7 @@ function HomeContent() {
             onCreditsClick={function() { setCreditsSheetOpen(true); }}
             onAuthClick={function() { setAuthSheetOpen(true); }}
           />
+          {user && <NotificationBell />}
           <button
             onClick={function(e) { e.stopPropagation(); setMenuOpen(true); }}
             style={{
