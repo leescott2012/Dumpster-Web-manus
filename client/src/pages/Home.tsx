@@ -29,6 +29,7 @@ import RecycleSheet from "@/components/RecycleSheet";
 import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
 import AuthSheet from "@/components/AuthSheet";
+import UsernameGateModal from "@/components/UsernameGateModal";
 import CreditsSheet from "@/components/CreditsSheet";
 import BugReportButton from "@/components/BugReportButton";
 import CreditsBadge from "@/components/CreditsBadge";
@@ -183,7 +184,7 @@ function HomeContent() {
   var [creditsSheetOpen, setCreditsSheetOpen] = useState(false);
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
   var [demoBannerVisible, setDemoBannerVisible] = useState(false);
-  var { user, canAfford, refreshProfile } = useAuth();
+  var { user, profile, canAfford, refreshProfile } = useAuth();
 
   // ── AI profile sync — merge captions/taste/rules from cloud on sign-in.
   // Photos and workspace (dumps + pool) are device-local for beta.
@@ -1108,6 +1109,10 @@ function HomeContent() {
       <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} onVisibilityChange={setDemoBannerVisible} />
       <GuidedTour active={tourActive} onEnd={endTour} />
       <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} />
+      <UsernameGateModal
+        open={!!user && !!profile && !profile.username}
+        onDone={function() { refreshProfile(); }}
+      />
       <CreditsSheet
         open={creditsSheetOpen}
         onClose={function() { setCreditsSheetOpen(false); }}

@@ -30,6 +30,26 @@
       "destination": "/api/ig-scrub"
     },
     {
+      "source": "/api/check-username",
+      "destination": "/api/social?fn=check-username"
+    },
+    {
+      "source": "/api/connections",
+      "destination": "/api/social?fn=connections"
+    },
+    {
+      "source": "/api/dm",
+      "destination": "/api/social?fn=dm"
+    },
+    {
+      "source": "/api/notifications",
+      "destination": "/api/social?fn=notifications"
+    },
+    {
+      "source": "/api/dump-visibility",
+      "destination": "/api/social?fn=dump-visibility"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

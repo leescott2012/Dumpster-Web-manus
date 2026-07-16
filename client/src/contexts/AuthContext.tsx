@@ -20,6 +20,9 @@ export interface UserProfile {
   referral_code: string;
   lifetime_purchase: boolean;
   stripe_customer_id: string | null;
+  username: string | null;
+  avatar_icon: string | null;
+  avatar_color: string | null;
 }
 
 interface AuthState {

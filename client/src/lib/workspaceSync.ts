@@ -30,7 +30,7 @@ function syncEnabled(userId: string | null): userId is string {
 }
 
 interface PhotoRow { id: string; url: string; category: string | null; order: number | null; }
-interface DumpRow { id: string; title: string | null; subtitle: string | null; description: string | null; }
+interface DumpRow { id: string; title: string | null; subtitle: string | null; description: string | null; public: boolean | null; }
 interface DumpPhotoRow { dump_id: string; photo_id: string; order: number | null; }
 
 function toPhoto(r: PhotoRow): Photo {
@@ -56,7 +56,7 @@ export async function loadWorkspace(
 
     var dumpsRes = await supabase
       .from("dumps")
-      .select("id, title, subtitle, description")
+      .select("id, title, subtitle, description, public")
       .eq("user_id", userId);
     if (dumpsRes.error) return null;
     var dumpRows = (dumpsRes.data || []) as DumpRow[];
@@ -100,6 +100,7 @@ export async function loadWorkspace(
         title: d.title || "Untitled",
         subtitle: d.subtitle || d.description || "",
         photos: photos,
+        public: !!d.public,
       };
     });
 
@@ -170,6 +171,22 @@ export async function saveWorkspaceNow(
  * public HTTPS URL. Returns null when not signed in, the url isn't a data URL,
  * or anything fails — caller keeps the data URL (device-local fallback).
  */
+/** Toggle a dump's public/private flag. Owner-only server-side. */
+export async function setDumpPublic(dumpId: string, isPublic: boolean): Promise<boolean> {
+  try {
+    var headers = await getAuthHeaders();
+    if (!headers.Authorization) return false;
+    var res = await fetch("/api/dump-visibility", {
+      method: "PATCH",
+      headers: Object.assign({ "Content-Type": "application/json" }, headers),
+      body: JSON.stringify({ dumpId: dumpId, public: isPublic }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function uploadPhotoToCloud(id: string, dataUrl: string): Promise<string | null> {
   if (!dataUrl || dataUrl.indexOf("data:") !== 0) return null;
   try {

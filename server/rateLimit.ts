@@ -38,6 +38,9 @@ var LIMITS: Record<string, { count: number; window: "10 m" | "1 m" | "1 h" }> = 
   tts:         { count: 20, window: "10 m" }, // ElevenLabs cost per call
   admin_user_detail: { count: 30, window: "10 m" }, // PII/IP lookup — throttle enumeration
   stripe_checkout: { count: 10, window: "1 h" }, // anti-spam
+  check_username: { count: 30, window: "1 m" }, // typed live, needs headroom
+  connection_request: { count: 20, window: "10 m" },
+  dm_send: { count: 30, window: "10 m" },
 };
 
 var limiterCache: Record<string, Ratelimit> = {};

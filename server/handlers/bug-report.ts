@@ -114,7 +114,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
   let q = supabaseAdmin
     .from("bug_reports")
-    .select("id, user_id, email, source, message, error_code, stack, url, user_agent, viewport, context, status, admin_note, created_at, updated_at")
+    .select("id, user_id, email, source, message, error_code, stack, url, user_agent, viewport, context, status, admin_note, admin_reply, admin_replied_at, created_at, updated_at")
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -124,7 +124,19 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
   const { data, error } = await q;
   if (error) return res.status(500).json({ error: error.message });
-  return res.status(200).json({ reports: data ?? [] });
+
+  // Attach username for display — bug_reports.user_id → auth.users, not
+  // profiles, so PostgREST can't embed this automatically; batch-fetch instead.
+  const rows = data ?? [];
+  const userIds = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
+  let usernameById: Record<string, string | null> = {};
+  if (userIds.length > 0) {
+    const { data: profs } = await supabaseAdmin.from("profiles").select("id, username").in("id", userIds);
+    for (const p of profs ?? []) usernameById[p.id] = p.username;
+  }
+  const enriched = rows.map((r) => ({ ...r, username: r.user_id ? usernameById[r.user_id] ?? null : null }));
+
+  return res.status(200).json({ reports: enriched });
 }
 
 // ── PATCH: mark seen/fixed (admin only) ─────────────────────────────────────
@@ -135,18 +147,39 @@ async function handlePatch(req: VercelRequest, res: VercelResponse) {
   if (!adminId) return res.status(503).json({ error: "ADMIN_USER_ID not set." });
   if (userId !== adminId) return res.status(403).json({ error: "Forbidden." });
 
-  const { id, status, admin_note } = (req.body || {}) as { id?: string; status?: string; admin_note?: string };
+  const { id, status, admin_note, admin_reply } = (req.body || {}) as {
+    id?: string; status?: string; admin_note?: string; admin_reply?: string;
+  };
   if (!id) return res.status(400).json({ error: "id required" });
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (status && ["new", "seen", "fixed", "wontfix"].includes(status)) patch.status = status;
   if (typeof admin_note === "string") patch.admin_note = admin_note.slice(0, 2000);
+  const replyText = typeof admin_reply === "string" ? admin_reply.trim().slice(0, 2000) : null;
+  if (replyText) {
+    patch.admin_reply = replyText;
+    patch.admin_replied_at = new Date().toISOString();
+  }
 
-  const { error } = await supabaseAdmin
+  const { data: row, error } = await supabaseAdmin
     .from("bug_reports")
     .update(patch)
-    .eq("id", id);
+    .eq("id", id)
+    .select("user_id")
+    .maybeSingle();
 
   if (error) return res.status(500).json({ error: error.message });
+
+  // Notify the reporter, if they were signed in when they filed it.
+  if (replyText && row?.user_id) {
+    await supabaseAdmin.from("notifications").insert({
+      user_id: row.user_id,
+      type: "bug_reply",
+      title: "Reply to your bug report",
+      body: replyText.slice(0, 140),
+      link: "/bug-reports",
+    });
+  }
+
   return res.status(200).json({ ok: true });
 }
