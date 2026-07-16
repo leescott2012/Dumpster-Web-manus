@@ -524,6 +524,15 @@ export function useCarouselState() {
     });
   }, []);
 
+  /** Local-state mirror of a dump's public flag — server write happens in the caller (setDumpPublic in workspaceSync.ts). */
+  var setDumpPublicFlag = useCallback(function(dumpId: string, isPublic: boolean) {
+    setDumps(function(prev) {
+      return prev.map(function(d) {
+        return d.id === dumpId ? { ...d, public: isPublic } : d;
+      });
+    });
+  }, []);
+
   // Create dumps from AI suggestions — moves photos from pool into new dumps
   var createDumpsFromSuggestions = useCallback(function(clusters: SuggestedCluster[]) {
     setPool(function(prevPool) {
@@ -754,7 +763,7 @@ export function useCarouselState() {
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,
-    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, replacePhotoUrl, applyPhotoLabels, renameDump,
+    toggleFavorite, toggleDumpFavorite, setDumpPublicFlag, addUploadedPhotos, replacePhotoUrl, applyPhotoLabels, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto,
     setDumpChatHistory,

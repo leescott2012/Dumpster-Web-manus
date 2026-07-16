@@ -2,7 +2,7 @@
  * DumpActionSheet — iOS-style "..." action menu for a dump
  * Actions: Rate, Heart, Valet (AI assistant), Generate Captions, Export/Share, Delete
  */
-import { Heart, Sparkles, Share2, Trash2, X, MessageCircle, ThumbsUp, ThumbsDown, Archive, ArchiveRestore } from "lucide-react";
+import { Heart, Sparkles, Share2, Trash2, X, MessageCircle, ThumbsUp, ThumbsDown, Archive, ArchiveRestore, Globe, Lock } from "lucide-react";
 import type { Dump } from "@/lib/photoData";
 
 interface DumpActionSheetProps {
@@ -18,6 +18,8 @@ interface DumpActionSheetProps {
   onArchive: (dumpId: string) => void;
   isArchived?: boolean;
   onDelete: (dumpId: string) => void;
+  /** Optional — omitted while a dump has no cloud-synced id yet (visibility only applies once a dump exists server-side). */
+  onTogglePublic?: (dumpId: string, next: boolean) => void;
 }
 
 interface ActionRow {
@@ -31,13 +33,14 @@ interface ActionRow {
 }
 
 export default function DumpActionSheet({
-  dump, open, onClose, onHeart, onChat, onRate, onThumbsDown, onCaptions, onExport, onArchive, isArchived, onDelete,
+  dump, open, onClose, onHeart, onChat, onRate, onThumbsDown, onCaptions, onExport, onArchive, isArchived, onDelete, onTogglePublic,
 }: DumpActionSheetProps) {
   if (!open || !dump) return null;
 
   var isHearted = Boolean(dump.favorited);
   var hasCaptions = dump.captions && dump.captions.length > 0;
   var currentRating = dump.rating || null;
+  var isPublic = Boolean(dump.public);
 
   var actions: ActionRow[] = [
     {
@@ -77,6 +80,13 @@ export default function DumpActionSheet({
       color: "#e8e8e8",
       onClick: function() { onArchive(dump.id); onClose(); },
     },
+    ...(onTogglePublic ? [{
+      icon: isPublic ? <Globe size={18} /> : <Lock size={18} />,
+      label: isPublic ? "Public" : "Private",
+      sublabel: isPublic ? "Visible to your connections" : "Only you can see this",
+      color: isPublic ? "#4ade80" : "#e8e8e8",
+      onClick: function() { onTogglePublic(dump.id, !isPublic); },
+    } as ActionRow] : []),
     {
       icon: <Trash2 size={18} />,
       label: "Delete Dump",

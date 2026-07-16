@@ -43,7 +43,7 @@ import { findDuplicatePhotoIds, hashMissingPhotos } from "@/lib/photoDupes";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
-import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, saveArchivedDumpIds } from "@/lib/workspaceSync";
+import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, saveArchivedDumpIds, setDumpPublic } from "@/lib/workspaceSync";
 import { scanPhotos, autoScanPhotos } from "@/lib/aiLabel";
 import { track } from "@/lib/analytics";
 import { logBug } from "@/lib/bugLogger";
@@ -62,7 +62,7 @@ function HomeContent() {
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,
-    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, replacePhotoUrl, applyPhotoLabels, renameDump,
+    toggleFavorite, toggleDumpFavorite, setDumpPublicFlag, addUploadedPhotos, replacePhotoUrl, applyPhotoLabels, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto, setDumpChatHistory,
     archivedDumpIds, archiveDump, unarchiveDump, mergeArchivedDumpIds,
@@ -1062,6 +1062,12 @@ function HomeContent() {
         onArchive={handleArchiveDump}
         isArchived={actionSheetDumpId ? archivedIdSet.has(actionSheetDumpId) : false}
         onDelete={function(dumpId) { handleDeleteDump(dumpId); }}
+        onTogglePublic={user ? function(dumpId, next) {
+          setDumpPublicFlag(dumpId, next); // optimistic local update
+          setDumpPublic(dumpId, next).then(function(ok) {
+            if (!ok) setDumpPublicFlag(dumpId, !next); // revert on failure
+          });
+        } : undefined}
       />
       <DumpShareSheet
         open={shareSheetDumpId !== null}
