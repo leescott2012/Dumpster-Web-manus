@@ -33,8 +33,8 @@ const FALLBACK_CATEGORY = "LIFESTYLE";
 const CATEGORY_HINTS = [
   "AUTOMOTIVE — cars, vehicles, rims, engines, dashboards",
   "SELFIE — self-taken: arm's-length shot, front camera, mirror photo — the giveaway is the visible arm/phone/mirror reflection, or the framing angle only a self-shot produces",
-  "NIGHTLIFE — bars, clubs, parties, drinks, concerts, neon",
-  "DINING — food, meals, restaurants, coffee, plated dishes",
+  "NIGHTLIFE — bars, clubs, parties, concerts, neon (a drink ONLY counts here if the bar/club/party scene is the actual subject, not just a drink in frame)",
+  "DINING — food, meals, restaurants, coffee, plated dishes, AND any drink on its own (cocktail, coffee, wine) — a drink is a description of what it is, not a category; the category is what kind of scene it's in, and absent an obvious nightlife/party scene that's DINING",
   "FITNESS — gym, workouts, sports, athletes, training",
   "TRAVEL — beaches, nature, landscapes, sunsets, mountains, water",
   "ARCHITECTURE — buildings, interiors, cities, rooms, structures",
