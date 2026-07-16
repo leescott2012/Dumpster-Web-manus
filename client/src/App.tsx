@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
+import { Analytics } from "@vercel/analytics/react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import ErrorToaster from "./components/ErrorToaster";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -70,6 +71,7 @@ function App() {
           {/* Visible red error notifier with "Send to bug log" button.
               Mounted once at the top so it's available on every route. */}
           <ErrorToaster />
+          <Analytics />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
