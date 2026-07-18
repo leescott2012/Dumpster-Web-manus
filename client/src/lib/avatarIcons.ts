@@ -40,5 +40,5 @@ export type AvatarIconName =
 
 export const AVATAR_COLORS: string[] = [
   "#f5c518", // Dumpster's admin accent — kept as the first/default option
-  "#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899",
+  "#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899", "#9ca3af",
 ];
