@@ -92,6 +92,22 @@ function isPrivateOrReservedIp(addr: string): boolean {
   return true; // couldn't even parse it as an IP — treat as unsafe
 }
 
+/**
+ * Detects the real image format from magic bytes. Storage/CDN Content-Type
+ * headers (and data: URL prefixes) can be stale or just wrong — e.g. a file
+ * re-encoded to JPEG whose object metadata still says image/png — and
+ * Anthropic's API hard-rejects a mismatch between declared media_type and
+ * actual bytes. Sniffing the bytes directly is the only way to know the
+ * truth. Returns null if the bytes don't match any known signature.
+ */
+function sniffMediaType(buf: Buffer): MediaType | null {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
+  if (buf.length >= 6 && buf.toString("ascii", 0, 3) === "GIF") return "image/gif";
+  if (buf.length >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  return null;
+}
+
 export async function fetchImageAsBase64(
   url: string
 ): Promise<{ base64: string; mediaType: MediaType } | null> {
@@ -99,9 +115,11 @@ export async function fetchImageAsBase64(
   if (url.startsWith("data:")) {
     const match = url.match(/^data:([^;]+);base64,(.+)$/);
     if (!match) return null;
+    const base64 = match[2];
     const rawType = match[1].trim() as MediaType;
-    const mediaType = (VALID_TYPES.includes(rawType) ? rawType : "image/jpeg") as MediaType;
-    return { base64: match[2], mediaType };
+    const declaredType = VALID_TYPES.includes(rawType) ? rawType : null;
+    const mediaType = sniffMediaType(Buffer.from(base64, "base64")) ?? declaredType ?? "image/jpeg";
+    return { base64, mediaType };
   }
 
   if (!(await isSafeRemoteUrl(url))) return null;
@@ -111,12 +129,16 @@ export async function fetchImageAsBase64(
     if (!res.ok) return null;
     const contentLength = res.headers.get("content-length");
     if (contentLength && Number(contentLength) > MAX_IMAGE_BYTES) return null;
-    const contentType = res.headers.get("content-type") || "image/jpeg";
-    const mt = contentType.split(";")[0].trim() as MediaType;
-    const mediaType = (VALID_TYPES.includes(mt) ? mt : "image/jpeg") as MediaType;
     const buf = await res.arrayBuffer();
     if (buf.byteLength > MAX_IMAGE_BYTES) return null;
-    const base64 = Buffer.from(buf).toString("base64");
+    const bytes = Buffer.from(buf);
+
+    const contentType = res.headers.get("content-type") || "";
+    const mt = contentType.split(";")[0].trim() as MediaType;
+    const declaredType = VALID_TYPES.includes(mt) ? mt : null;
+    const mediaType = sniffMediaType(bytes) ?? declaredType ?? "image/jpeg";
+
+    const base64 = bytes.toString("base64");
     return { base64, mediaType };
   } catch {
     return null;

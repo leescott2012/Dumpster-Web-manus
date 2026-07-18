@@ -147,9 +147,11 @@ function mergeIntoLocal(cloud: CloudAIProfile) {
   var merged: PoolCaption[] = [];
   cloudById.forEach(function(c) {
     var l = localById.get(c.id);
-    // Tombstone wins from either side
+    // Tombstone wins from either side. banned: true (not false) — delete
+    // implies never-use now (see captionPool.ts removeCaption), so a synced
+    // tombstone must preserve that instead of silently clearing the ban.
     if (c.deleted || (l && l.deleted)) {
-      merged.push(Object.assign({}, c, { deleted: true, favorited: false, banned: false }));
+      merged.push(Object.assign({}, c, { deleted: true, favorited: false, banned: true }));
     } else {
       merged.push(c);
     }

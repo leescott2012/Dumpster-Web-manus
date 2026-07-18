@@ -45,7 +45,7 @@ import { findDuplicatePhotoIds, hashMissingPhotos } from "@/lib/photoDupes";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
-import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, saveArchivedDumpIds, setDumpPublic } from "@/lib/workspaceSync";
+import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, scheduleArchivedDumpIdsSave, flushArchivedDumpIdsSave, setDumpPublic } from "@/lib/workspaceSync";
 import { scanPhotos, autoScanPhotos } from "@/lib/aiLabel";
 import { track } from "@/lib/analytics";
 import { logBug } from "@/lib/bugLogger";
@@ -60,7 +60,7 @@ var VALID_CATEGORIES = [
 
 function HomeContent() {
   var {
-    dumps, pool, resetAll, clearDemoContent, replaceState,
+    dumps, pool, clearDemoContent, replaceState,
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,
@@ -244,8 +244,10 @@ function HomeContent() {
     if (!user) return;
     var uid = user.id;
     if (workspaceLoadedRef.current !== uid) return;
-    var t = setTimeout(function () { saveArchivedDumpIds(uid, archivedDumpIds); }, 2000);
-    return function () { clearTimeout(t); };
+    scheduleArchivedDumpIdsSave(uid, archivedDumpIds);
+    var onUnload = function () { flushArchivedDumpIdsSave(); };
+    window.addEventListener("beforeunload", onUnload);
+    return function () { window.removeEventListener("beforeunload", onUnload); };
   }, [user, archivedDumpIds]);
 
   // ── Clear demo/stock content on sign-in.
@@ -670,15 +672,6 @@ function HomeContent() {
     toast("Created " + clusters.length + " AI-suggested dump" + (clusters.length !== 1 ? "s" : ""));
   }, [createDumpsFromSuggestions]);
 
-  var handleReset = useCallback(function() {
-    resetAll();
-    setSelectedPhotoId(null);
-    setContextMenu(null);
-    setSelectionMode(false);
-    setSelectedPoolPhotoIds([]);
-    toast("Reset to original state");
-  }, [resetAll]);
-
   var handleCreateDump = useCallback(function() {
     createNewDump();
     toast("New dump created \u2014 tap + to add photos");
@@ -1032,7 +1025,6 @@ function HomeContent() {
         onAISuggest={function() { setAiSheetOpen(true); }}
         onCaptions={function() { if (creditGate("ai_caption")) { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); } }}
         onIGScrub={function() { setIGScrubOpen(true); }}
-        onReset={handleReset}
         onTour={startTour}
         onSignIn={function() { setAuthSheetOpen(true); }}
         dumpCount={dumps.length}

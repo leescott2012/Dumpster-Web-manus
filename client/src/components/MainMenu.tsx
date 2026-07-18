@@ -29,7 +29,6 @@ interface MainMenuProps {
   onAISuggest: () => void;
   onCaptions: () => void;
   onIGScrub: () => void;
-  onReset?: () => void;
   onTour?: () => void;
   onSignIn?: () => void;
   dumpCount: number;
@@ -41,6 +40,7 @@ interface MainMenuProps {
 const ACCENT_OPTIONS = [
   { name: "gold",     hex: "#C8A96E", label: "Gold" },
   { name: "silver",   hex: "#B0B0B0", label: "Silver" },
+  { name: "grey",     hex: "#7A7A7A", label: "Grey" },
   { name: "rose",     hex: "#C8787E", label: "Rose" },
   { name: "emerald",  hex: "#6EC8A0", label: "Emerald" },
   { name: "sapphire", hex: "#6E8EC8", label: "Sapphire" },
@@ -72,7 +72,7 @@ export function initAccent() {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, onReset, onTour, onSignIn, dumpCount, poolCount }: MainMenuProps) {
+export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, onTour, onSignIn, dumpCount, poolCount }: MainMenuProps) {
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const [visible, setVisible] = useState(false);
   const [accent, setAccent] = useState(loadAccent);
@@ -359,7 +359,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
               {activeTab === "appearance" && (
                 <AppearancePanel accent={accent} onAccentChange={handleAccentChange} />
               )}
-              {activeTab === "about" && <AboutPanel onReset={onReset} onTour={onTour ? function() { onClose(); setTimeout(function() { if (onTour) onTour(); }, 400); } : undefined} />}
+              {activeTab === "about" && <AboutPanel onTour={onTour ? function() { onClose(); setTimeout(function() { if (onTour) onTour(); }, 400); } : undefined} />}
               {activeTab === "social" && <SocialMediaPanel />}
             </div>
           )}
@@ -916,7 +916,7 @@ function SocialMediaPanel() {
 
 // ── About Panel ──────────────────────────────────────────────────────────────
 
-function AboutPanel({ onReset, onTour }: { onReset?: () => void; onTour?: () => void }) {
+function AboutPanel({ onTour }: { onTour?: () => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {[
@@ -945,26 +945,6 @@ function AboutPanel({ onReset, onTour }: { onReset?: () => void; onTour?: () => 
             }}
           >
             TAKE A TOUR
-          </button>
-        </div>
-      )}
-
-      {onReset && (
-        <div style={{ marginTop: 10 }}>
-          <button
-            onClick={() => {
-              if (confirm("Reset all dumps and photos to original state? This cannot be undone.")) {
-                onReset();
-              }
-            }}
-            style={{
-              width: "100%", padding: "12px", borderRadius: 10,
-              background: "rgba(255,59,48,0.1)", border: "1px solid rgba(255,59,48,0.2)",
-              color: "#ff3b30", fontSize: 12, fontWeight: 700, cursor: "pointer",
-              fontFamily: "inherit", letterSpacing: "0.04em",
-            }}
-          >
-            RESET TO ORIGINAL STATE
           </button>
         </div>
       )}

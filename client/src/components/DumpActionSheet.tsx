@@ -30,6 +30,11 @@ interface ActionRow {
   danger?: boolean;
   disabled?: boolean;
   onClick: () => void;
+  /** Renders a visible on/off switch instead of relying on the row reading as
+   *  an action — feedback was that flipping public/private looked like every
+   *  other one-shot menu action (Archive, Delete) with no indication it's a
+   *  toggle you can flip back. */
+  toggled?: boolean;
 }
 
 export default function DumpActionSheet({
@@ -86,6 +91,7 @@ export default function DumpActionSheet({
       sublabel: isPublic ? "Visible to your connections" : "Only you can see this",
       color: isPublic ? "#4ade80" : "#e8e8e8",
       onClick: function() { onTogglePublic(dump.id, !isPublic); },
+      toggled: isPublic,
     } as ActionRow] : []),
     {
       icon: <Trash2 size={18} />,
@@ -270,6 +276,23 @@ export default function DumpActionSheet({
                     </div>
                   )}
                 </div>
+
+                {action.toggled !== undefined && (
+                  // Visual-only indicator — the whole row is already the click
+                  // target (it's a <button>), so this isn't its own control
+                  // (avoids nesting an interactive element inside a button).
+                  <div style={{
+                    width: 32, height: 18, borderRadius: 999, flexShrink: 0,
+                    background: action.toggled ? "#4ade80" : "#333",
+                    position: "relative" as const, transition: "background 0.15s",
+                  }}>
+                    <div style={{
+                      width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                      position: "absolute" as const, top: 2,
+                      left: action.toggled ? 16 : 2, transition: "left 0.15s",
+                    }} />
+                  </div>
+                )}
               </button>
             );
           })}

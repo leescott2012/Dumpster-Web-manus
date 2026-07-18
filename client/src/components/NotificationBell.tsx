@@ -102,7 +102,7 @@ export default function NotificationBell() {
         <>
           <div onClick={function () { setOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 349 }} />
           <div style={{
-            position: "absolute", top: 44, right: 0, width: 320, maxHeight: 420, overflowY: "auto",
+            position: "absolute", top: 44, right: 0, width: 320, maxWidth: "calc(100vw - 32px)", maxHeight: 420, overflowY: "auto",
             background: "#0e0e0e", border: "1px solid #2a2a2a", borderRadius: 14, zIndex: 350,
             boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
           }}>

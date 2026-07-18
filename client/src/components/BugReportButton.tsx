@@ -8,11 +8,13 @@
  * No new backend: Sentry's feedback API is purpose-built for this.
  */
 import { useState } from "react";
-import { Bug, X, Send } from "lucide-react";
+import { Bug, X, Send, Paperclip } from "lucide-react";
 import * as Sentry from "@sentry/react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { logBug } from "@/lib/bugLogger";
+
+var MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024; // Sentry attachment cap headroom
 
 export default function BugReportButton() {
   var { user } = useAuth();
@@ -20,6 +22,18 @@ export default function BugReportButton() {
   var [message, setMessage] = useState("");
   var [email, setEmail] = useState("");
   var [sending, setSending] = useState(false);
+  var [screenshot, setScreenshot] = useState<File | null>(null);
+
+  var handleScreenshotPick = function(e: React.ChangeEvent<HTMLInputElement>) {
+    var file = e.target.files && e.target.files[0];
+    e.target.value = ""; // allow picking the same file again after removing it
+    if (!file) return;
+    if (file.size > MAX_SCREENSHOT_BYTES) {
+      toast.error("Screenshot's too big (max 5MB).", { position: "top-center" });
+      return;
+    }
+    setScreenshot(file);
+  };
 
   var handleSubmit = async function() {
     var trimmed = message.trim();
@@ -29,6 +43,11 @@ export default function BugReportButton() {
     }
     setSending(true);
     try {
+      var attachments = undefined;
+      if (screenshot) {
+        var bytes = new Uint8Array(await screenshot.arrayBuffer());
+        attachments = [{ filename: screenshot.name || "screenshot.png", data: bytes, contentType: screenshot.type || "image/png" }];
+      }
       Sentry.captureFeedback(
         {
           message: trimmed,
@@ -36,6 +55,7 @@ export default function BugReportButton() {
           email: email.trim() || user?.email || undefined,
         },
         {
+          attachments: attachments,
           captureContext: {
             tags: {
               source: "in-app-bug-button",
@@ -58,37 +78,50 @@ export default function BugReportButton() {
         context: { reporter_email: email.trim() || user?.email || null, name: user?.user_metadata?.full_name || null },
         silent: true,
       });
-      toast.success("Thanks — we'll take a look.");
+      // Centered + longer than the app default (bottom-center, easy to miss
+      // per feedback) — this is the one confirmation a user actually needs
+      // to see before the sheet closes under it.
+      toast.success("Thanks — we'll take a look.", { position: "top-center", duration: 3500 });
       setMessage("");
       setEmail("");
+      setScreenshot(null);
       setOpen(false);
     } catch (e) {
       console.error("[BugReportButton] submit failed:", e);
-      toast.error("Couldn't send. Try again?");
+      toast.error("Couldn't send. Try again?", { position: "top-center", duration: 3500 });
     }
     setSending(false);
   };
 
   return (
     <>
-      {/* Floating pill — right edge, vertically centered, always-on */}
+      {/* Floating pill — bottom-right corner, always-on.
+          Was fixed at right:0/top:50% (viewport-relative vertical center) --
+          since every scrollable card ("..." menu, etc.) is in normal document
+          flow, ANY multi-item list eventually scrolls a card's own controls
+          through that same mid-screen strip, guaranteeing a visual collision
+          sooner or later (not a one-off). Bottom-right corner is the standard
+          floating-action-button/support-widget spot precisely because real
+          content rarely renders there. PhotoPool's own floating action bar
+          uses bottom-center (left:50%), so this doesn't collide with that
+          either. If you add another `position: fixed` element, check what's
+          already parked in each screen corner/edge before picking a spot. */}
       <button
         onClick={function() { setOpen(true); }}
         aria-label="Report a bug"
         style={{
           position: "fixed",
-          right: 0,
-          top: "50%",
-          transform: "translateY(-50%)",
+          right: 16,
+          bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
           zIndex: 50,
           display: "flex",
           alignItems: "center",
-          gap: 6,
-          padding: "10px 8px 10px 10px",
+          justifyContent: "center",
+          width: 40,
+          height: 40,
           background: "rgba(255,255,255,0.06)",
           border: "1px solid rgba(255,255,255,0.12)",
-          borderRight: "none",
-          borderRadius: "10px 0 0 10px",
+          borderRadius: "50%",
           color: "#bbb",
           cursor: "pointer",
           backdropFilter: "blur(8px)",
@@ -191,6 +224,31 @@ export default function BugReportButton() {
                   marginBottom: 12, outline: "none",
                 }}
               />
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "8px 12px", borderRadius: 10,
+                  background: "#141414", border: "1px solid #2a2a2a",
+                  color: "#aaa", fontSize: 12, fontWeight: 600,
+                  cursor: "pointer",
+                }}>
+                  <Paperclip size={13} />
+                  {screenshot ? screenshot.name : "Attach a screenshot"}
+                  <input type="file" accept="image/*" onChange={handleScreenshotPick} style={{ display: "none" }} />
+                </label>
+                {screenshot && (
+                  <button
+                    onClick={function() { setScreenshot(null); }}
+                    style={{
+                      marginLeft: 8, background: "none", border: "none",
+                      color: "#666", fontSize: 12, cursor: "pointer", textDecoration: "underline",
+                    }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
 
               {!user && (
                 <input

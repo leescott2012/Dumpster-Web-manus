@@ -36,7 +36,14 @@ export const config = { runtime: "nodejs", maxDuration: 30, memory: 512 };
 var BUCKET = "workspace-uploads";
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-interface InPhoto { id: string; url: string; category?: string }
+interface InPhoto {
+  id: string; url: string; category?: string;
+  // AI-generated specific label (photo.alt in the UI, e.g. "Matte black G-Wagon").
+  alt?: string;
+  // Duplicate-detection signature only — never GPS/camera/lens (those stay
+  // client-local, see client/src/lib/photoData.ts PhotoMeta).
+  meta?: { fileSize?: number; width?: number; height?: number };
+}
 interface InDump { id: string; title?: string; subtitle?: string; photos: InPhoto[] }
 interface InBody { dumps: InDump[]; pool: InPhoto[] }
 
@@ -104,7 +111,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     // 1) Collect every unique photo (dump photos + pool), upload base64, upsert.
     var seen: Record<string, boolean> = {};
-    var photoRows: Array<{ id: string; user_id: string; url: string; category: string; order: number }> = [];
+    var photoRows: Array<{ id: string; user_id: string; url: string; category: string; label: string | null; order: number; dup_meta: { fileSize?: number; width?: number; height?: number } | null }> = [];
     var idMap: Record<string, string> = {}; // localId -> dbId
     var order = 0;
     var all: InPhoto[] = [];
@@ -124,7 +131,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         url = uploaded;
       }
       if (!url) continue;
-      photoRows.push({ id: dbId, user_id: userId, url: url, category: ph.category || "", order: order++ });
+      // Allowlist only the 3 dup-signature fields — never trust/forward the
+      // whole client object (GPS/camera/lens must never reach the server).
+      var dupMeta = ph.meta
+        ? { fileSize: ph.meta.fileSize, width: ph.meta.width, height: ph.meta.height }
+        : null;
+      photoRows.push({ id: dbId, user_id: userId, url: url, category: ph.category || "", label: ph.alt || null, order: order++, dup_meta: dupMeta });
     }
 
     // SECURITY: the service role bypasses RLS, so we must manually ensure none
@@ -201,9 +213,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     //    pool forever unless we prune it here (this is the explicit photo
     //    deletion the v1 note deferred). SAFETY: only the caller's own rows,
     //    only ids absent from this payload, and only when the payload actually
-    //    carried photos (photoRows.length > 0) — so a data-URL-only or racy
-    //    empty payload can never wipe the account.
-    if (photoRows.length > 0) {
+    //    carried photo entries (all.length > 0) — so a racy empty payload can
+    //    never wipe the account. Gating on `all` (what the client sent) rather
+    //    than `photoRows` (what survived upload) matters: a delete that leaves
+    //    every remaining photo already-synced still has photoRows entries, but
+    //    a round where uploads happened to fail shouldn't silently mean "there
+    //    were no photos" and skip pruning what the user actually deleted.
+    if (all.length > 0) {
       var existingP = await supabaseAdmin.from("photos").select("id").eq("user_id", userId);
       if (!existingP.error && existingP.data) {
         var keepPhotoIds: Record<string, boolean> = {};
