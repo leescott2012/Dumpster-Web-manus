@@ -76,7 +76,7 @@ export default function CreditsBadge({ onCreditsClick, onAuthClick }: CreditsBad
           onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; }}
           onMouseLeave={function(e) { e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.25)"; }}
         >
-          <LayoutDashboard size={13} /> Dashboard
+          <LayoutDashboard size={13} /> <span className="owner-dashboard-label">Dashboard</span>
         </a>
       )}
     <button

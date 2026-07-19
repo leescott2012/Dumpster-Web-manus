@@ -246,3 +246,14 @@ body {
     }
   }
 }
+
+/* Top nav overflows on narrow phones for the owner account: DUMPSTER label +
+   Dashboard pill + credits pill + connections/bell/menu buttons don't fit
+   under ~430px, clipping the last icon off-screen. Drop the Dashboard pill's
+   text (icon stays) to claw back width — it's owner-only, so this never
+   affects a real user's nav. */
+@media (max-width: 430px) {
+  .owner-dashboard-label {
+    display: none;
+  }
+}
