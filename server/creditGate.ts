@@ -11,10 +11,13 @@
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import { createClient } from "@supabase/supabase-js";
-import { deductCredits } from "./supabaseAdmin.js";
+import { deductCredits, addCredits } from "./supabaseAdmin.js";
 import { enforceRateLimit } from "./rateLimit.js";
 import { checkBudget, recordCost } from "./dailyBudget.js";
 import { captureServerError } from "./sentry.js";
+
+/** No-op refund for gates that never deducted anything. */
+async function noopRefund(): Promise<void> {}
 
 var supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 var supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "";
@@ -59,7 +62,7 @@ export async function checkCredits(
   req: IncomingMessage,
   res: ServerResponse,
   action: string
-): Promise<{ userId: string | null; proceed: boolean }> {
+): Promise<{ userId: string | null; proceed: boolean; refund: () => Promise<void> }> {
   // 1) Auth required — no more guest-mode AI calls
   var userId = await getUserFromRequest(req);
   if (!userId) {
@@ -68,16 +71,16 @@ export async function checkCredits(
       error: "Sign in to use AI features.",
       code: "auth_required",
     }));
-    return { userId: null, proceed: false };
+    return { userId: null, proceed: false, refund: noopRefund };
   }
 
   // 2) Per-user rate limit
   var rlOk = await enforceRateLimit(req, res, action, userId);
-  if (!rlOk) return { userId: userId, proceed: false };
+  if (!rlOk) return { userId: userId, proceed: false, refund: noopRefund };
 
   // 3) Global daily budget
   var budgetOk = await checkBudget(res);
-  if (!budgetOk) return { userId: userId, proceed: false };
+  if (!budgetOk) return { userId: userId, proceed: false, refund: noopRefund };
 
   // 4) Credit balance
   //
@@ -92,6 +95,7 @@ export async function checkCredits(
   // preview/development for local testing.
   var isProd = (process.env.VERCEL_ENV || process.env.NODE_ENV) === "production";
   var creditsDisabled = !isProd && process.env.DISABLE_CREDIT_LIMIT === "1";
+  var refund = noopRefund;
   if (!creditsDisabled) {
     var cost = COSTS[action] || 2;
     var result = await deductCredits(userId, action, cost);
@@ -103,8 +107,22 @@ export async function checkCredits(
         remaining: result.remaining,
         cost: cost,
       }));
-      return { userId: userId, proceed: false };
+      return { userId: userId, proceed: false, refund: noopRefund };
     }
+    // Deduction succeeded — give the caller a way to undo it if the AI call
+    // that follows fails or errors out (found 2026-07-18: credits were
+    // deducted before the Claude call with no rollback on failure, so a
+    // timeout/rate-limit/error on Anthropic's side silently charged the user
+    // for nothing).
+    var deductedUserId = userId;
+    refund = async function() {
+      try {
+        await addCredits(deductedUserId, cost, "refund_" + action);
+      } catch (e) {
+        console.warn("[creditGate] refund failed:", e);
+        captureServerError(e, "creditGate.refund", { action: action, userId: deductedUserId });
+      }
+    };
   }
 
   // Record cost against today's budget (fire-and-forget) — keep this even
@@ -114,7 +132,7 @@ export async function checkCredits(
     captureServerError(e, "creditGate.recordCost", { action: action, userId: userId });
   });
 
-  return { userId: userId, proceed: true };
+  return { userId: userId, proceed: true, refund: refund };
 }
 
 /**
@@ -128,24 +146,25 @@ export async function checkAutoCredits(
   req: IncomingMessage,
   res: ServerResponse,
   action: string
-): Promise<{ userId: string | null; proceed: boolean }> {
+): Promise<{ userId: string | null; proceed: boolean; refund: () => Promise<void> }> {
   var userId = await getUserFromRequest(req);
   if (!userId) {
     res.writeHead(401, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Sign in required.", code: "auth_required" }));
-    return { userId: null, proceed: false };
+    return { userId: null, proceed: false, refund: noopRefund };
   }
 
   var rlOk = await enforceRateLimit(req, res, action, userId);
-  if (!rlOk) return { userId: userId, proceed: false };
+  if (!rlOk) return { userId: userId, proceed: false, refund: noopRefund };
 
   var budgetOk = await checkBudget(res);
-  if (!budgetOk) return { userId: userId, proceed: false };
+  if (!budgetOk) return { userId: userId, proceed: false, refund: noopRefund };
 
   recordCost(action).catch(function(e) {
     console.warn("[creditGate] recordCost failed:", e);
     captureServerError(e, "creditGate.recordCost", { action: action, userId: userId });
   });
 
-  return { userId: userId, proceed: true };
+  // No credits were deducted (system-initiated action) — nothing to refund.
+  return { userId: userId, proceed: true, refund: noopRefund };
 }

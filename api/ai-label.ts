@@ -35,5 +35,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     : await checkCredits(req, res, "ai_label");
   if (!gate.proceed) return;
 
-  return handleAILabel(req, res, body);
+  try {
+    await handleAILabel(req, res, body);
+  } finally {
+    if (res.statusCode >= 400) await gate.refund();
+  }
 }
