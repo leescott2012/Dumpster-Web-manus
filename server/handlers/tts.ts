@@ -1,5 +1,12 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { getUserFromRequest } from '../creditGate.js';
+import { enforceRateLimit } from '../rateLimit.js';
+import { captureServerError } from '../sentry.js';
+
+// A GENIUSS spoken reply is documented as 1-3 short sentences; this is a
+// generous ceiling well above any legitimate reply, bounding per-call cost
+// even from a compromised admin session (backend security audit, 2026-07-01).
+const MAX_TTS_CHARS = 2000;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -12,7 +19,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const adminId = process.env.ADMIN_USER_ID;
   if (!adminId || userId !== adminId) return res.status(403).json({ error: 'Forbidden' });
 
+  // Not credit-gated (this is the admin's own tool, not a consumer feature),
+  // but still rate-limited — this endpoint was previously completely ungated,
+  // so a compromised admin session had no per-call cost backstop at all.
+  const allowed = await enforceRateLimit(req, res, "tts", userId);
+  if (!allowed) return;
+
   const { text, voiceId: requestedVoiceId } = req.body;
+  if (typeof text !== 'string' || !text.trim()) {
+    return res.status(400).json({ error: 'text is required' });
+  }
+  if (text.length > MAX_TTS_CHARS) {
+    return res.status(400).json({ error: `text exceeds ${MAX_TTS_CHARS} characters` });
+  }
 
   // Support both ELEVENLABS_API_KEY and ELEVENLABS_API_KEY_2 naming conventions
   const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY_2;
@@ -70,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 'no-store');
     res.send(buffer);
   } catch (error: any) {
-    console.error('TTS error:', error);
+    captureServerError(error, 'tts', { userId });
     res.status(500).json({ error: error.message });
   }
 }

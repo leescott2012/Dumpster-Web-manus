@@ -172,10 +172,9 @@ export default function ArcReactor({ status, isOnline = true }: ArcReactorProps)
                 <motion.div
                   key="thinking"
                   initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="w-6 h-6 border-2 border-[#D4AF37] border-t-transparent rounded-full"
-                  animate={{ rotate: 360 }}
+                  animate={{ opacity: 1, rotate: 360 }}
                   transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
                 />
               ) : (

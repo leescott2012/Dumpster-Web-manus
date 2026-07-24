@@ -29,13 +29,21 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { createHash } from "crypto";
 import { getUserFromRequest } from "../server/creditGate.js";
 import { supabaseAdmin } from "../server/supabaseAdmin.js";
+import { captureServerError } from "../server/sentry.js";
 
 export const config = { runtime: "nodejs", maxDuration: 30, memory: 512 };
 
 var BUCKET = "workspace-uploads";
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-interface InPhoto { id: string; url: string; category?: string }
+interface InPhoto {
+  id: string; url: string; category?: string;
+  // AI-generated specific label (photo.alt in the UI, e.g. "Matte black G-Wagon").
+  alt?: string;
+  // Duplicate-detection signature only — never GPS/camera/lens (those stay
+  // client-local, see client/src/lib/photoData.ts PhotoMeta).
+  meta?: { fileSize?: number; width?: number; height?: number };
+}
 interface InDump { id: string; title?: string; subtitle?: string; photos: InPhoto[] }
 interface InBody { dumps: InDump[]; pool: InPhoto[] }
 
@@ -88,8 +96,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
   if (req.method !== "POST") { res.writeHead(405).end("Method not allowed"); return; }
 
+  var userId: string | null = null;
   try {
-    var userId = await getUserFromRequest(req);
+    userId = await getUserFromRequest(req);
     if (!userId) return json(401, { error: "Sign in to sync.", code: "auth_required" });
 
     var body = await parseBody(req);
@@ -102,7 +111,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     // 1) Collect every unique photo (dump photos + pool), upload base64, upsert.
     var seen: Record<string, boolean> = {};
-    var photoRows: Array<{ id: string; user_id: string; url: string; category: string; order: number }> = [];
+    var photoRows: Array<{ id: string; user_id: string; url: string; category: string; label: string | null; order: number; dup_meta: { fileSize?: number; width?: number; height?: number } | null }> = [];
     var idMap: Record<string, string> = {}; // localId -> dbId
     var order = 0;
     var all: InPhoto[] = [];
@@ -122,7 +131,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         url = uploaded;
       }
       if (!url) continue;
-      photoRows.push({ id: dbId, user_id: userId, url: url, category: ph.category || "", order: order++ });
+      // Allowlist only the 3 dup-signature fields — never trust/forward the
+      // whole client object (GPS/camera/lens must never reach the server).
+      var dupMeta = ph.meta
+        ? { fileSize: ph.meta.fileSize, width: ph.meta.width, height: ph.meta.height }
+        : null;
+      photoRows.push({ id: dbId, user_id: userId, url: url, category: ph.category || "", label: ph.alt || null, order: order++, dup_meta: dupMeta });
     }
 
     // SECURITY: the service role bypasses RLS, so we must manually ensure none
@@ -138,7 +152,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     if (photoRows.length > 0) {
       var pUp = await supabaseAdmin.from("photos").upsert(photoRows, { onConflict: "id" });
-      if (pUp.error) return json(500, { error: "photos upsert failed: " + pUp.error.message });
+      if (pUp.error) {
+        captureServerError(pUp.error, "workspace.photos_upsert", { userId: userId });
+        return json(500, { error: "Failed to save photos" });
+      }
     }
 
     // 2) Upsert dumps.
@@ -158,7 +175,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
     if (dumpRows.length > 0) {
       var dUp = await supabaseAdmin.from("dumps").upsert(dumpRows, { onConflict: "id" });
-      if (dUp.error) return json(500, { error: "dumps upsert failed: " + dUp.error.message });
+      if (dUp.error) {
+        captureServerError(dUp.error, "workspace.dumps_upsert", { userId: userId });
+        return json(500, { error: "Failed to save dumps" });
+      }
     }
 
     // 3) Delete dumps removed locally (+ their links). Photos are untouched.
@@ -181,7 +201,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         .filter(function (l) { return seen[l.photo_id]; });
       if (links.length > 0) {
         var lIns = await supabaseAdmin.from("dump_photos").insert(links);
-        if (lIns.error) return json(500, { error: "dump_photos insert failed: " + lIns.error.message });
+        if (lIns.error) {
+          captureServerError(lIns.error, "workspace.dump_photos_insert", { userId: userId });
+          return json(500, { error: "Failed to save dump layout" });
+        }
       }
     }
 
@@ -190,9 +213,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     //    pool forever unless we prune it here (this is the explicit photo
     //    deletion the v1 note deferred). SAFETY: only the caller's own rows,
     //    only ids absent from this payload, and only when the payload actually
-    //    carried photos (photoRows.length > 0) — so a data-URL-only or racy
-    //    empty payload can never wipe the account.
-    if (photoRows.length > 0) {
+    //    carried photo entries (all.length > 0) — so a racy empty payload can
+    //    never wipe the account. Gating on `all` (what the client sent) rather
+    //    than `photoRows` (what survived upload) matters: a delete that leaves
+    //    every remaining photo already-synced still has photoRows entries, but
+    //    a round where uploads happened to fail shouldn't silently mean "there
+    //    were no photos" and skip pruning what the user actually deleted.
+    if (all.length > 0) {
       var existingP = await supabaseAdmin.from("photos").select("id").eq("user_id", userId);
       if (!existingP.error && existingP.data) {
         var keepPhotoIds: Record<string, boolean> = {};
@@ -209,7 +236,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     return json(200, { ok: true, dumps: dumpRows.length, photos: photoRows.length, totalSent: totalPhotos });
   } catch (err) {
-    var msg = err instanceof Error ? err.message : "Unknown error";
-    return json(500, { error: msg });
+    captureServerError(err, "workspace", { userId: userId });
+    return json(500, { error: "Server error" });
   }
 }

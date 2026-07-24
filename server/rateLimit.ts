@@ -29,11 +29,18 @@ function getRedis(): Redis | null {
 /** Per-action rate limit windows. */
 var LIMITS: Record<string, { count: number; window: "10 m" | "1 m" | "1 h" }> = {
   ai_suggest:  { count: 5,  window: "10 m" }, // heavy: Claude vision with up to 20 images
+  ai_label:    { count: 8,  window: "10 m" }, // heavy: Claude Sonnet vision, up to 12 images/batch
+  ai_label_auto: { count: 3, window: "10 m" }, // system auto-heal of stale/legacy categories — tighter, no user action behind it
   ai_caption:  { count: 20, window: "10 m" },
   ai_chat:     { count: 30, window: "10 m" },
   ai_recycle:  { count: 10, window: "10 m" },
   ig_scrub:    { count: 3,  window: "10 m" }, // expensive scraping
+  tts:         { count: 20, window: "10 m" }, // ElevenLabs cost per call
+  admin_user_detail: { count: 30, window: "10 m" }, // PII/IP lookup — throttle enumeration
   stripe_checkout: { count: 10, window: "1 h" }, // anti-spam
+  check_username: { count: 30, window: "1 m" }, // typed live, needs headroom
+  connection_request: { count: 20, window: "10 m" },
+  dm_send: { count: 30, window: "10 m" },
 };
 
 var limiterCache: Record<string, Ratelimit> = {};

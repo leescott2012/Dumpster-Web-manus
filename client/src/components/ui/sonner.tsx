@@ -5,6 +5,7 @@ var Toaster = function(props: ToasterProps) {
     <Sonner
       theme="dark"
       className="toaster group"
+      offset={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
       style={
         {
           "--normal-bg": "var(--popover)",

@@ -14,5 +14,11 @@ export const config = {
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   var gate = await checkCredits(req, res, "ai_suggest");
   if (!gate.proceed) return;
-  return handleAISuggest(req, res);
+  try {
+    await handleAISuggest(req, res);
+  } finally {
+    // Refund credits if the request didn't actually succeed — no reason to
+    // charge the user for a failed/errored Claude call.
+    if (res.statusCode >= 400) await gate.refund();
+  }
 }

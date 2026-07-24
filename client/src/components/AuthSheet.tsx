@@ -66,7 +66,7 @@ export default function AuthSheet({ open, onClose }: AuthSheetProps) {
             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", color: "#666",
+            cursor: "pointer", color: "#8a8a8a",
           }}>
             <X size={15} />
           </button>
@@ -152,7 +152,7 @@ export default function AuthSheet({ open, onClose }: AuthSheetProps) {
 
           {/* Legal text — links required for Google OAuth verification */}
           <div style={{ textAlign: "center", marginTop: 24, paddingBottom: 20 }}>
-            <span style={{ fontSize: 11, color: "#666", lineHeight: 1.6 }}>
+            <span style={{ fontSize: 11, color: "#8a8a8a", lineHeight: 1.6 }}>
               By continuing, you agree to our{" "}
               <a href="/terms" target="_blank" rel="noopener" style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: 2 }}>
                 Terms of Service

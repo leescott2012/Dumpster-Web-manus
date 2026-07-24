@@ -6,9 +6,11 @@
  * This prevents an attacker from crediting a different account they don't own.
  */
 import type { IncomingMessage, ServerResponse } from "http";
+import { createHash } from "crypto";
 import Stripe from "stripe";
 import { getUserFromRequest } from "../server/creditGate.js";
 import { enforceRateLimit } from "../server/rateLimit.js";
+import { captureServerError } from "../server/sentry.js";
 
 export const config = { runtime: "nodejs", maxDuration: 10, memory: 256 };
 
@@ -43,9 +45,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  var userId: string | null = null;
   try {
     // 1) Auth — pull userId from JWT, never trust the request body
-    var userId = await getUserFromRequest(req);
+    userId = await getUserFromRequest(req);
     if (!userId) {
       res.writeHead(401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Sign in to start checkout.", code: "auth_required" }));
@@ -100,13 +103,25 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       };
     }
 
-    var session = await stripe.checkout.sessions.create(sessionParams);
+    // Idempotency key — collapses accidental duplicate submissions (double
+    // click, client retry on a network blip) within a 5-minute window into
+    // the same Stripe Checkout Session instead of creating a new one each
+    // time. ponytail: window-based key, not per-click — a deliberate second
+    // purchase of the same item within 5 minutes also collapses into the
+    // first session; upgrade path if that ever matters is to have the client
+    // generate and send its own key per click instead of deriving one here.
+    var idempotencyWindowMs = 5 * 60 * 1000;
+    var idempotencyKey = createHash("sha256")
+      .update(`checkout:${userId}:${itemId}:${body.type}:${Math.floor(Date.now() / idempotencyWindowMs)}`)
+      .digest("hex");
+
+    var session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: idempotencyKey });
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ url: session.url }));
   } catch (err) {
-    var msg = err instanceof Error ? err.message : "Unknown error";
+    captureServerError(err, "stripe-checkout", { userId: userId });
     res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: msg }));
+    res.end(JSON.stringify({ error: "Server error" }));
   }
 }

@@ -146,7 +146,7 @@ export default function PhotoPool({
       background: active ? "rgba(var(--accent-rgb),0.15)" : "transparent",
       border: active ? "1px solid var(--accent)" : "1px solid #2a2a2a",
       borderRadius: "100px", padding: "5px 14px", fontSize: "11px",
-      color: active ? "var(--accent)" : "#666", cursor: "pointer",
+      color: active ? "var(--accent)" : "#8a8a8a", cursor: "pointer",
       fontFamily: "inherit", letterSpacing: "0.04em", fontWeight: active ? 600 : 400,
       transition: "all 0.2s", display: "inline-flex", alignItems: "center",
     };
@@ -163,7 +163,7 @@ export default function PhotoPool({
           <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: "4px" }}>
             Tap photos to add them
           </h3>
-          <div style={{ fontSize: "13px", color: "#666", fontStyle: "italic" }}>
+          <div style={{ fontSize: "13px", color: "#8a8a8a", fontStyle: "italic" }}>
             {selectedIds.length + " selected · Tap to select/deselect · Confirm when ready"}
           </div>
           <button onClick={onCancelSelection}
@@ -183,7 +183,7 @@ export default function PhotoPool({
           <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: "4px" }}>
             Tap photos to select for deletion
           </h3>
-          <div style={{ fontSize: "13px", color: "#666", fontStyle: "italic" }}>
+          <div style={{ fontSize: "13px", color: "#8a8a8a", fontStyle: "italic" }}>
             {selectedDeleteIds.length + " selected · Tap to select/deselect · Confirm to delete permanently"}
           </div>
           <button onClick={onCancelDeleteMode}
@@ -279,12 +279,12 @@ export default function PhotoPool({
                   onClick={onEnterDeleteMode}
                   style={{
                     background: "transparent", border: "1px solid #2a2a2a",
-                    borderRadius: "100px", padding: "6px 14px", fontSize: "11px", color: "#666",
+                    borderRadius: "100px", padding: "6px 14px", fontSize: "11px", color: "#8a8a8a",
                     cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
                     display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
                   }}
                   onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
-                  onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
+                  onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#8a8a8a"; }}
                 >
                   <Trash2 size={11} />Select to Delete
                 </button>
@@ -318,7 +318,7 @@ export default function PhotoPool({
             );
           })}
           {usedPhotos.length === 0 && (
-            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "#666", fontSize: "14px", border: "1px dashed #2a2a2a", borderRadius: "10px" }}>
+            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "#8a8a8a", fontSize: "14px", border: "1px dashed #2a2a2a", borderRadius: "10px" }}>
               No photos in dumps yet
             </div>
           )}
@@ -361,12 +361,12 @@ export default function PhotoPool({
                 width: "100%", aspectRatio: size.w + " / " + size.h,
                 borderRadius: "10px", border: "2px dashed #2a2a2a",
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                color: "#666", fontSize: "13px", textAlign: "center", cursor: "pointer",
+                color: "#8a8a8a", fontSize: "13px", textAlign: "center", cursor: "pointer",
                 transition: "all 0.2s", background: "rgba(255,255,255,0.02)",
                 boxSizing: "border-box" as const,
               }}
               onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}
+              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#8a8a8a"; }}
             >
               <Plus size={28} strokeWidth={1.5} />
               <span style={{ marginTop: "6px", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>Add Photos</span>
@@ -374,7 +374,7 @@ export default function PhotoPool({
           )}
 
           {displayPhotos.length === 0 && !selectionMode && filter !== "all" && (
-            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "#666", fontSize: "14px", border: "1px dashed #2a2a2a", borderRadius: "10px" }}>
+            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "#8a8a8a", fontSize: "14px", border: "1px dashed #2a2a2a", borderRadius: "10px" }}>
               {filter === "starred" ? "No starred photos yet" : "No videos yet — upload one"}
             </div>
           )}

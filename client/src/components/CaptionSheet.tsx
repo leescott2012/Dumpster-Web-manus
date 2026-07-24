@@ -196,7 +196,7 @@ export default function CaptionSheet({
               <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
                 AI Captions
               </div>
-              <div style={{ fontSize: 11, color: "#666", marginTop: 1 }}>
+              <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 1 }}>
                 Claude Haiku
               </div>
             </div>
@@ -205,7 +205,7 @@ export default function CaptionSheet({
             width: 32, height: 32, borderRadius: "50%",
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", color: "#666",
+            cursor: "pointer", color: "#8a8a8a",
           }}>
             <X size={16} />
           </button>
@@ -214,7 +214,7 @@ export default function CaptionSheet({
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px calc(32px + env(safe-area-inset-bottom, 0px))" }}>
           {dumps.length === 0 && (
-            <div style={{ padding: "32px 18px", textAlign: "center", color: "#666", fontSize: 13 }}>
+            <div style={{ padding: "32px 18px", textAlign: "center", color: "#8a8a8a", fontSize: 13 }}>
               Create a dump first, then come back to caption it.
             </div>
           )}
@@ -222,7 +222,7 @@ export default function CaptionSheet({
           {dumps.length > 0 && phase === "picker" && (
             <>
               {/* Dump picker */}
-              <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12, fontWeight: 700 }}>
+              <div style={{ fontSize: 11, color: "#8a8a8a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12, fontWeight: 700 }}>
                 Choose a dump
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
@@ -268,7 +268,7 @@ export default function CaptionSheet({
               </div>
 
               {/* Prompt textarea — the main user input */}
-              <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12, fontWeight: 700 }}>
+              <div style={{ fontSize: 11, color: "#8a8a8a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12, fontWeight: 700 }}>
                 What's the caption about? <span style={{ color: "#444", textTransform: "none" as const, letterSpacing: 0 }}>(optional)</span>
               </div>
               <textarea
@@ -290,7 +290,7 @@ export default function CaptionSheet({
               {/* Editable title + category — collapsed by default to keep sheet clean */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
                 <div>
-                  <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6, fontWeight: 700 }}>
+                  <div style={{ fontSize: 10, color: "#8a8a8a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6, fontWeight: 700 }}>
                     Title
                   </div>
                   <input
@@ -306,7 +306,7 @@ export default function CaptionSheet({
                   />
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6, fontWeight: 700 }}>
+                  <div style={{ fontSize: 10, color: "#8a8a8a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6, fontWeight: 700 }}>
                     Category
                   </div>
                   <input
@@ -324,7 +324,7 @@ export default function CaptionSheet({
               </div>
 
               {/* Tone selector */}
-              <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12, fontWeight: 700 }}>
+              <div style={{ fontSize: 11, color: "#8a8a8a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12, fontWeight: 700 }}>
                 Tone
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 24 }}>
@@ -459,7 +459,7 @@ export default function CaptionSheet({
                       onClick={() => handleCopy(cap, i)}
                       style={{
                         background: "transparent", border: "none", cursor: "pointer",
-                        color: copiedIdx === i ? "#22c55e" : "#666",
+                        color: copiedIdx === i ? "#22c55e" : "#8a8a8a",
                         padding: 4, display: "flex", alignItems: "center", flexShrink: 0,
                         transition: "color 0.15s",
                       }}

@@ -14,5 +14,9 @@ export const config = {
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   var gate = await checkCredits(req, res, "ai_chat");
   if (!gate.proceed) return;
-  return handleAIChat(req, res);
+  try {
+    await handleAIChat(req, res);
+  } finally {
+    if (res.statusCode >= 400) await gate.refund();
+  }
 }

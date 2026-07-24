@@ -105,7 +105,7 @@ export default function OutOfCreditsOverlay({ open, action, onClose, onAuthClick
             </button>
             <button onClick={onClose} style={{
               width: "100%", padding: "12px 20px", borderRadius: 12,
-              background: "transparent", border: "1px solid #2a2a2a", color: "#666",
+              background: "transparent", border: "1px solid #2a2a2a", color: "#8a8a8a",
               fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
             }}>
               Not now

@@ -101,30 +101,33 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
       opacity: leaving ? 0 : 1,
       transition: "opacity 0.35s ease",
     }}>
-      {/* Close button — pushed below notch/dynamic island */}
-      <button
-        onClick={dismiss}
-        style={{
-          position: "absolute", top: "calc(env(safe-area-inset-top, 12px) + 12px)", right: 20, zIndex: 2,
-          width: 36, height: 36, borderRadius: "50%",
-          background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          cursor: "pointer", color: "#888", transition: "all 0.15s",
-        }}
-      >
-        <X size={16} />
-      </button>
-
-      {/* Card */}
+      {/* Card — close button is anchored to its corner (not floating loose
+          over the backdrop) so it reads as part of the card it closes. */}
       <div style={{
+        position: "relative",
         maxWidth: 420, width: "100%",
         background: "#0e0e0e", border: "1px solid #1e1e1e",
-        borderRadius: 20, overflow: "hidden",
+        borderRadius: 20, overflow: "visible",
         maxHeight: "calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 48px)",
-        overflowY: "auto",
         transform: leaving ? "scale(0.96)" : "scale(1)",
         transition: "transform 0.35s ease",
       }}>
+        <button
+          onClick={dismiss}
+          aria-label="Close"
+          style={{
+            position: "absolute", top: -14, right: -14, zIndex: 2,
+            width: 32, height: 32, borderRadius: "50%",
+            background: "#1c1c1c", border: "1px solid #2e2e2e",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", color: "#c8c8c8", transition: "all 0.15s",
+          }}
+        >
+          <X size={15} strokeWidth={2.5} />
+        </button>
+
+        <div style={{ borderRadius: 20, overflow: "hidden", overflowY: "auto", maxHeight: "inherit" }}>
         {/* Top accent bar */}
         <div style={{
           height: 3,
@@ -183,7 +186,7 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#e8e8e8", letterSpacing: "-0.01em" }}>
                       {f.title}
                     </div>
-                    <div style={{ fontSize: 11, color: "#666", marginTop: 1 }}>
+                    <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 1 }}>
                       {f.desc}
                     </div>
                   </div>
@@ -244,7 +247,7 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
               onClick={dismiss}
               style={{
                 width: "100%", padding: "12px 20px",
-                background: "transparent", color: "#666",
+                background: "transparent", color: "#8a8a8a",
                 border: "none", borderRadius: 12,
                 fontSize: 12, fontWeight: 500, fontFamily: "inherit",
                 cursor: "pointer", transition: "all 0.15s",
@@ -253,6 +256,7 @@ export default function WelcomeOverlay({ onUploadClick, onTourClick }: WelcomeOv
               Explore on My Own
             </button>
           </div>
+        </div>
         </div>
       </div>
     </div>

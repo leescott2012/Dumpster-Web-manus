@@ -13,5 +13,9 @@ export const config = {
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   var gate = await checkCredits(req, res, "ai_caption");
   if (!gate.proceed) return;
-  return handleAICaption(req, res);
+  try {
+    await handleAICaption(req, res);
+  } finally {
+    if (res.statusCode >= 400) await gate.refund();
+  }
 }

@@ -113,13 +113,13 @@ export default function FindOriginalSheet({ photo, onClose }: FindOriginalSheetP
           <div style={{ background: "#171717", border: "1px solid #232323", borderRadius: 14, padding: 14, marginBottom: 16 }}>
             {hasDate && (
               <div style={{ marginBottom: hasLoc ? 12 : 0 }}>
-                <div style={{ color: "#666", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>Taken</div>
+                <div style={{ color: "#8a8a8a", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>Taken</div>
                 <div style={{ color: "#fff", fontSize: 15, fontWeight: 600 }}>{formatDate(m!.takenAt!)}</div>
               </div>
             )}
             {hasLoc && (
               <div>
-                <div style={{ color: "#666", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>Location</div>
+                <div style={{ color: "#8a8a8a", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>Location</div>
                 <div style={{ color: "#e8e8e8", fontSize: 14 }}>{m!.lat!.toFixed(4)}°, {m!.lng!.toFixed(4)}°</div>
               </div>
             )}

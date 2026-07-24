@@ -19,6 +19,7 @@ export type AnalyticsEvent =
   | "session_start"
   | "photo_uploaded"
   | "photos_scanned"
+  | "photos_auto_relabeled"
   | "dump_exported";
 
 /**

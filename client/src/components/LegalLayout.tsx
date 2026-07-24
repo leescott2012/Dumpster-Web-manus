@@ -64,7 +64,7 @@ export default function LegalLayout({ title, lastUpdated, children }: LegalLayou
           {title}
         </h1>
         <p style={{
-          fontSize: 12, color: "#666", margin: "0 0 36px",
+          fontSize: 12, color: "#8a8a8a", margin: "0 0 36px",
           letterSpacing: "0.04em",
         }}>
           Last updated: {lastUpdated}
@@ -81,7 +81,7 @@ export default function LegalLayout({ title, lastUpdated, children }: LegalLayou
           marginTop: 48, paddingTop: 24,
           borderTop: "1px solid #1a1a1a",
           display: "flex", gap: 18,
-          fontSize: 13, color: "#666",
+          fontSize: 13, color: "#8a8a8a",
         }}>
           <Link href="/privacy" style={{ color: "#888", textDecoration: "none" }}>Privacy</Link>
           <Link href="/terms" style={{ color: "#888", textDecoration: "none" }}>Terms</Link>

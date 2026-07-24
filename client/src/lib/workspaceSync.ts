@@ -29,12 +29,24 @@ function syncEnabled(userId: string | null): userId is string {
   return !!userId;
 }
 
-interface PhotoRow { id: string; url: string; category: string | null; order: number | null; }
-interface DumpRow { id: string; title: string | null; subtitle: string | null; description: string | null; }
+interface PhotoRow {
+  id: string; url: string; category: string | null; label: string | null; order: number | null;
+  dup_meta: { fileSize?: number; width?: number; height?: number } | null;
+}
+interface DumpRow { id: string; title: string | null; subtitle: string | null; description: string | null; public: boolean | null; }
 interface DumpPhotoRow { dump_id: string; photo_id: string; order: number | null; }
 
 function toPhoto(r: PhotoRow): Photo {
-  return { id: r.id, url: r.url, alt: "", isFavorite: false, category: r.category || "" };
+  // dup_meta round-trips only the byte-exact duplicate signature (see
+  // photoDupes.ts) — without this, cross-device/reloaded photos lose their
+  // EXIF fileSize signature and duplicate detection silently falls back to
+  // exact-URL matching, which can never match two distinct uploads.
+  // label round-trips the AI-generated description (photo.alt) — without
+  // this, the scanned description shows once then vanishes on next reload.
+  return {
+    id: r.id, url: r.url, alt: r.label || "", isFavorite: false, category: r.category || "",
+    meta: r.dup_meta || undefined,
+  };
 }
 
 /**
@@ -48,7 +60,7 @@ export async function loadWorkspace(
   try {
     var photosRes = await supabase
       .from("photos")
-      .select("id, url, category, order")
+      .select("id, url, category, label, order, dup_meta")
       .eq("user_id", userId);
     if (photosRes.error) return null;
     var photoRows = (photosRes.data || []) as PhotoRow[];
@@ -56,7 +68,7 @@ export async function loadWorkspace(
 
     var dumpsRes = await supabase
       .from("dumps")
-      .select("id, title, subtitle, description")
+      .select("id, title, subtitle, description, public")
       .eq("user_id", userId);
     if (dumpsRes.error) return null;
     var dumpRows = (dumpsRes.data || []) as DumpRow[];
@@ -100,6 +112,7 @@ export async function loadWorkspace(
         title: d.title || "Untitled",
         subtitle: d.subtitle || d.description || "",
         photos: photos,
+        public: !!d.public,
       };
     });
 
@@ -125,6 +138,13 @@ import { getAuthHeaders } from "./supabase";
 
 function isCloudUrl(url: string) { return url.startsWith("http"); }
 
+// Duplicate-signature fields only — never send GPS/camera/lens/etc to the
+// server (see photoData.ts PhotoMeta; those stay client-local by design).
+function dupMeta(p: Photo) {
+  if (!p.meta || !p.meta.fileSize) return undefined;
+  return { fileSize: p.meta.fileSize, width: p.meta.width, height: p.meta.height };
+}
+
 function serialize(dumps: Dump[], pool: Photo[]) {
   // Data-URL photos are too large for the workspace JSON (hits Vercel's 4.5 MB
   // body limit fast). They live in IndexedDB only; only HTTPS-URL photos sync.
@@ -134,12 +154,12 @@ function serialize(dumps: Dump[], pool: Photo[]) {
         id: d.id, title: d.title, subtitle: d.subtitle,
         photos: d.photos
           .filter(function (p) { return isCloudUrl(p.url); })
-          .map(function (p) { return { id: p.id, url: p.url, category: p.category }; }),
+          .map(function (p) { return { id: p.id, url: p.url, category: p.category, alt: p.alt, meta: dupMeta(p) }; }),
       };
     }),
     pool: pool
       .filter(function (p) { return isCloudUrl(p.url); })
-      .map(function (p) { return { id: p.id, url: p.url, category: p.category }; }),
+      .map(function (p) { return { id: p.id, url: p.url, category: p.category, meta: dupMeta(p) }; }),
   };
 }
 
@@ -151,17 +171,25 @@ export async function saveWorkspaceNow(
   if (!syncEnabled(userId)) return;
   // Client-side wipe guard mirrors the server's — never push an empty workspace.
   if (dumps.length === 0 && pool.length === 0) return;
-  try {
-    var headers = await getAuthHeaders();
-    if (!headers.Authorization) return; // not signed in → nothing to sync
-    await fetch("/api/workspace", {
-      method: "POST",
-      headers: Object.assign({ "Content-Type": "application/json" }, headers),
-      body: JSON.stringify(serialize(dumps, pool)),
-      keepalive: true,
-    });
-  } catch (e) {
-    console.warn("[workspaceSync] save failed:", e);
+  var headers = await getAuthHeaders();
+  if (!headers.Authorization) return; // not signed in → nothing to sync
+  var body = JSON.stringify(serialize(dumps, pool));
+  // One retry — this is the only thing that makes an add/delete durable
+  // (see api/workspace.ts), so a single dropped request otherwise silently
+  // reverts the edit on next load. A network blip shouldn't do that.
+  for (var attempt = 0; attempt < 2; attempt++) {
+    try {
+      var res = await fetch("/api/workspace", {
+        method: "POST",
+        headers: Object.assign({ "Content-Type": "application/json" }, headers),
+        body: body,
+        keepalive: true,
+      });
+      if (res.ok) return;
+    } catch (e) {
+      if (attempt === 1) console.warn("[workspaceSync] save failed after retry:", e);
+    }
+    if (attempt === 0) await new Promise(function (r) { setTimeout(r, 1000); });
   }
 }
 
@@ -170,6 +198,22 @@ export async function saveWorkspaceNow(
  * public HTTPS URL. Returns null when not signed in, the url isn't a data URL,
  * or anything fails — caller keeps the data URL (device-local fallback).
  */
+/** Toggle a dump's public/private flag. Owner-only server-side. */
+export async function setDumpPublic(dumpId: string, isPublic: boolean): Promise<boolean> {
+  try {
+    var headers = await getAuthHeaders();
+    if (!headers.Authorization) return false;
+    var res = await fetch("/api/dump-visibility", {
+      method: "PATCH",
+      headers: Object.assign({ "Content-Type": "application/json" }, headers),
+      body: JSON.stringify({ dumpId: dumpId, public: isPublic }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function uploadPhotoToCloud(id: string, dataUrl: string): Promise<string | null> {
   if (!dataUrl || dataUrl.indexOf("data:") !== 0) return null;
   try {
@@ -210,4 +254,89 @@ export function flushWorkspaceSave(): void {
   if (_timer) { clearTimeout(_timer); _timer = null; }
   var p = _pending; _pending = null;
   if (p) saveWorkspaceNow(p.userId, p.dumps, p.pool);
+}
+
+// ── Archived dump ids ────────────────────────────────────────────────────────
+// Archive state lives client-side as an id list (useCarouselState). Two things
+// used to lose it on re-sign-in:
+//   1. /api/workspace rewrites non-UUID dump ids via normId(), so after a cloud
+//      reload the dumps carry UUIDs the local archive list doesn't contain.
+//   2. The list itself never left the device.
+// normDumpId mirrors the server's normId so the client can store the id a dump
+// WILL have after sync; the list itself is persisted per-user in the otherwise
+// retired user_workspaces table (RLS already scopes rows to auth.uid()).
+
+var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Client mirror of api/workspace.ts normId() — must stay byte-identical. */
+export async function normDumpId(id: string): Promise<string> {
+  if (UUID_RE.test(id)) return id.toLowerCase();
+  var buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode("dumpster:" + id));
+  var bytes = new Uint8Array(buf);
+  var h = "";
+  for (var i = 0; i < bytes.length; i++) h += bytes[i].toString(16).padStart(2, "0");
+  return (
+    h.slice(0, 8) + "-" + h.slice(8, 12) + "-5" + h.slice(13, 16) + "-" +
+    ((parseInt(h.slice(16, 18), 16) & 0x3f) | 0x80).toString(16) + h.slice(18, 20) +
+    "-" + h.slice(20, 32)
+  );
+}
+
+/** Pull the user's archived dump ids from the cloud. Null = none saved / error. */
+export async function loadArchivedDumpIds(userId: string | null): Promise<string[] | null> {
+  if (!syncEnabled(userId)) return null;
+  try {
+    var res = await supabase.from("user_workspaces").select("dumps_json").eq("id", userId).maybeSingle();
+    if (res.error || !res.data) return null;
+    var j = res.data.dumps_json as { archivedDumpIds?: unknown } | unknown[] | null;
+    if (j && !Array.isArray(j) && Array.isArray((j as { archivedDumpIds?: unknown }).archivedDumpIds)) {
+      return ((j as { archivedDumpIds: unknown[] }).archivedDumpIds).filter(function (x) { return typeof x === "string"; }) as string[];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+var _archiveTimer: ReturnType<typeof setTimeout> | null = null;
+var _archivePending: { userId: string; ids: string[] } | null = null;
+
+/** Debounced version of saveArchivedDumpIds — mirrors scheduleWorkspaceSave. */
+export function scheduleArchivedDumpIdsSave(userId: string | null, ids: string[]): void {
+  if (!syncEnabled(userId)) return;
+  _archivePending = { userId: userId, ids: ids };
+  if (_archiveTimer) clearTimeout(_archiveTimer);
+  _archiveTimer = setTimeout(function () {
+    _archiveTimer = null;
+    var p = _archivePending; _archivePending = null;
+    if (p) saveArchivedDumpIds(p.userId, p.ids);
+  }, 2000);
+}
+
+/** Flush a pending archive-id save immediately — call on beforeunload. */
+export function flushArchivedDumpIdsSave(): void {
+  if (_archiveTimer) { clearTimeout(_archiveTimer); _archiveTimer = null; }
+  var p = _archivePending; _archivePending = null;
+  if (p) saveArchivedDumpIds(p.userId, p.ids);
+}
+
+/** Replace the user's cloud archive list. Last write wins (single-user data). */
+export async function saveArchivedDumpIds(userId: string | null, ids: string[]): Promise<void> {
+  if (!syncEnabled(userId)) return;
+  try {
+    // Preserve whatever legacy blob sits in dumps_json (old JSON-sync arrays).
+    var cur = await supabase.from("user_workspaces").select("dumps_json").eq("id", userId).maybeSingle();
+    var existing = cur.data ? cur.data.dumps_json : null;
+    var next: Record<string, unknown> =
+      existing && typeof existing === "object" && !Array.isArray(existing)
+        ? Object.assign({}, existing as Record<string, unknown>)
+        : existing != null ? { legacyDumps: existing } : {};
+    next.archivedDumpIds = ids;
+    var up = await supabase.from("user_workspaces").upsert({
+      id: userId, dumps_json: next, updated_at: new Date().toISOString(),
+    });
+    if (up.error) console.warn("[workspaceSync] archived-ids save failed:", up.error.message);
+  } catch (e) {
+    console.warn("[workspaceSync] archived-ids save failed:", e);
+  }
 }

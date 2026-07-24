@@ -337,16 +337,22 @@ export default function PhotoCard({
         </div>
       )}
 
-      {/* Category label — bottom gradient */}
-      <div style={{
-        position: "absolute", bottom: 0, left: 0, right: 0,
-        background: "linear-gradient(transparent, rgba(0,0,0,0.85))",
-        padding: "24px 10px 8px", fontSize: "9px", fontWeight: 500,
-        letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "#999",
-        pointerEvents: "none",
-      }}>
-        {photo.category}
-      </div>
+      {/* Specific AI label — bottom gradient. Category ("AUTOMOTIVE") is an
+          internal filter bucket, not user-facing copy; only show the specific
+          description ("Matte black G-Wagon") and hide the bar entirely when a
+          photo hasn't been scanned yet (empty alt) rather than fall back to
+          the raw category. */}
+      {photo.alt && (
+        <div style={{
+          position: "absolute", bottom: 0, left: 0, right: 0,
+          background: "linear-gradient(transparent, rgba(0,0,0,0.85))",
+          padding: "24px 10px 8px", fontSize: "9px", fontWeight: 500,
+          letterSpacing: "0.02em", color: "#ccc",
+          pointerEvents: "none",
+        }}>
+          {photo.alt}
+        </div>
+      )}
     </div>
   );
 }

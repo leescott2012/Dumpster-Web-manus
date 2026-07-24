@@ -58,6 +58,10 @@ export interface Dump {
   /** Valet chat history for this dump — last 20 messages.
    *  Stored on the dump itself so it syncs across devices via workspace JSON. */
   chatHistory?: ChatHistoryEntry[];
+  /** Visible to accepted connections when true. Persisted via a dedicated
+   *  PATCH /api/dump-visibility call, not the /api/workspace full-sync payload
+   *  (see workspaceSync.ts / dump-visibility.ts for why). Default false/private. */
+  public?: boolean;
 }
 
 /** One Valet message persisted per-dump (mirrors DumpChatSheet's ChatMessage). */

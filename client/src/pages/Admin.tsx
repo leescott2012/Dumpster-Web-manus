@@ -213,15 +213,38 @@ export default function Admin() {
   // Tracks recent bugs logged via /api/bug-report. Polls on initial load and
   // after errors so the admin always sees fresh entries.
   interface BugReportRow {
-    id: string; user_id: string | null; email: string | null;
+    id: string; user_id: string | null; email: string | null; username: string | null;
     source: string; message: string; error_code: string | null; stack: string | null;
     url: string | null; user_agent: string | null; viewport: string | null;
     status: string; admin_note: string | null;
+    admin_reply: string | null; admin_replied_at: string | null;
     context: unknown;
     created_at: string;
   }
   const [bugs, setBugs] = useState<BugReportRow[]>([]);
   const [bugFilter, setBugFilter] = useState<"all" | "new" | "seen" | "fixed">("new");
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replySending, setReplySending] = useState<string | null>(null);
+
+  const sendReply = useCallback(async function(id: string) {
+    if (!session) return;
+    const text = (replyDrafts[id] || "").trim();
+    if (!text) return;
+    setReplySending(id);
+    try {
+      const res = await fetch("/api/bug-report", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+        body: JSON.stringify({ id, admin_reply: text }),
+      });
+      if (res.ok) {
+        setBugs(prev => prev.map(b => b.id === id ? { ...b, admin_reply: text, admin_replied_at: new Date().toISOString() } : b));
+        setReplyDrafts(prev => { const next = { ...prev }; delete next[id]; return next; });
+      }
+    } finally {
+      setReplySending(null);
+    }
+  }, [session, replyDrafts]);
 
   const fetchBugs = useCallback(async function() {
     if (!session) return;
@@ -1021,11 +1044,17 @@ export default function Admin() {
                       </div>
                     </div>
                     <div className="text-xs text-white break-words mb-2">{b.message}</div>
-                    {(b.email || b.url) && (
+                    {(b.username || b.email || b.url) && (
                       <div className="text-[10px] text-gray-600 mb-2 truncate">
-                        {b.email && <>by {b.email}</>}
-                        {b.email && b.url && <> · </>}
+                        {b.username ? <>by @{b.username}</> : b.email ? <>by {b.email}</> : null}
+                        {(b.username || b.email) && b.url && <> · </>}
                         {b.url && <span className="font-mono">{b.url}</span>}
+                      </div>
+                    )}
+                    {b.admin_reply && (
+                      <div className="text-[10px] text-[#D4AF37]/80 mb-2 p-2 bg-[#D4AF37]/5 border border-[#D4AF37]/15 rounded">
+                        <span className="uppercase tracking-widest text-[9px] text-[#D4AF37]/50 block mb-1">Your reply</span>
+                        {b.admin_reply}
                       </div>
                     )}
                     {b.stack && (
@@ -1051,6 +1080,23 @@ export default function Admin() {
                         </button>
                       )}
                     </div>
+                    {b.user_id && (
+                      <div className="flex gap-2 mt-2">
+                        <input
+                          value={replyDrafts[b.id] || ""}
+                          onChange={e => setReplyDrafts(prev => ({ ...prev, [b.id]: e.target.value }))}
+                          placeholder={b.admin_reply ? "Send another reply…" : "Reply to reporter…"}
+                          className="flex-1 min-w-0 text-[11px] bg-black border border-[#D4AF37]/15 rounded px-2 py-1.5 text-white placeholder-gray-600 focus:outline-none focus:border-[#D4AF37]/40"
+                        />
+                        <button
+                          onClick={() => sendReply(b.id)}
+                          disabled={!(replyDrafts[b.id] || "").trim() || replySending === b.id}
+                          className="text-[10px] uppercase tracking-widest px-2 py-1 border border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          {replySending === b.id ? "..." : "Send"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1082,7 +1128,7 @@ export default function Admin() {
               cpuUsage: 12,
               memoryUsage: 24,
               synapseLatency: 18,
-              satelliteStatus: 'online'
+              satelliteStatus: 'secured'
             }}
           />
 

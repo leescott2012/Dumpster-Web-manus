@@ -10,6 +10,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getUserFromRequest } from "../creditGate.js";
 import { supabaseAdmin } from "../supabaseAdmin.js";
+import { enforceRateLimit } from "../rateLimit.js";
+import { captureServerError } from "../sentry.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).end();
@@ -28,6 +30,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (callerId !== adminId) {
     return res.status(403).json({ error: "Forbidden." });
   }
+
+  // Unlike every AI endpoint, this PII/IP lookup had no rate limit at all
+  // (backend security audit, 2026-07-01) — a compromised admin session could
+  // enumerate every user's activity/IP with no throttle.
+  const allowed = await enforceRateLimit(req, res, "admin_user_detail", callerId);
+  if (!allowed) return;
 
   const { userId } = req.query;
   if (!userId || typeof userId !== "string") {
@@ -72,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ activity, credits, last_ip: lastIp });
 
   } catch (err) {
-    console.error("[admin-user-detail] error:", err);
+    captureServerError(err, "admin-user-detail", { userId: callerId });
     return res.status(500).json({ error: "Internal error" });
   }
 }

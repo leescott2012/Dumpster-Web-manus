@@ -178,7 +178,7 @@ export default function RecycleSheet({
             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", color: "#666",
+            cursor: "pointer", color: "#8a8a8a",
           }}>
             <X size={15} />
           </button>
@@ -215,7 +215,7 @@ export default function RecycleSheet({
                 </div>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: "#e8e8e8" }}>Manual Pick</div>
-                  <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>Browse the pool and choose</div>
+                  <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 2 }}>Browse the pool and choose</div>
                 </div>
               </button>
 
@@ -242,7 +242,7 @@ export default function RecycleSheet({
                 </div>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: "#e8e8e8" }}>Let AI Choose</div>
-                  <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 2 }}>
                     {pool.length === 0 ? "Pool is empty" : "Best fit based on the dump's vibe"}
                   </div>
                 </div>
@@ -253,7 +253,7 @@ export default function RecycleSheet({
           {/* Phase: manual — pool grid */}
           {phase === "manual" && (
             <>
-              <div style={{ fontSize: 12, color: "#666", marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: "#8a8a8a", marginBottom: 14 }}>
                 {"Tap a photo to swap it in · " + pool.length + " available"}
               </div>
               {pool.length === 0 && (
@@ -338,7 +338,7 @@ export default function RecycleSheet({
                   </div>
 
                   {/* Arrow */}
-                  <div style={{ fontSize: 20, color: "#666" }}>{"→"}</div>
+                  <div style={{ fontSize: 20, color: "#8a8a8a" }}>{"→"}</div>
 
                   {/* New photo */}
                   <div style={{ textAlign: "center" }}>

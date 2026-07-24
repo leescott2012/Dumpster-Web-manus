@@ -5,21 +5,86 @@
   "framework": null,
   "installCommand": "pnpm install --no-frozen-lockfile || npm install",
   "rewrites": [
-    { "source": "/api/admin-stats", "destination": "/api/admin?fn=admin-stats" },
-    { "source": "/api/admin-user-detail", "destination": "/api/admin?fn=admin-user-detail" },
-    { "source": "/api/bug-report", "destination": "/api/admin?fn=bug-report" },
-    { "source": "/api/genius-chat", "destination": "/api/admin?fn=genius-chat" },
-    { "source": "/api/tts", "destination": "/api/admin?fn=tts" },
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/admin-stats",
+      "destination": "/api/admin?fn=admin-stats"
+    },
+    {
+      "source": "/api/admin-user-detail",
+      "destination": "/api/admin?fn=admin-user-detail"
+    },
+    {
+      "source": "/api/bug-report",
+      "destination": "/api/admin?fn=bug-report"
+    },
+    {
+      "source": "/api/genius-chat",
+      "destination": "/api/admin?fn=genius-chat"
+    },
+    {
+      "source": "/api/tts",
+      "destination": "/api/admin?fn=tts"
+    },
+    {
+      "source": "/api/scrub-instagram",
+      "destination": "/api/ig-scrub"
+    },
+    {
+      "source": "/api/check-username",
+      "destination": "/api/social?fn=check-username"
+    },
+    {
+      "source": "/api/connections",
+      "destination": "/api/social?fn=connections"
+    },
+    {
+      "source": "/api/dm",
+      "destination": "/api/social?fn=dm"
+    },
+    {
+      "source": "/api/notifications",
+      "destination": "/api/social?fn=notifications"
+    },
+    {
+      "source": "/api/dump-visibility",
+      "destination": "/api/social?fn=dump-visibility"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ],
   "functions": {
-    "api/ai-suggest.ts": { "maxDuration": 60, "memory": 1024 },
-    "api/ai-caption.ts": { "maxDuration": 30, "memory": 512 },
-    "api/ig-scrub.ts": { "maxDuration": 60, "memory": 512 },
-    "api/ai-chat.ts": { "maxDuration": 30, "memory": 512 },
-    "api/stripe-checkout.ts": { "maxDuration": 10, "memory": 256 },
-    "api/stripe-webhook.ts": { "maxDuration": 15, "memory": 256 },
-    "api/admin.ts": { "maxDuration": 60 }
+    "api/ai-suggest.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "api/ai-caption.ts": {
+      "maxDuration": 30,
+      "memory": 512
+    },
+    "api/ig-scrub.ts": {
+      "maxDuration": 60,
+      "memory": 512
+    },
+    "api/ai-chat.ts": {
+      "maxDuration": 30,
+      "memory": 512
+    },
+    "api/stripe-checkout.ts": {
+      "maxDuration": 10,
+      "memory": 256
+    },
+    "api/stripe-webhook.ts": {
+      "maxDuration": 15,
+      "memory": 256
+    },
+    "api/admin.ts": {
+      "maxDuration": 60
+    }
   }
 }

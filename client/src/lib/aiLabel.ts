@@ -23,15 +23,18 @@ async function prepareUrl(url: string): Promise<string> {
   return url; // http(s) — sent by reference, server fetches it
 }
 
-async function scanBatch(batch: ScanInput[]): Promise<PhotoLabel[]> {
+async function scanBatch(batch: ScanInput[], auto: boolean): Promise<PhotoLabel[]> {
   const photos = await Promise.all(
     batch.map(async (p) => ({ id: p.id, url: await prepareUrl(p.url) }))
   );
   const headers = await getAuthHeaders();
+  // One endpoint, two credit-gate modes (auto flag) — see api/ai-label.ts;
+  // Vercel's Hobby plan caps a deployment at 12 serverless functions, so this
+  // isn't split into a second route.
   const res = await fetch("/api/ai-label", {
     method: "POST",
     headers: Object.assign({ "Content-Type": "application/json" }, headers),
-    body: JSON.stringify({ photos }),
+    body: JSON.stringify({ photos, auto }),
   });
   if (!res.ok) {
     let msg = "Scan failed";
@@ -42,21 +45,40 @@ async function scanBatch(batch: ScanInput[]): Promise<PhotoLabel[]> {
   return Array.isArray(data.labels) ? data.labels : [];
 }
 
-/**
- * Scan a set of photos, calling `onBatch` after each batch so the UI can apply
- * labels incrementally. Returns all labels once finished. Throws on the first
- * batch failure (callers should toast the message).
- */
-export async function scanPhotos(
+async function scanAll(
   input: ScanInput[],
+  auto: boolean,
   onBatch?: (labels: PhotoLabel[]) => void
 ): Promise<PhotoLabel[]> {
   const all: PhotoLabel[] = [];
   for (let i = 0; i < input.length; i += BATCH_SIZE) {
     const batch = input.slice(i, i + BATCH_SIZE);
-    const labels = await scanBatch(batch);
+    const labels = await scanBatch(batch, auto);
     all.push(...labels);
     if (onBatch && labels.length > 0) onBatch(labels);
   }
   return all;
+}
+
+/**
+ * Scan a set of photos (user-initiated, costs credits), calling `onBatch`
+ * after each batch so the UI can apply labels incrementally. Throws on the
+ * first batch failure (callers should toast the message).
+ */
+export async function scanPhotos(
+  input: ScanInput[],
+  onBatch?: (labels: PhotoLabel[]) => void
+): Promise<PhotoLabel[]> {
+  return scanAll(input, false, onBatch);
+}
+
+/**
+ * Same as scanPhotos but free to the user — for system-initiated healing of
+ * photos stuck with a stale/legacy category.
+ */
+export async function autoScanPhotos(
+  input: ScanInput[],
+  onBatch?: (labels: PhotoLabel[]) => void
+): Promise<PhotoLabel[]> {
+  return scanAll(input, true, onBatch);
 }

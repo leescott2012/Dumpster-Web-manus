@@ -3,6 +3,7 @@ import { INITIAL_DUMPS, INITIAL_POOL, IS_OWNER, type Dump, type Photo } from "@/
 import { nanoid } from "nanoid";
 import type { SuggestedCluster } from "@/components/AISuggestSheet";
 import { idbGet, idbSet, idbDel, idbFlush } from "@/lib/localStore";
+import { normDumpId } from "@/lib/workspaceSync";
 
 // ── localStorage persistence ───────────────────────────────────────────────
 
@@ -12,6 +13,11 @@ var SK_POOL  = IS_OWNER ? "dumpster_state_pool_owner" : "dumpster_state_pool_gue
 // so the many field-by-field dump reconstructions below can't accidentally drop
 // the archived state on a reorder/move.
 var SK_ARCHIVED = IS_OWNER ? "dumpster_state_archived_owner" : "dumpster_state_archived_guest";
+// Ids of photos the user has confirmed are NOT duplicates, despite matching
+// another photo's signature/hash. Tracked as a small id list (same reasoning
+// as SK_ARCHIVED) so it survives the photo-object reconstructions elsewhere
+// in this file untouched, and persists across sessions (bug report 2026-07-10).
+var SK_DUPE_DISMISSED = IS_OWNER ? "dumpster_state_dupe_dismissed_owner" : "dumpster_state_dupe_dismissed_guest";
 
 function loadSaved<T>(key: string): T | null {
   try {
@@ -103,6 +109,12 @@ export function useCarouselState() {
     return Array.isArray(saved) ? saved : [];
   });
 
+  // Ids of photos the user dismissed as "Not a duplicate" from the flagged badge.
+  var [dupeDismissedIds, rawSetDupeDismissed] = useState<string[]>(function() {
+    var saved = loadSaved<string[]>(SK_DUPE_DISMISSED);
+    return Array.isArray(saved) ? saved : [];
+  });
+
   // Cloud sync (load + debounced save) is orchestrated by Home.tsx via
   // replaceState() and clearDemoContent() so the page can coordinate it with
   // file uploads to Supabase Storage. This hook stays focused on local state.
@@ -110,6 +122,9 @@ export function useCarouselState() {
   // Refs that always track latest state (for beforeunload backup)
   var dumpsRef = useRef(dumps);
   var poolRef = useRef(pool);
+  // Ids of photos uploaded in THIS session — shields them from being dropped
+  // when a cloud workspace load replaces state (see replaceState).
+  var sessionUploadIds = useRef<Set<string>>(new Set());
 
   // Gate: until IndexedDB hydration has run, the mount-time fallback effects
   // below must NOT write — otherwise they'd persist the initial (demo/empty)
@@ -232,7 +247,13 @@ export function useCarouselState() {
       for (cj = 0; cj < newDumps[ci].photos.length; cj++) cloudIds.add(newDumps[ci].photos[cj].id);
     }
     var localOnly = poolRef.current.filter(function(p) {
-      return p.url.startsWith("data:") && !cloudIds.has(p.id);
+      // data: URL = bytes not yet uploaded. sessionUploadIds = added this
+      // session — its bytes may already be in cloud Storage (https URL) while
+      // the pool list referencing it is still waiting on the debounced save;
+      // without this check the load drops exactly those photos (bug report
+      // 2026-07-10). Session-scoped so uploads rehydrated from IndexedDB still
+      // follow the cloud (deletes on other devices don't resurrect).
+      return (p.url.startsWith("data:") || sessionUploadIds.current.has(p.id)) && !cloudIds.has(p.id);
     });
     var mergedPool = localOnly.length > 0 ? newPool.concat(localOnly) : newPool;
     rawSetDumps(newDumps);
@@ -380,8 +401,11 @@ export function useCarouselState() {
       if (!dump) return prev;
       var dumpPhotos = dump.photos.slice();
       setPool(function(prevPool) { return prevPool.concat(dumpPhotos); });
-      // Drop any archive marker for the deleted dump so the set can't leak ids.
-      setArchived(function(prevIds) { return prevIds.filter(function(id) { return id !== dumpId; }); });
+      // Drop any archive marker for the deleted dump so the set can't leak ids
+      // (both the raw id and its normalized cloud twin).
+      normDumpId(dumpId).catch(function() { return dumpId; }).then(function(n) {
+        setArchived(function(prevIds) { return prevIds.filter(function(id) { return id !== dumpId && id !== n; }); });
+      });
       return prev.filter(function(d) { return d.id !== dumpId; }).map(function(d, i) {
         return { id: d.id, number: i + 1, title: d.title, subtitle: d.subtitle, photos: d.photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
       });
@@ -408,6 +432,7 @@ export function useCarouselState() {
   }, []);
 
   var addUploadedPhotos = useCallback(function(newPhotos: Photo[]) {
+    for (var i = 0; i < newPhotos.length; i++) sessionUploadIds.current.add(newPhotos[i].id);
     setPool(function(prev) { return prev.concat(newPhotos); });
   }, []);
 
@@ -438,8 +463,11 @@ export function useCarouselState() {
     });
   }, []);
 
-  // Apply AI scan results — set category (+ alt label) on matching photos in
-  // the pool. Used by the Pool "Scan" button. Unmatched ids are ignored.
+  // Apply AI scan results — set category (+ alt label) on matching photos,
+  // wherever they live (pool AND already-placed-in-a-dump). A photo's category
+  // is a property of the photo itself, not of which list it's currently in, so
+  // a stale/legacy label (e.g. "Object") needs fixing in both places or the
+  // dump-carousel copy never heals. Unmatched ids are ignored.
   var applyPhotoLabels = useCallback(function(labels: Array<{ id: string; category: string; label: string }>) {
     if (!labels || labels.length === 0) return;
     var byId: Record<string, { category: string; label: string }> = {};
@@ -453,6 +481,22 @@ export function useCarouselState() {
         return { ...p, category: l.category || p.category, alt: l.label || p.alt };
       });
       return changed ? next : prev;
+    });
+    setDumps(function(prev) {
+      var anyChanged = false;
+      var next = prev.map(function(d) {
+        var dumpChanged = false;
+        var photos = d.photos.map(function(p) {
+          var l = byId[p.id];
+          if (!l) return p;
+          dumpChanged = true;
+          return { ...p, category: l.category || p.category, alt: l.label || p.alt };
+        });
+        if (!dumpChanged) return d;
+        anyChanged = true;
+        return { ...d, photos: photos };
+      });
+      return anyChanged ? next : prev;
     });
   }, []);
 
@@ -476,6 +520,15 @@ export function useCarouselState() {
     setDumps(function(prev) {
       return prev.map(function(d) {
         return d.id === dumpId ? { ...d, favorited: !d.favorited } : d;
+      });
+    });
+  }, []);
+
+  /** Local-state mirror of a dump's public flag — server write happens in the caller (setDumpPublic in workspaceSync.ts). */
+  var setDumpPublicFlag = useCallback(function(dumpId: string, isPublic: boolean) {
+    setDumps(function(prev) {
+      return prev.map(function(d) {
+        return d.id === dumpId ? { ...d, public: isPublic } : d;
       });
     });
   }, []);
@@ -642,11 +695,59 @@ export function useCarouselState() {
 
   var archiveDump = useCallback(function(dumpId: string) {
     setArchived(function(prev) { return prev.indexOf(dumpId) === -1 ? prev.concat([dumpId]) : prev; });
+    // Cloud sync rewrites non-UUID dump ids (api/workspace.ts normId), so also
+    // store the id this dump will carry after the next cloud reload — without
+    // the twin, a re-sign-in resurrects the dump (bug report 2026-07-14).
+    normDumpId(dumpId).then(function(n) {
+      if (n === dumpId) return;
+      setArchived(function(prev) { return prev.indexOf(n) === -1 ? prev.concat([n]) : prev; });
+    }).catch(function() { /* keep raw id only */ });
   }, [setArchived]);
 
+  var setDupeDismissed = useCallback(function(action: string[] | ((prev: string[]) => string[])) {
+    rawSetDupeDismissed(function(prev) {
+      var next = typeof action === "function" ? (action as (p: string[]) => string[])(prev) : action;
+      persist(SK_DUPE_DISMISSED, next);
+      return next;
+    });
+  }, []);
+
+  // Mark a flagged photo as "not actually a duplicate" — excluded from the
+  // dup badge from now on, persisted per photo (bug report 2026-07-10).
+  var dismissDuplicate = useCallback(function(photoId: string) {
+    setDupeDismissed(function(prev) { return prev.indexOf(photoId) === -1 ? prev.concat([photoId]) : prev; });
+  }, [setDupeDismissed]);
+
   var unarchiveDump = useCallback(function(dumpId: string) {
-    setArchived(function(prev) { return prev.filter(function(id) { return id !== dumpId; }); });
+    normDumpId(dumpId).catch(function() { return dumpId; }).then(function(n) {
+      setArchived(function(prev) { return prev.filter(function(id) { return id !== dumpId && id !== n; }); });
+    });
   }, [setArchived]);
+
+  // Merge cloud-loaded archive ids into the local list (union — id-level
+  // dedup; ids are already normalized by the save path).
+  var mergeArchivedDumpIds = useCallback(function(ids: string[]) {
+    if (!Array.isArray(ids) || ids.length === 0) return;
+    setArchived(function(prev) {
+      var have = new Set(prev);
+      var add = ids.filter(function(id) { return typeof id === "string" && !have.has(id); });
+      return add.length > 0 ? prev.concat(add) : prev;
+    });
+  }, [setArchived]);
+
+  // One-time heal: archive entries saved before id normalization existed hold
+  // only the raw local id — add each entry's normalized twin so dumps reloaded
+  // from the cloud (which carry normalized ids) still count as archived.
+  useEffect(function() {
+    var ids = archivedDumpIds;
+    if (ids.length === 0) return;
+    Promise.all(ids.map(function(id) { return normDumpId(id).catch(function() { return id; }); })).then(function(norms) {
+      var have = new Set(ids);
+      var add = norms.filter(function(n) { return !have.has(n); });
+      if (add.length > 0) mergeArchivedDumpIds(add);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Rate a dump thumbs up/down (or clear)
   var rateDump = useCallback(function(dumpId: string, rating: "up" | "down" | null) {
@@ -662,10 +763,11 @@ export function useCarouselState() {
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,
-    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, replacePhotoUrl, applyPhotoLabels, renameDump,
+    toggleFavorite, toggleDumpFavorite, setDumpPublicFlag, addUploadedPhotos, replacePhotoUrl, applyPhotoLabels, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto,
     setDumpChatHistory,
-    archivedDumpIds, archiveDump, unarchiveDump,
+    archivedDumpIds, archiveDump, unarchiveDump, mergeArchivedDumpIds,
+    dupeDismissedIds, dismissDuplicate,
   };
 }

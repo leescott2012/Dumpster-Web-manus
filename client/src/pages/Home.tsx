@@ -5,6 +5,7 @@
  * No rules, no onboarding hints. App name: Dumpster.
  */
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { DragProvider, useDrag } from "@/contexts/DragContext";
 import { useCarouselState } from "@/hooks/useCarouselState";
 import DumpStrip from "@/components/DumpStrip";
@@ -14,7 +15,7 @@ import PhotoContextMenu from "@/components/PhotoContextMenu";
 import FindOriginalSheet from "@/components/FindOriginalSheet";
 import DragGhost from "@/components/DragGhost";
 import type { Photo } from "@/lib/photoData";
-import { Plus, RotateCcw, Sparkles, Menu } from "lucide-react";
+import { Plus, Sparkles, Menu, Users } from "lucide-react";
 import { toast } from "sonner";
 import { nanoid } from "nanoid";
 import AISuggestSheet, { type SuggestedCluster } from "@/components/AISuggestSheet";
@@ -28,6 +29,9 @@ import RecycleSheet from "@/components/RecycleSheet";
 import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
 import AuthSheet from "@/components/AuthSheet";
+import UsernameGateModal from "@/components/UsernameGateModal";
+import NotificationBell from "@/components/NotificationBell";
+import ConnectionsPanel from "@/components/ConnectionsPanel";
 import CreditsSheet from "@/components/CreditsSheet";
 import BugReportButton from "@/components/BugReportButton";
 import CreditsBadge from "@/components/CreditsBadge";
@@ -37,24 +41,34 @@ import GuidedTour, { isTourCompleted } from "@/components/GuidedTour";
 import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions, archiveCaptionsByText } from "@/lib/captionPool";
-import { findDuplicatePhotoIds } from "@/lib/photoDupes";
+import { findDuplicatePhotoIds, hashMissingPhotos } from "@/lib/photoDupes";
 import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
-import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud } from "@/lib/workspaceSync";
-import { scanPhotos } from "@/lib/aiLabel";
+import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, scheduleArchivedDumpIdsSave, flushArchivedDumpIdsSave, setDumpPublic } from "@/lib/workspaceSync";
+import { scanPhotos, autoScanPhotos } from "@/lib/aiLabel";
 import { track } from "@/lib/analytics";
+import { logBug } from "@/lib/bugLogger";
+
+// Mirror of CATEGORIES in server/aiLabel.ts — used to decide whether a pool
+// photo's existing category is a real AI label or a stale/legacy value that
+// should be re-scanned. Keep in sync with the server list.
+var VALID_CATEGORIES = [
+  "AUTOMOTIVE", "SELFIE", "NIGHTLIFE", "DINING", "FITNESS", "TRAVEL",
+  "ARCHITECTURE", "ART", "FASHION", "STUDIO", "CULTURE", "LIFESTYLE",
+];
 
 function HomeContent() {
   var {
-    dumps, pool, resetAll, clearDemoContent, replaceState,
+    dumps, pool, clearDemoContent, replaceState,
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,
-    toggleFavorite, toggleDumpFavorite, addUploadedPhotos, replacePhotoUrl, applyPhotoLabels, renameDump,
+    toggleFavorite, toggleDumpFavorite, setDumpPublicFlag, addUploadedPhotos, replacePhotoUrl, applyPhotoLabels, renameDump,
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto, setDumpChatHistory,
-    archivedDumpIds, archiveDump, unarchiveDump,
+    archivedDumpIds, archiveDump, unarchiveDump, mergeArchivedDumpIds,
+    dupeDismissedIds, dismissDuplicate,
   } = useCarouselState();
 
   // Split dumps into the active list (shown up top) and the archived list
@@ -79,12 +93,30 @@ function HomeContent() {
   }, [dumps, archivedIdSet, archiveDump, unarchiveDump]);
 
   // Possible-duplicate photo ids, computed across the whole workspace (pool +
-  // every dump) so a re-uploaded photo is flagged wherever it sits.
-  var duplicatePhotoIds = useMemo(function() {
+  // every dump) so a re-uploaded photo is flagged wherever it sits. EXIF
+  // byte-signature matches are instant; perceptual (aHash) matches land a
+  // moment later as photos are hashed in the background (catches re-encoded
+  // uploads whose bytes differ — mobile Safari does this on every upload).
+  var hashCache = useRef<Map<string, string>>(new Map());
+  var [hashVersion, setHashVersion] = useState(0);
+  var allWorkspacePhotos = useMemo(function() {
     var all = pool.slice();
     for (var i = 0; i < dumps.length; i++) all = all.concat(dumps[i].photos);
-    return findDuplicatePhotoIds(all);
+    return all;
   }, [pool, dumps]);
+  useEffect(function() {
+    var cancelled = false;
+    hashMissingPhotos(allWorkspacePhotos, hashCache.current).then(function(added) {
+      if (added && !cancelled) setHashVersion(function(v) { return v + 1; });
+    });
+    return function() { cancelled = true; };
+  }, [allWorkspacePhotos]);
+  var duplicatePhotoIds = useMemo(function() {
+    var raw = findDuplicatePhotoIds(allWorkspacePhotos, hashCache.current);
+    for (var i = 0; i < dupeDismissedIds.length; i++) raw.delete(dupeDismissedIds[i]);
+    return raw;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allWorkspacePhotos, hashVersion, dupeDismissedIds]);
 
   var { dragState, updateDragPosition, endDrag } = useDrag();
 
@@ -94,6 +126,7 @@ function HomeContent() {
     photo: Photo; position: { x: number; y: number }; dumpId?: string;
   } | null>(null);
   var [menuOpen, setMenuOpen] = useState(false);
+  var [connectionsOpen, setConnectionsOpen] = useState(false);
   var [poolTab, setPoolTab] = useState<PoolTab>("photos");
   var [captionCount, setCaptionCount] = useState<number>(function() { return loadCaptions().length; });
   // Refresh caption count when the tab changes (in case caps were added)
@@ -154,7 +187,7 @@ function HomeContent() {
   var [creditsSheetOpen, setCreditsSheetOpen] = useState(false);
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
   var [demoBannerVisible, setDemoBannerVisible] = useState(false);
-  var { user, canAfford } = useAuth();
+  var { user, profile, canAfford, refreshProfile } = useAuth();
 
   // ── AI profile sync — merge captions/taste/rules from cloud on sign-in.
   // Photos and workspace (dumps + pool) are device-local for beta.
@@ -185,7 +218,12 @@ function HomeContent() {
     loadWorkspace(user.id).then(function (ws) {
       if (ws) replaceState(ws.dumps, ws.pool);
     }).catch(function () { /* stay device-local */ });
-  }, [user, replaceState]);
+    // Archive state syncs separately (small id list in user_workspaces) so
+    // archived dumps stay archived across re-sign-ins and devices.
+    loadArchivedDumpIds(user.id).then(function (ids) {
+      if (ids) mergeArchivedDumpIds(ids);
+    }).catch(function () { /* stay device-local */ });
+  }, [user, replaceState, mergeArchivedDumpIds]);
 
   // Push workspace changes to the cloud (debounced) + flush on tab close.
   useEffect(function () {
@@ -198,6 +236,19 @@ function HomeContent() {
     window.addEventListener("beforeunload", onUnload);
     return function () { window.removeEventListener("beforeunload", onUnload); };
   }, [user, dumps, pool]);
+
+  // Push archive-state changes (debounced full-list replace, so unarchive
+  // propagates too). ponytail: last-write-wins across devices; per-id merge if
+  // simultaneous multi-device archiving ever matters.
+  useEffect(function () {
+    if (!user) return;
+    var uid = user.id;
+    if (workspaceLoadedRef.current !== uid) return;
+    scheduleArchivedDumpIdsSave(uid, archivedDumpIds);
+    var onUnload = function () { flushArchivedDumpIdsSave(); };
+    window.addEventListener("beforeunload", onUnload);
+    return function () { window.removeEventListener("beforeunload", onUnload); };
+  }, [user, archivedDumpIds]);
 
   // ── Clear demo/stock content on sign-in.
   // All users share the same localStorage keys (IS_OWNER is build-time, not
@@ -543,14 +594,18 @@ function HomeContent() {
   }, [addUploadedPhotos, replacePhotoUrl, user]);
 
   // Scan pool photos with AI and auto-label them (category + short alt). Only
-  // scans photos that haven't been labeled yet ("" or "Uploaded" category),
+  // scans photos that haven't been labeled yet ("" or "Uploaded" category) or
+  // whose category predates the current taxonomy (e.g. "Object", "Party",
+  // "City" — stale values written by the native app's old filename-guessing
+  // labeler before it switched to server-side Claude Vision on 2026-07-10);
   // skips videos, and applies labels incrementally as each batch returns.
   var handleScanPhotos = useCallback(function() {
     if (scanning) return;
     if (!user) { setAuthSheetOpen(true); toast("Sign in to scan photos"); return; }
     var toScan = pool.filter(function(p) {
       if (p.category === "Video") return false;
-      return p.category === "" || p.category === "Uploaded";
+      if (p.category === "" || p.category === "Uploaded") return true;
+      return VALID_CATEGORIES.indexOf(p.category.toUpperCase()) === -1;
     });
     if (toScan.length === 0) { toast("All photos are already labeled"); return; }
 
@@ -561,26 +616,61 @@ function HomeContent() {
       .then(function(all) {
         track("photos_scanned", { count: all.length });
         toast("Labeled " + all.length + (all.length === 1 ? " photo" : " photos"));
+        // Credits were deducted server-side (creditGate) — refetch so the
+        // header pill doesn't show a stale balance until next reload.
+        refreshProfile();
       })
       .catch(function(e) {
         toast(e && e.message ? e.message : "Scan failed — try again");
       })
       .then(function() { setScanning(false); });
-  }, [scanning, user, pool, applyPhotoLabels]);
+  }, [scanning, user, pool, applyPhotoLabels, refreshProfile]);
+
+  // Auto-heal loop: photos stuck with a stale/legacy category (e.g. "Object",
+  // written by the native app's old filename-guessing labeler before it moved
+  // to server-side Claude Vision) get silently re-scanned at NO charge to the
+  // user's credits, wherever they live (pool or already in a dump — see
+  // applyPhotoLabels). The fix is logged to the bug bin in the same call that
+  // makes it, closing the loop without a separate admin step. Runs once per
+  // session — autoHealTriggeredRef guards against re-firing as state settles.
+  var autoHealTriggeredRef = useRef(false);
+  useEffect(function() {
+    if (!user || autoHealTriggeredRef.current) return;
+    var stale = allWorkspacePhotos.filter(function(p) {
+      if (p.category === "Video") return false;
+      if (p.category === "" || p.category === "Uploaded") return true;
+      return VALID_CATEGORIES.indexOf(p.category.toUpperCase()) === -1;
+    });
+    if (stale.length === 0) return;
+    autoHealTriggeredRef.current = true;
+
+    var before = stale.map(function(p) { return { id: p.id, category: p.category }; });
+    var input = stale.map(function(p) { return { id: p.id, url: p.url }; });
+    autoScanPhotos(input, function(labels) { applyPhotoLabels(labels); })
+      .then(function(all) {
+        track("photos_auto_relabeled", { count: all.length });
+        logBug({
+          source: "auto-relabel",
+          message: "Auto re-scanned " + all.length + " photo(s) stuck with a stale/legacy category — no charge to the user.",
+          context: { before: before, after: all },
+          status: "fixed",
+          silent: true,
+        });
+      })
+      .catch(function(e) {
+        logBug({
+          source: "auto-relabel",
+          message: "Auto re-scan failed: " + (e && e.message ? e.message : "unknown error"),
+          context: { attempted: before },
+          silent: true,
+        });
+      });
+  }, [user, allWorkspacePhotos, applyPhotoLabels]);
 
   var handleAICreateDumps = useCallback(function(clusters: SuggestedCluster[]) {
     createDumpsFromSuggestions(clusters);
     toast("Created " + clusters.length + " AI-suggested dump" + (clusters.length !== 1 ? "s" : ""));
   }, [createDumpsFromSuggestions]);
-
-  var handleReset = useCallback(function() {
-    resetAll();
-    setSelectedPhotoId(null);
-    setContextMenu(null);
-    setSelectionMode(false);
-    setSelectedPoolPhotoIds([]);
-    toast("Reset to original state");
-  }, [resetAll]);
 
   var handleCreateDump = useCallback(function() {
     createNewDump();
@@ -637,6 +727,21 @@ function HomeContent() {
             onCreditsClick={function() { setCreditsSheetOpen(true); }}
             onAuthClick={function() { setAuthSheetOpen(true); }}
           />
+          {user && (
+            <button
+              onClick={function(e) { e.stopPropagation(); setConnectionsOpen(true); }}
+              aria-label="Connections"
+              style={{
+                width: 36, height: 36, borderRadius: 9,
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", color: "#e8e8e8", transition: "all 0.15s",
+              }}
+            >
+              <Users size={16} />
+            </button>
+          )}
+          {user && <NotificationBell />}
           <button
             onClick={function(e) { e.stopPropagation(); setMenuOpen(true); }}
             style={{
@@ -678,7 +783,7 @@ function HomeContent() {
         <h1 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.1, color: "#fff", marginBottom: "16px" }}>
           Build Your <span style={{ color: "var(--accent)" }}>Dumps</span>
         </h1>
-        <p style={{ fontSize: "15px", color: "#666", maxWidth: "640px", lineHeight: 1.7 }}>
+        <p style={{ fontSize: "15px", color: "#8a8a8a", maxWidth: "640px", lineHeight: 1.7 }}>
           Rearrange photos, build new dumps, and experiment with different flows.
           Tap a photo to select it. Tap + to add from the pool.
         </p>
@@ -691,7 +796,7 @@ function HomeContent() {
             return (
               <span key={pill.label} style={{
                 background: "#1a1a1a", border: "1px solid #1e1e1e", borderRadius: "100px",
-                padding: "5px 14px", fontSize: "11px", color: "#666", letterSpacing: "0.04em",
+                padding: "5px 14px", fontSize: "11px", color: "#8a8a8a", letterSpacing: "0.04em",
               }}>
                 <strong style={{ color: "#e8e8e8", fontWeight: 600 }}>{pill.value}</strong> {pill.label}
               </span>
@@ -700,30 +805,37 @@ function HomeContent() {
         </div>
       </header>
 
-      {/* Dump Strips (active, non-archived) */}
-      {activeDumps.map(function(dump) {
-        return (
-          <div key={dump.id} style={{
-            position: "relative",
-            zIndex: (selectionMode || deleteMode) ? 50 : "auto",
-            opacity: (selectionMode || deleteMode) ? 0.3 : 1,
-            transition: "opacity 0.3s",
-            pointerEvents: (selectionMode || deleteMode) ? "none" : "auto",
-          }}>
-            <DumpStrip
-              dump={dump} selectedPhotoId={selectedPhotoId}
-              onSelectPhoto={handleSelectPhoto} onDotsClick={handleDotsClick}
-              onDoubleTapPhoto={handleDoubleTapPhoto} onDropPhoto={handleDropOnDump}
-              onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
-              onRenameDump={renameDump} onPlusClick={handlePlusClick}
-              onMenuClick={function(dumpId) { setActionSheetDumpId(dumpId); }}
-              onCaptionClick={function(dumpId) { if (creditGate("ai_caption")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
-              onUploadFromDevice={handleUploadPhotos}
-              isCustom={!originalDumpIds.includes(dump.id)}
-            />
-          </div>
-        );
-      })}
+      {/* Dump Strips (active, non-archived). AnimatePresence + layout gives
+          archiving a "pop" exit (scale/fade out, remaining cards reflow up)
+          instead of an instant vanish. */}
+      <AnimatePresence initial={false}>
+        {activeDumps.map(function(dump) {
+          return (
+            <motion.div key={dump.id} layout
+              exit={{ opacity: 0, scale: 0.85, y: 12 }}
+              transition={{ duration: 0.25, ease: "easeIn" }}
+              style={{
+                position: "relative",
+                zIndex: (selectionMode || deleteMode) ? 50 : "auto",
+                opacity: (selectionMode || deleteMode) ? 0.3 : 1,
+                transition: "opacity 0.3s",
+                pointerEvents: (selectionMode || deleteMode) ? "none" : "auto",
+              }}>
+              <DumpStrip
+                dump={dump} selectedPhotoId={selectedPhotoId}
+                onSelectPhoto={handleSelectPhoto} onDotsClick={handleDotsClick}
+                onDoubleTapPhoto={handleDoubleTapPhoto} onDropPhoto={handleDropOnDump}
+                onDeleteDump={!originalDumpIds.includes(dump.id) ? handleDeleteDump : undefined}
+                onRenameDump={renameDump} onPlusClick={handlePlusClick}
+                onMenuClick={function(dumpId) { setActionSheetDumpId(dumpId); }}
+                onCaptionClick={function(dumpId) { if (creditGate("ai_caption")) { setCaptionInitialDumpId(dumpId); setCaptionSheetOpen(true); } }}
+                onUploadFromDevice={handleUploadPhotos}
+                isCustom={!originalDumpIds.includes(dump.id)}
+              />
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
 
       {/* Archived dumps — collapsed by default so saved dumps stay out of the
           way but remain one tap from being restored. */}
@@ -740,7 +852,7 @@ function HomeContent() {
             style={{
               display: "flex", alignItems: "center", gap: 8,
               background: "transparent", border: "none", cursor: "pointer",
-              color: "#666", fontSize: "12px", fontWeight: 700, fontFamily: "inherit",
+              color: "#8a8a8a", fontSize: "12px", fontWeight: 700, fontFamily: "inherit",
               letterSpacing: "0.08em", textTransform: "uppercase", padding: "8px 0",
             }}
           >
@@ -799,17 +911,6 @@ function HomeContent() {
         >
           <Plus size={16} /> New Dump
         </button>
-        <button onClick={handleReset} style={{
-          display: "flex", alignItems: "center", gap: "8px",
-          background: "#151515", border: "1px solid #2a2a2a", borderRadius: "10px",
-          padding: "12px 20px", color: "#999", fontSize: "13px", fontWeight: 500,
-          cursor: "pointer", transition: "all 0.2s", fontFamily: "inherit", letterSpacing: "0.04em",
-        }}
-          onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#666"; }}
-          onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; }}
-        >
-          <RotateCcw size={14} /> Reset All
-        </button>
       </div>
 
       </div>{/* end .dumpster-dumps */}
@@ -825,7 +926,7 @@ function HomeContent() {
           <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
           <div style={{
             fontSize: 11, fontWeight: 700, letterSpacing: "0.35em",
-            textTransform: "uppercase" as const, color: "#666",
+            textTransform: "uppercase" as const, color: "#8a8a8a",
             flexShrink: 0,
           }}>
             POOL
@@ -848,7 +949,7 @@ function HomeContent() {
           <h2 style={{ fontSize: "clamp(20px, 2.5vw, 28px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: 4 }}>
             {poolTab === "photos" ? "Available Photos" : "Caption Library"}
           </h2>
-          <div style={{ fontSize: 14, color: "#666", fontStyle: "italic" as const }}>
+          <div style={{ fontSize: 14, color: "#8a8a8a", fontStyle: "italic" as const }}>
             {poolTab === "photos"
               ? pool.length + " available · " + dumps.reduce(function(s, d) { return s + d.photos.length; }, 0) + " in dumps"
               : captionCount + " captions in library"
@@ -895,7 +996,7 @@ function HomeContent() {
           your privacy policy"). */}
       <footer style={{
         maxWidth: "1100px", margin: "0 auto", padding: "40px 32px",
-        textAlign: "center", color: "#666", fontSize: "12px", borderTop: "1px solid #1e1e1e",
+        textAlign: "center", color: "#8a8a8a", fontSize: "12px", borderTop: "1px solid #1e1e1e",
         display: "flex", flexDirection: "column", gap: 10, alignItems: "center",
       }}>
         <div style={{ color: "#888", letterSpacing: "0.02em" }}>
@@ -924,7 +1025,6 @@ function HomeContent() {
         onAISuggest={function() { setAiSheetOpen(true); }}
         onCaptions={function() { if (creditGate("ai_caption")) { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); } }}
         onIGScrub={function() { setIGScrubOpen(true); }}
-        onReset={handleReset}
         onTour={startTour}
         onSignIn={function() { setAuthSheetOpen(true); }}
         dumpCount={dumps.length}
@@ -972,6 +1072,12 @@ function HomeContent() {
         onArchive={handleArchiveDump}
         isArchived={actionSheetDumpId ? archivedIdSet.has(actionSheetDumpId) : false}
         onDelete={function(dumpId) { handleDeleteDump(dumpId); }}
+        onTogglePublic={user ? function(dumpId, next) {
+          setDumpPublicFlag(dumpId, next); // optimistic local update
+          setDumpPublic(dumpId, next).then(function(ok) {
+            if (!ok) setDumpPublicFlag(dumpId, !next); // revert on failure
+          });
+        } : undefined}
       />
       <DumpShareSheet
         open={shareSheetDumpId !== null}
@@ -997,11 +1103,13 @@ function HomeContent() {
         photo={contextMenu ? contextMenu.photo : null}
         position={contextMenu ? contextMenu.position : null}
         dumpId={contextMenu ? contextMenu.dumpId : undefined}
+        isDuplicate={Boolean(contextMenu && duplicatePhotoIds.has(contextMenu.photo.id))}
         onClose={function() { setContextMenu(null); setSelectedPhotoId(null); }}
         onRemove={handleRemove}
         onToggleFavorite={toggleFavorite}
         onRecycle={function(photoId, dumpId) { setRecyclePhotoId(photoId); setRecycleDumpId(dumpId); setContextMenu(null); setSelectedPhotoId(null); }}
         onFindOriginal={function(photo) { setFindOriginalPhoto(photo); setContextMenu(null); setSelectedPhotoId(null); }}
+        onDismissDuplicate={function(photoId) { dismissDuplicate(photoId); setContextMenu(null); setSelectedPhotoId(null); toast("Won't flag this one again"); }}
       />
       <FindOriginalSheet photo={findOriginalPhoto} onClose={function() { setFindOriginalPhoto(null); }} />
       <RecycleSheet
@@ -1017,6 +1125,17 @@ function HomeContent() {
       <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} onVisibilityChange={setDemoBannerVisible} />
       <GuidedTour active={tourActive} onEnd={endTour} />
       <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} />
+      <UsernameGateModal
+        open={!!user && !!profile && !profile.username}
+        onDone={function() { refreshProfile(); }}
+      />
+      {user && (
+        <ConnectionsPanel
+          open={connectionsOpen}
+          onClose={function() { setConnectionsOpen(false); }}
+          myUserId={user.id}
+        />
+      )}
       <CreditsSheet
         open={creditsSheetOpen}
         onClose={function() { setCreditsSheetOpen(false); }}

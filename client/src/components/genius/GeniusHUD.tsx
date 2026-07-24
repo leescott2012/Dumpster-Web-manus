@@ -126,8 +126,7 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, band
 
           {/* Scanning Lines Ring */}
           <motion.div 
-            className="absolute w-[95%] h-[95%] border-[1px] border-[#D4AF37] rounded-full opacity-20"
-            style={{ borderDasharray: '10 20' }}
+            className="absolute w-[95%] h-[95%] border-[1px] border-dashed border-[#D4AF37] rounded-full opacity-20"
             animate={{ rotate: -360 }}
             transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
           />

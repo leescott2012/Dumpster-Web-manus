@@ -2,7 +2,7 @@
  * DumpActionSheet — iOS-style "..." action menu for a dump
  * Actions: Rate, Heart, Valet (AI assistant), Generate Captions, Export/Share, Delete
  */
-import { Heart, Sparkles, Share2, Trash2, X, MessageCircle, ThumbsUp, ThumbsDown, Archive, ArchiveRestore } from "lucide-react";
+import { Heart, Sparkles, Share2, Trash2, X, MessageCircle, ThumbsUp, ThumbsDown, Archive, ArchiveRestore, Globe, Lock } from "lucide-react";
 import type { Dump } from "@/lib/photoData";
 
 interface DumpActionSheetProps {
@@ -18,6 +18,8 @@ interface DumpActionSheetProps {
   onArchive: (dumpId: string) => void;
   isArchived?: boolean;
   onDelete: (dumpId: string) => void;
+  /** Optional — omitted while a dump has no cloud-synced id yet (visibility only applies once a dump exists server-side). */
+  onTogglePublic?: (dumpId: string, next: boolean) => void;
 }
 
 interface ActionRow {
@@ -28,16 +30,22 @@ interface ActionRow {
   danger?: boolean;
   disabled?: boolean;
   onClick: () => void;
+  /** Renders a visible on/off switch instead of relying on the row reading as
+   *  an action — feedback was that flipping public/private looked like every
+   *  other one-shot menu action (Archive, Delete) with no indication it's a
+   *  toggle you can flip back. */
+  toggled?: boolean;
 }
 
 export default function DumpActionSheet({
-  dump, open, onClose, onHeart, onChat, onRate, onThumbsDown, onCaptions, onExport, onArchive, isArchived, onDelete,
+  dump, open, onClose, onHeart, onChat, onRate, onThumbsDown, onCaptions, onExport, onArchive, isArchived, onDelete, onTogglePublic,
 }: DumpActionSheetProps) {
   if (!open || !dump) return null;
 
   var isHearted = Boolean(dump.favorited);
   var hasCaptions = dump.captions && dump.captions.length > 0;
   var currentRating = dump.rating || null;
+  var isPublic = Boolean(dump.public);
 
   var actions: ActionRow[] = [
     {
@@ -77,6 +85,14 @@ export default function DumpActionSheet({
       color: "#e8e8e8",
       onClick: function() { onArchive(dump.id); onClose(); },
     },
+    ...(onTogglePublic ? [{
+      icon: isPublic ? <Globe size={18} /> : <Lock size={18} />,
+      label: isPublic ? "Public" : "Private",
+      sublabel: isPublic ? "Visible to your connections" : "Only you can see this",
+      color: isPublic ? "#4ade80" : "#e8e8e8",
+      onClick: function() { onTogglePublic(dump.id, !isPublic); },
+      toggled: isPublic,
+    } as ActionRow] : []),
     {
       icon: <Trash2 size={18} />,
       label: "Delete Dump",
@@ -143,7 +159,7 @@ export default function DumpActionSheet({
               width: 32, height: 32, borderRadius: "50%", flexShrink: 0, marginLeft: 12,
               background: "#1a1a1a", border: "1px solid #2a2a2a",
               display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: "#666",
+              cursor: "pointer", color: "#8a8a8a",
             }}
           >
             <X size={15} />
@@ -155,7 +171,7 @@ export default function DumpActionSheet({
           display: "flex", alignItems: "center", gap: 12,
           padding: "14px 24px", borderBottom: "1px solid #1a1a1a",
         }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#666", letterSpacing: "0.06em", marginRight: "auto" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#8a8a8a", letterSpacing: "0.06em", marginRight: "auto" }}>
             RATE THIS DUMP
           </div>
           <button
@@ -168,7 +184,7 @@ export default function DumpActionSheet({
               background: currentRating === "up" ? "rgba(74,222,128,0.15)" : "#1a1a1a",
               border: "1px solid " + (currentRating === "up" ? "rgba(74,222,128,0.4)" : "#2a2a2a"),
               display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: currentRating === "up" ? "#4ade80" : "#666",
+              cursor: "pointer", color: currentRating === "up" ? "#4ade80" : "#8a8a8a",
               transition: "all 0.15s",
             }}
           >
@@ -191,7 +207,7 @@ export default function DumpActionSheet({
               background: currentRating === "down" ? "rgba(239,68,68,0.15)" : "#1a1a1a",
               border: "1px solid " + (currentRating === "down" ? "rgba(239,68,68,0.4)" : "#2a2a2a"),
               display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: currentRating === "down" ? "#ef4444" : "#666",
+              cursor: "pointer", color: currentRating === "down" ? "#ef4444" : "#8a8a8a",
               transition: "all 0.15s",
             }}
           >
@@ -260,6 +276,23 @@ export default function DumpActionSheet({
                     </div>
                   )}
                 </div>
+
+                {action.toggled !== undefined && (
+                  // Visual-only indicator — the whole row is already the click
+                  // target (it's a <button>), so this isn't its own control
+                  // (avoids nesting an interactive element inside a button).
+                  <div style={{
+                    width: 32, height: 18, borderRadius: 999, flexShrink: 0,
+                    background: action.toggled ? "#4ade80" : "#333",
+                    position: "relative" as const, transition: "background 0.15s",
+                  }}>
+                    <div style={{
+                      width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                      position: "absolute" as const, top: 2,
+                      left: action.toggled ? 16 : 2, transition: "left 0.15s",
+                    }} />
+                  </div>
+                )}
               </button>
             );
           })}

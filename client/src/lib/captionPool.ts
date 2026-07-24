@@ -157,10 +157,17 @@ export function toggleBanned(id: string): PoolCaption[] {
  * Soft-delete a caption. Tombstones the row (deleted=true) so cloud sync
  * propagates the deletion to other devices and merge-from-cloud doesn't
  * resurrect it. UI's loadCaptions() filters tombstones out.
+ *
+ * Also marks it banned=true — feedback was that "delete" and "never use"
+ * felt like they should be the same action: deleting a caption you didn't
+ * like IS a "don't write like this again" signal, not just "get it out of
+ * my sight". buildTasteBlock() reads banned captions from the raw
+ * (tombstone-inclusive) list specifically so this still reaches the AI
+ * prompt after deletion.
  */
 export function removeCaption(id: string): PoolCaption[] {
   const raw = loadCaptionsRaw();
-  const list = raw.map(c => c.id === id ? { ...c, deleted: true, favorited: false, banned: false } : c);
+  const list = raw.map(c => c.id === id ? { ...c, deleted: true, favorited: false, banned: true } : c);
   saveCaptions(list);
   return list.filter(c => !c.deleted);
 }
@@ -236,7 +243,9 @@ export function buildTasteBlock(): string {
   const profile = loadTasteProfile().trim();
   const rules = loadAIRules().trim();
   const favorites = loadCaptions().filter(c => c.favorited).slice(0, 8);
-  const banned    = loadCaptions().filter(c => c.banned).slice(0, 8);
+  // Raw (tombstone-inclusive) — deleted captions are marked banned too now,
+  // and loadCaptions() would filter them back out before this check ran.
+  const banned    = loadCaptionsRaw().filter(c => c.banned).slice(0, 8);
 
   const parts: string[] = [];
   if (profile) parts.push(`User's aesthetic / taste profile:\n${profile}`);

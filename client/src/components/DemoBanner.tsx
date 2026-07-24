@@ -55,7 +55,7 @@ export default function DemoBanner({ hasUserPhotos, onUploadClick, onVisibilityC
       background: "rgba(14,14,14,0.92)",
       backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
       border: "1px solid #2a2a2a",
-      borderRadius: 100, padding: "6px 8px 6px 14px",
+      borderRadius: 100, padding: "6px 10px 6px 14px",
       boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
       animation: "demoBannerIn 0.4s ease",
     }}>
@@ -95,18 +95,19 @@ export default function DemoBanner({ hasUserPhotos, onUploadClick, onVisibilityC
         Upload yours
       </button>
 
-      {/* Close */}
+      {/* Close — extra marginLeft + larger tap target so it doesn't feel
+          cramped against the upload button (feedback: too tight together) */}
       <button
         onClick={handleDismiss}
         style={{
-          width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+          width: 26, height: 26, marginLeft: 2, borderRadius: "50%", flexShrink: 0,
           background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
           display: "flex", alignItems: "center", justifyContent: "center",
           cursor: "pointer", color: "#555", padding: 0,
           transition: "all 0.15s",
         }}
       >
-        <X size={10} />
+        <X size={11} />
       </button>
 
       {/* Keyframe animation */}
