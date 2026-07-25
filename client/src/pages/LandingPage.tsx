@@ -25,7 +25,10 @@ const HeroShader = memo(function HeroShader() {
   return (
     <div className="lp-hero__shader" aria-hidden="true">
       {webgl2Supported && (
+<<<<<<< HEAD
         <Suspense fallback={null}>
+=======
+>>>>>>> 9bfc85a (fix(web): skip hero ColorPanels shader when WebGL2 is unsupported)
         <ColorPanels
           colors={['#C8A96E', '#8B6F3A', '#d4b87a', '#5a4620']}
           colorBack="#08080800"
@@ -43,7 +46,10 @@ const HeroShader = memo(function HeroShader() {
           rotation={180}
           style={{ width: '100%', height: '100%' }}
         />
+<<<<<<< HEAD
         </Suspense>
+=======
+>>>>>>> 9bfc85a (fix(web): skip hero ColorPanels shader when WebGL2 is unsupported)
       )}
     </div>
   );

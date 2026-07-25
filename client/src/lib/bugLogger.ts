@@ -187,6 +187,8 @@ export function installGlobalBugHandlers(): void {
   window.addEventListener("error", (event) => {
     const stack = event.error instanceof Error ? event.error.stack : undefined;
     if (isNoiseError(stack, event.filename, event.message)) return;
+    // Browser-masked cross-origin error (extension/third-party script): no file, line or stack — nothing to fix.
+    if (event.message === "Script error." && !event.filename && !event.lineno && !event.colno) return;
     // event.error may be null in some browsers (CORS-failed scripts, etc.)
     logBug({
       source:   "unhandled",
