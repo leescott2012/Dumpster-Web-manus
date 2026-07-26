@@ -70,12 +70,15 @@ export default function BugReportButton() {
           },
         }
       );
-      // Also mirror to Supabase bug_reports so it shows on /admin's Bug Inventory.
+      // Also mirror to Supabase bug_reports so it shows on /admin's Bug Inventory,
+      // screenshot included (Sentry only stores it as an attachment there, which
+      // the admin bin can't render) — this is what makes it viewable in-app.
       // Silent: bug button already has its own confirmation UI.
       logBug({
         source: "user-bug-button",
         message: trimmed,
         context: { reporter_email: email.trim() || user?.email || null, name: user?.user_metadata?.full_name || null },
+        screenshot: screenshot || undefined,
         silent: true,
       });
       // Centered + longer than the app default (bottom-center, easy to miss

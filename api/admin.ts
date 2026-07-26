@@ -13,6 +13,7 @@ import adminUserDetail from "../server/handlers/admin-user-detail.js";
 import bugReport from "../server/handlers/bug-report.js";
 import geniusChat from "../server/handlers/genius-chat.js";
 import tts from "../server/handlers/tts.js";
+import sentryFeedback from "../server/handlers/sentry-feedback.js";
 import { captureServerError } from "../server/sentry.js";
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>;
@@ -23,6 +24,7 @@ const ROUTES: Record<string, Handler> = {
   "bug-report": bugReport as Handler,
   "genius-chat": geniusChat as Handler,
   "tts": tts as Handler,
+  "sentry-feedback": sentryFeedback as Handler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

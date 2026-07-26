@@ -37,6 +37,33 @@ interface BugReportBody {
    *  else falls back to the DB default ("new"); this is not a general status
    *  override for user-filed reports. */
   status?:    string;
+  /** Screenshot from the bug-report sheet, base64-encoded (no data: prefix). */
+  screenshot_base64?: string;
+  screenshot_content_type?: string;
+}
+
+const SCREENSHOT_BUCKET = "workspace-uploads"; // reuse the existing public bucket, own "bug-reports/" prefix
+const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
+
+async function uploadScreenshot(base64: string, contentType: string): Promise<string | null> {
+  try {
+    const bytes = Buffer.from(base64, "base64");
+    if (bytes.length > MAX_SCREENSHOT_BYTES) return null;
+    const ext = contentType.split("/")[1]?.split("+")[0] || "png";
+    const path = `bug-reports/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabaseAdmin.storage
+      .from(SCREENSHOT_BUCKET)
+      .upload(path, bytes, { contentType, upsert: false });
+    if (error) {
+      console.error("[bug-report] screenshot upload failed:", error);
+      return null;
+    }
+    const { data } = supabaseAdmin.storage.from(SCREENSHOT_BUCKET).getPublicUrl(path);
+    return data.publicUrl;
+  } catch (e) {
+    console.error("[bug-report] screenshot upload threw:", e);
+    return null;
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -88,6 +115,13 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
   // Self-resolving reports only — see BugReportBody.status comment.
   if (body.status === "fixed") row.status = "fixed";
 
+  if (body.screenshot_base64) {
+    row.screenshot_url = await uploadScreenshot(
+      body.screenshot_base64,
+      body.screenshot_content_type || "image/png"
+    );
+  }
+
   const { data, error } = await supabaseAdmin
     .from("bug_reports")
     .insert(row)
@@ -114,7 +148,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
   let q = supabaseAdmin
     .from("bug_reports")
-    .select("id, user_id, email, source, message, error_code, stack, url, user_agent, viewport, context, status, admin_note, admin_reply, admin_replied_at, created_at, updated_at")
+    .select("id, user_id, email, source, message, error_code, stack, url, user_agent, viewport, context, screenshot_url, status, admin_note, admin_reply, admin_replied_at, created_at, updated_at")
     .order("created_at", { ascending: false })
     .limit(limit);
 
