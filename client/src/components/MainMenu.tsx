@@ -194,9 +194,11 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
         overscrollBehavior: "contain",
         WebkitOverflowScrolling: "touch",
       }}>
-        {/* Header */}
+        {/* Header — top padding reserves the iOS status-bar / Dynamic Island
+            safe area (this panel is position:fixed, inset:0, so it renders
+            under the notch on notch/Dynamic-Island phones without this). */}
         <div style={{
-          padding: "60px 24px 20px",
+          padding: "calc(60px + env(safe-area-inset-top, 0px)) 24px 20px",
           borderBottom: "1px solid #1a1a1a",
           display: "flex", justifyContent: "space-between", alignItems: "flex-start",
           flexShrink: 0,

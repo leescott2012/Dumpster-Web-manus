@@ -307,9 +307,10 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
         )}
       </svg>
 
-      {/* Close button */}
+      {/* Close button — top offset reserves the iOS status-bar / Dynamic
+          Island safe area so it doesn't sit under the notch on narrow phones. */}
       <button onClick={finish} style={{
-        position: "fixed", top: 16, right: 16, zIndex: 10001,
+        position: "fixed", top: "calc(16px + env(safe-area-inset-top, 0px))", right: 16, zIndex: 10001,
         width: 36, height: 36, borderRadius: "50%",
         background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
         display: "flex", alignItems: "center", justifyContent: "center",
