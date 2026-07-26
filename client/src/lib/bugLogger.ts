@@ -33,6 +33,8 @@ export interface BugInput {
    * needing a separate admin PATCH. Omit for anything that still needs eyes.
    */
   status?:     "fixed";
+  /** Screenshot to attach, if any — sent as base64 so the bug bin can show it. */
+  screenshot?: File;
 }
 
 export interface BugToastPayload {
@@ -72,8 +74,16 @@ function getMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+// File -> base64 (no data: prefix) so it can ride along as JSON.
+async function fileToBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
 // Build the wire body — same shape /api/bug-report expects.
-function buildBody(args: BugInput) {
+async function buildBody(args: BugInput) {
   return {
     source:     args.source,
     message:    args.message,
@@ -84,6 +94,8 @@ function buildBody(args: BugInput) {
     viewport:   typeof window !== "undefined" ? `${window.innerWidth}x${window.innerHeight}` : undefined,
     context:    args.context,
     status:     args.status,
+    screenshot_base64:       args.screenshot ? await fileToBase64(args.screenshot) : undefined,
+    screenshot_content_type: args.screenshot?.type || undefined,
   };
 }
 
@@ -102,7 +114,7 @@ function isDupe(args: BugInput): boolean {
   return now - last < 5_000;
 }
 
-async function postBug(body: ReturnType<typeof buildBody>): Promise<boolean> {
+async function postBug(body: Awaited<ReturnType<typeof buildBody>>): Promise<boolean> {
   try {
     // Best-effort attach JWT — endpoint accepts unauth too
     const { data: { session } } = await supabase.auth.getSession();
@@ -129,10 +141,8 @@ async function postBug(body: ReturnType<typeof buildBody>): Promise<boolean> {
 export function logBug(args: BugInput): void {
   if (isDupe(args)) return;
 
-  const body = buildBody(args);
-
   if (args.silent) {
-    void postBug(body);
+    void buildBody(args).then(postBug);
     return;
   }
 
@@ -143,7 +153,7 @@ export function logBug(args: BugInput): void {
     source: args.source,
     message: args.message,
     errorCode: args.errorCode != null ? String(args.errorCode) : undefined,
-    send: () => postBug(body),
+    send: () => buildBody(args).then(postBug),
   });
 }
 
