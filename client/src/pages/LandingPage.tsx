@@ -6,25 +6,38 @@ import './LandingPage.css';
 
 const HeroShader = memo(function HeroShader() {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // ponytail: feature-detect once — @paper-design/shaders-react throws from an
+  // unawaited async init effect when webgl2 is unavailable (blocked GPU,
+  // disabled hw accel, some VMs/RDP), which surfaces as an unhandled promise
+  // rejection and crashes shader init. Skip the shader there instead.
+  const [webgl2Supported] = useState(() => {
+    try {
+      return !!document.createElement('canvas').getContext('webgl2');
+    } catch {
+      return false;
+    }
+  });
   return (
     <div className="lp-hero__shader" aria-hidden="true">
-      <ColorPanels
-        colors={['#C8A96E', '#8B6F3A', '#d4b87a', '#5a4620']}
-        colorBack="#08080800"
-        density={4.2}
-        angle1={0.62}
-        angle2={0.3}
-        length={1.1}
-        edges
-        blur={0.3}
-        fadeIn={0.85}
-        fadeOut={0.35}
-        gradient={0.5}
-        speed={reduced ? 0 : 1.6}
-        scale={1}
-        rotation={180}
-        style={{ width: '100%', height: '100%' }}
-      />
+      {webgl2Supported && (
+        <ColorPanels
+          colors={['#C8A96E', '#8B6F3A', '#d4b87a', '#5a4620']}
+          colorBack="#08080800"
+          density={4.2}
+          angle1={0.62}
+          angle2={0.3}
+          length={1.1}
+          edges
+          blur={0.3}
+          fadeIn={0.85}
+          fadeOut={0.35}
+          gradient={0.5}
+          speed={reduced ? 0 : 1.6}
+          scale={1}
+          rotation={180}
+          style={{ width: '100%', height: '100%' }}
+        />
+      )}
     </div>
   );
 });
