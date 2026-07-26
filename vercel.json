@@ -50,6 +50,10 @@
       "destination": "/api/social?fn=dump-visibility"
     },
     {
+      "source": "/api/iap-verify",
+      "destination": "/api/social?fn=iap-verify"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

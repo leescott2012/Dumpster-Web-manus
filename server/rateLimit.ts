@@ -41,6 +41,7 @@ var LIMITS: Record<string, { count: number; window: "10 m" | "1 m" | "1 h" }> = 
   check_username: { count: 30, window: "1 m" }, // typed live, needs headroom
   connection_request: { count: 20, window: "10 m" },
   dm_send: { count: 30, window: "10 m" },
+  iap_verify: { count: 20, window: "10 m" }, // purchases are rare; generous but not open
 };
 
 var limiterCache: Record<string, Ratelimit> = {};
