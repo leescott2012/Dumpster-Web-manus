@@ -19,6 +19,7 @@ create table if not exists public.bug_reports (
   user_agent  text,
   viewport    text,                       -- "WxH"
   context     jsonb,                      -- free-form extra (request body fragment, state, etc.)
+  screenshot_url text,                    -- public URL in the workspace-uploads bucket, if attached
 
   status      text        not null default 'new',  -- new / seen / fixed / wontfix
   admin_note  text,
@@ -26,6 +27,9 @@ create table if not exists public.bug_reports (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+
+-- Existing tables predate this column — add it if missing.
+alter table public.bug_reports add column if not exists screenshot_url text;
 
 create index if not exists bug_reports_created_at_idx on public.bug_reports(created_at desc);
 create index if not exists bug_reports_status_idx     on public.bug_reports(status);

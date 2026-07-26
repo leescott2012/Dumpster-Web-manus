@@ -18,6 +18,10 @@
       "destination": "/api/admin?fn=bug-report"
     },
     {
+      "source": "/api/sentry-feedback",
+      "destination": "/api/admin?fn=sentry-feedback"
+    },
+    {
       "source": "/api/genius-chat",
       "destination": "/api/admin?fn=genius-chat"
     },

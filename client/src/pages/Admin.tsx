@@ -216,6 +216,7 @@ export default function Admin() {
     id: string; user_id: string | null; email: string | null; username: string | null;
     source: string; message: string; error_code: string | null; stack: string | null;
     url: string | null; user_agent: string | null; viewport: string | null;
+    screenshot_url: string | null;
     status: string; admin_note: string | null;
     admin_reply: string | null; admin_replied_at: string | null;
     context: unknown;
@@ -225,6 +226,39 @@ export default function Admin() {
   const [bugFilter, setBugFilter] = useState<"all" | "new" | "seen" | "fixed">("new");
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replySending, setReplySending] = useState<string | null>(null);
+
+  // ── Sentry feedback screenshot viewer ───────────────────────────────────
+  // Sentry User Feedback attachments only live in Sentry, not in bug_reports.
+  // /api/sentry-feedback proxies the image (needs a bearer token Sentry-side,
+  // so <img src> alone can't load it) given the short ID shown in Sentry
+  // (e.g. "JAVASCRIPT-REACT-1Z").
+  const [sentryShortId, setSentryShortId] = useState("");
+  const [sentryImageUrl, setSentryImageUrl] = useState<string | null>(null);
+  const [sentryLoading, setSentryLoading] = useState(false);
+  const [sentryError, setSentryError] = useState<string | null>(null);
+
+  const fetchSentryFeedbackImage = useCallback(async function() {
+    if (!session || !sentryShortId.trim()) return;
+    setSentryLoading(true);
+    setSentryError(null);
+    if (sentryImageUrl) URL.revokeObjectURL(sentryImageUrl);
+    setSentryImageUrl(null);
+    try {
+      const res = await fetch("/api/sentry-feedback?issue_id=" + encodeURIComponent(sentryShortId.trim()), {
+        headers: { Authorization: "Bearer " + session.access_token },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setSentryError(body.error || `Failed (${res.status})`);
+        return;
+      }
+      setSentryImageUrl(URL.createObjectURL(await res.blob()));
+    } catch (e) {
+      setSentryError(e instanceof Error ? e.message : "Failed to fetch.");
+    } finally {
+      setSentryLoading(false);
+    }
+  }, [session, sentryShortId, sentryImageUrl]);
 
   const sendReply = useCallback(async function(id: string) {
     if (!session) return;
@@ -989,6 +1023,33 @@ export default function Admin() {
             </div>
           </div>
 
+          {/* ── Sentry Feedback Screenshot Viewer ────────────────────────── */}
+          <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl overflow-hidden p-6 mb-6">
+            <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold mb-3">
+              Sentry Feedback Screenshot
+            </div>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={sentryShortId}
+                onChange={(e) => setSentryShortId(e.target.value)}
+                placeholder="Short ID, e.g. JAVASCRIPT-REACT-1Z"
+                className="flex-1 bg-black border border-[#D4AF37]/20 rounded px-3 py-2 text-xs text-white outline-none"
+              />
+              <button
+                onClick={fetchSentryFeedbackImage}
+                disabled={sentryLoading || !sentryShortId.trim()}
+                className="text-[10px] uppercase tracking-widest px-3 py-2 rounded border border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 disabled:opacity-40"
+              >
+                {sentryLoading ? "Loading…" : "View"}
+              </button>
+            </div>
+            {sentryError && <div className="text-[10px] text-red-500">{sentryError}</div>}
+            {sentryImageUrl && (
+              <img src={sentryImageUrl} alt="Sentry feedback screenshot" className="max-h-96 rounded border border-[#D4AF37]/15" />
+            )}
+          </div>
+
           {/* ── Bug Inventory ─────────────────────────────────────────── */}
           <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl overflow-hidden">
             <div className="p-6 border-b border-[#D4AF37]/10 flex items-center justify-between flex-wrap gap-3">
@@ -1044,6 +1105,15 @@ export default function Admin() {
                       </div>
                     </div>
                     <div className="text-xs text-white break-words mb-2">{b.message}</div>
+                    {b.screenshot_url && (
+                      <a href={b.screenshot_url} target="_blank" rel="noopener noreferrer" className="block mb-2">
+                        <img
+                          src={b.screenshot_url}
+                          alt="Attached screenshot"
+                          className="max-h-48 rounded border border-[#D4AF37]/15"
+                        />
+                      </a>
+                    )}
                     {(b.username || b.email || b.url) && (
                       <div className="text-[10px] text-gray-600 mb-2 truncate">
                         {b.username ? <>by @{b.username}</> : b.email ? <>by {b.email}</> : null}
