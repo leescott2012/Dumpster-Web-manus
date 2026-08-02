@@ -29,7 +29,7 @@ import RecycleSheet from "@/components/RecycleSheet";
 import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
 import AuthSheet from "@/components/AuthSheet";
-import UsernameGateModal from "@/components/UsernameGateModal";
+import OnboardingFlow from "@/components/OnboardingFlow";
 import NotificationBell from "@/components/NotificationBell";
 import ConnectionsPanel from "@/components/ConnectionsPanel";
 import CreditsSheet from "@/components/CreditsSheet";
@@ -263,17 +263,27 @@ function HomeContent() {
     clearDemoContent();
   }, [user, clearDemoContent]);
 
+  // First-run setup gate — open until the profile carries a completion stamp.
+  // Existing accounts were backfilled when the column was added, so only new
+  // signups see it.
+  var onboardingOpen = !!user && !!profile && !profile.onboarding_completed_at;
+
   // ── Always keep at least one empty dump visible so users have a target for
   // the "From Pool" / "Add More" twin cards. Without this, a freshly cleared
   // workspace renders as a wall of stats with no upload affordance — beta
   // testers were getting stuck here.
   useEffect(function() {
+    // Skip while onboarding is up: this is the "ghost dump" new users were
+    // landing on — a blank dump built behind the modal that flashes into view
+    // the moment setup closes. Onboarding ends by creating a real dump, so the
+    // affordance this effect exists to provide is already covered by then.
+    if (onboardingOpen) return;
     // Count only active dumps — if every dump is archived the user still needs
     // a visible target to upload into.
     if (activeDumps.length === 0) {
       createNewDump();
     }
-  }, [activeDumps.length, createNewDump]);
+  }, [activeDumps.length, createNewDump, onboardingOpen]);
 
   /**
    * Credit gate — checks if user can afford an AI action.
@@ -1125,8 +1135,14 @@ function HomeContent() {
       <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} onVisibilityChange={setDemoBannerVisible} />
       <GuidedTour active={tourActive} onEnd={endTour} />
       <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} />
-      <UsernameGateModal
-        open={!!user && !!profile && !profile.username}
+      <OnboardingFlow
+        open={onboardingOpen}
+        poolCount={pool.length}
+        hasUsername={!!profile && !!profile.username}
+        userId={user ? user.id : null}
+        onUploadPhotos={handleUploadPhotos}
+        onAICreateDumps={function() { setAiSheetOpen(true); }}
+        onCreateDump={handleCreateDump}
         onDone={function() { refreshProfile(); }}
       />
       {user && (
