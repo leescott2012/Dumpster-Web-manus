@@ -90,7 +90,7 @@ export default function LegalLayout({ title, lastUpdated, children }: LegalLayou
               Contact
             </a>
           </div>
-          <span style={{ fontSize: 12, color: "#6a6a6a" }}>© 2026 Ariya One LLC, d/b/a Chamillion Collective</span>
+          <span style={{ fontSize: 12, color: "#6a6a6a" }}>© 2026 Chamillion Collective</span>
         </div>
       </main>
     </div>
