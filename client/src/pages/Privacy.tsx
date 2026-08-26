@@ -17,11 +17,15 @@ import LegalLayout, { H2, P, Strong, UL, LI, A } from "@/components/LegalLayout"
 
 export default function Privacy() {
   return (
-    <LegalLayout title="Privacy Policy" lastUpdated="May 23, 2026">
+    <LegalLayout title="Privacy Policy" lastUpdated="August 26, 2026">
       <P>
         Dumpster is a tool for sequencing Instagram photo carousels. We want it
         to be useful without becoming another data-vacuum. This page describes
         exactly what we collect, why, where it lives, and how to delete it.
+      </P>
+      <P>
+        Dumpster is operated by <Strong>Ariya One LLC</Strong>, d/b/a Chamillion
+        Collective, a Georgia limited liability company ("Dumpster," "we," "us").
       </P>
 
       <H2>The TL;DR</H2>
@@ -159,7 +163,7 @@ export default function Privacy() {
         If you're in the EU, UK, or California, the regional privacy laws
         (GDPR, UK GDPR, CCPA) give you additional rights to portability and
         objection. To exercise any of these, email
-        <A href="mailto:axiomonellc@outlook.com"> axiomonellc@outlook.com</A>.
+        <A href="mailto:ariyaonellc@outlook.com"> ariyaonellc@outlook.com</A>.
       </P>
 
       <H2>Children</H2>
@@ -179,7 +183,7 @@ export default function Privacy() {
       <H2>Contact</H2>
       <P>
         Questions, deletion requests, or anything else:
-        <A href="mailto:axiomonellc@outlook.com"> axiomonellc@outlook.com</A>.
+        <A href="mailto:ariyaonellc@outlook.com"> ariyaonellc@outlook.com</A>.
       </P>
     </LegalLayout>
   );
