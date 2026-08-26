@@ -24,8 +24,8 @@ export default function Privacy() {
         exactly what we collect, why, where it lives, and how to delete it.
       </P>
       <P>
-        Dumpster is operated by <Strong>Ariya One LLC</Strong>, d/b/a Chamillion
-        Collective, a Georgia limited liability company ("Dumpster," "we," "us").
+        Dumpster is operated by <Strong>Chamillion Collective</Strong> ("Dumpster,"
+        "we," "us").
       </P>
 
       <H2>The TL;DR</H2>

@@ -22,8 +22,8 @@ export default function Terms() {
         <A href="mailto:ariyaonellc@outlook.com"> ariyaonellc@outlook.com</A>.
       </P>
       <P>
-        Dumpster is operated by <Strong>Ariya One LLC</Strong>, d/b/a Chamillion
-        Collective, a Georgia limited liability company ("Dumpster," "we," "us").
+        Dumpster is operated by <Strong>Chamillion Collective</Strong> ("Dumpster,"
+        "we," "us").
       </P>
 
       <H2>1. Who can use Dumpster</H2>
