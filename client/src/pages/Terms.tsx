@@ -15,11 +15,15 @@ import LegalLayout, { H2, P, Strong, UL, LI, A } from "@/components/LegalLayout"
 
 export default function Terms() {
   return (
-    <LegalLayout title="Terms of Service" lastUpdated="May 23, 2026">
+    <LegalLayout title="Terms of Service" lastUpdated="August 26, 2026">
       <P>
         By using Dumpster you agree to these terms. They're written in plain
         English. If something's unclear, email
-        <A href="mailto:axiomonellc@outlook.com"> axiomonellc@outlook.com</A>.
+        <A href="mailto:ariyaonellc@outlook.com"> ariyaonellc@outlook.com</A>.
+      </P>
+      <P>
+        Dumpster is operated by <Strong>Ariya One LLC</Strong>, d/b/a Chamillion
+        Collective, a Georgia limited liability company ("Dumpster," "we," "us").
       </P>
 
       <H2>1. Who can use Dumpster</H2>
@@ -142,7 +146,7 @@ export default function Terms() {
       <H2>9. Account termination</H2>
       <P>
         You can delete your account at any time by emailing
-        <A href="mailto:axiomonellc@outlook.com"> axiomonellc@outlook.com</A>.
+        <A href="mailto:ariyaonellc@outlook.com"> ariyaonellc@outlook.com</A>.
         We honor deletion within 7 days. We may terminate accounts that
         violate the Acceptable Use rules, with notice when possible.
       </P>
@@ -170,7 +174,7 @@ export default function Terms() {
       <H2>12. Contact</H2>
       <P>
         Questions or concerns:
-        <A href="mailto:axiomonellc@outlook.com"> axiomonellc@outlook.com</A>.
+        <A href="mailto:ariyaonellc@outlook.com"> ariyaonellc@outlook.com</A>.
       </P>
     </LegalLayout>
   );
