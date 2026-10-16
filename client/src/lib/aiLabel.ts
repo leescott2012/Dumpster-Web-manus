@@ -7,7 +7,7 @@
 import { getAuthHeaders } from "./supabase";
 import { compressDataUrlForVision } from "./imageDownscale";
 
-export interface PhotoLabel { id: string; category: string; label: string }
+export interface PhotoLabel { id: string; category: string; label: string; confidence?: number }
 interface ScanInput { id: string; url: string }
 
 // Fewer images per request so each high-res frame fits the 4.5 MB body limit and

@@ -46,19 +46,15 @@ import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
 import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, scheduleArchivedDumpIdsSave, flushArchivedDumpIdsSave, setDumpPublic } from "@/lib/workspaceSync";
-import { scanPhotos, autoScanPhotos } from "@/lib/aiLabel";
+import { scanPhotos } from "@/lib/aiLabel";
 import { track } from "@/lib/analytics";
 import { logBug } from "@/lib/bugLogger";
 import { saveVideo, listVideos, deleteVideo, setVideoTags, setVideoTrim, notVideo, type VideoMeta } from "@/lib/videoStore";
 import VideoSheet from "@/components/VideoSheet";
+import LabelHealthSheet, { LabelHealthChip } from "@/components/LabelHealthSheet";
+import { useLabelHealth } from "@/hooks/useLabelHealth";
 
-// Mirror of CATEGORIES in server/aiLabel.ts — used to decide whether a pool
-// photo's existing category is a real AI label or a stale/legacy value that
-// should be re-scanned. Keep in sync with the server list.
-var VALID_CATEGORIES = [
-  "AUTOMOTIVE", "SELFIE", "NIGHTLIFE", "DINING", "FITNESS", "TRAVEL",
-  "ARCHITECTURE", "ART", "FASHION", "STUDIO", "CULTURE", "LIFESTYLE",
-];
+// Category taxonomy mirror (of server/aiLabel.ts CATEGORIES) lives in lib/labelHealth.ts.
 
 function HomeContent() {
   var {
@@ -236,6 +232,8 @@ function HomeContent() {
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
   var [demoBannerVisible, setDemoBannerVisible] = useState(false);
   var { user, profile, canAfford, refreshProfile } = useAuth();
+  var labelHealth = useLabelHealth({ photos: allWorkspacePhotos, signedIn: !!user, applyPhotoLabels: applyPhotoLabels });
+  var [labelHealthOpen, setLabelHealthOpen] = useState(false);
 
   // ── AI profile sync — merge captions/taste/rules from cloud on sign-in.
   // Photos and workspace (dumps + pool) are device-local for beta.
@@ -689,17 +687,15 @@ function HomeContent() {
   var handleScanPhotos = useCallback(function() {
     if (scanning) return;
     if (!user) { setAuthSheetOpen(true); toast("Sign in to scan photos"); return; }
-    var toScan = pool.filter(function(p) {
-      if (!notVideo(p)) return false; // videos are device-only by owner decision
-      if (p.category === "" || p.category === "Uploaded") return true;
-      return VALID_CATEGORIES.indexOf(p.category.toUpperCase()) === -1;
-    });
+    // Same "needs a label" rule as the Label Health chip (videos already excluded there).
+    var unlabeledIds = new Set(labelHealth.health.unlabeled.map(function(p) { return p.id; }));
+    var toScan = pool.filter(function(p) { return notVideo(p) && unlabeledIds.has(p.id); });
     if (toScan.length === 0) { toast("All photos are already labeled"); return; }
 
     setScanning(true);
     toast("Scanning " + toScan.length + (toScan.length === 1 ? " photo…" : " photos…"));
     var input = toScan.map(function(p) { return { id: p.id, url: p.url }; });
-    scanPhotos(input, function(labels) { applyPhotoLabels(labels); })
+    scanPhotos(input, function(labels) { labelHealth.applyAi(labels); })
       .then(function(all) {
         track("photos_scanned", { count: all.length });
         toast("Labeled " + all.length + (all.length === 1 ? " photo" : " photos"));
@@ -711,48 +707,10 @@ function HomeContent() {
         toast(e && e.message ? e.message : "Scan failed — try again");
       })
       .then(function() { setScanning(false); });
-  }, [scanning, user, pool, applyPhotoLabels, refreshProfile]);
+  }, [scanning, user, pool, labelHealth.applyAi, labelHealth.health, refreshProfile]);
 
-  // Auto-heal loop: photos stuck with a stale/legacy category (e.g. "Object",
-  // written by the native app's old filename-guessing labeler before it moved
-  // to server-side Claude Vision) get silently re-scanned at NO charge to the
-  // user's credits, wherever they live (pool or already in a dump — see
-  // applyPhotoLabels). The fix is logged to the bug bin in the same call that
-  // makes it, closing the loop without a separate admin step. Runs once per
-  // session — autoHealTriggeredRef guards against re-firing as state settles.
-  var autoHealTriggeredRef = useRef(false);
-  useEffect(function() {
-    if (!user || autoHealTriggeredRef.current) return;
-    var stale = allWorkspacePhotos.filter(function(p) {
-      if (!notVideo(p)) return false; // videos are device-only by owner decision
-      if (p.category === "" || p.category === "Uploaded") return true;
-      return VALID_CATEGORIES.indexOf(p.category.toUpperCase()) === -1;
-    });
-    if (stale.length === 0) return;
-    autoHealTriggeredRef.current = true;
-
-    var before = stale.map(function(p) { return { id: p.id, category: p.category }; });
-    var input = stale.map(function(p) { return { id: p.id, url: p.url }; });
-    autoScanPhotos(input, function(labels) { applyPhotoLabels(labels); })
-      .then(function(all) {
-        track("photos_auto_relabeled", { count: all.length });
-        logBug({
-          source: "auto-relabel",
-          message: "Auto re-scanned " + all.length + " photo(s) stuck with a stale/legacy category — no charge to the user.",
-          context: { before: before, after: all },
-          status: "fixed",
-          silent: true,
-        });
-      })
-      .catch(function(e) {
-        logBug({
-          source: "auto-relabel",
-          message: "Auto re-scan failed: " + (e && e.message ? e.message : "unknown error"),
-          context: { attempted: before },
-          silent: true,
-        });
-      });
-  }, [user, allWorkspacePhotos, applyPhotoLabels]);
+  // Auto-heal of unlabeled/stale photos (free, quota-bounded) now lives in the
+  // Label Health loop — see hooks/useLabelHealth.ts.
 
   var handleAICreateDumps = useCallback(function(clusters: SuggestedCluster[]) {
     createDumpsFromSuggestions(clusters);
@@ -1070,6 +1028,7 @@ function HomeContent() {
             onCancelDeleteMode={handleCancelDeleteMode}
             onScan={handleScanPhotos}
             scanning={scanning}
+            labelHealthChip={<LabelHealthChip health={labelHealth.health} fix={labelHealth.fix} onOpen={function() { setLabelHealthOpen(true); }} />}
             videos={videos}
             onOpenVideo={function(p) { setVideoSheetId(p.id); }}
             onDeleteVideo={handleDeleteVideo}
@@ -1191,6 +1150,26 @@ function HomeContent() {
       />
       <DragGhost />
       <PhotoLightbox photo={lightboxPhoto} onClose={function() { setLightboxPhoto(null); }} />
+      {labelHealthOpen && (
+        <LabelHealthSheet
+          health={labelHealth.health}
+          store={labelHealth.store}
+          fix={labelHealth.fix}
+          photos={allWorkspacePhotos}
+          onClose={function() { setLabelHealthOpen(false); }}
+          onRunFix={function() {
+            if (!user) { setAuthSheetOpen(true); toast("Sign in to fix labels"); return; }
+            void labelHealth.runFix(true);
+          }}
+          onFixOne={function(p) {
+            if (!user) { setAuthSheetOpen(true); return Promise.resolve("Sign in to fix labels"); }
+            return labelHealth.fixOne(p);
+          }}
+          onVerify={labelHealth.verify}
+          onEdit={labelHealth.editLabel}
+          onToggleAutoFix={labelHealth.setAutoFix}
+        />
+      )}
       {videoSheetId && videos[videoSheetId] && videoUrls.current[videoSheetId] && (
         <VideoSheet
           video={videos[videoSheetId]}
