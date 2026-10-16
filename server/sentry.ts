@@ -70,6 +70,20 @@ export function captureServerError(
 }
 
 /**
+ * Log an AI-provider error server-side and return a SAFE message for the
+ * client — never the provider's raw text. Wording keeps the keywords
+ * client/src/lib/friendlyError.ts matches on ("overloaded", "timed out").
+ */
+export function publicAIError(err: unknown, source: string, extra?: Record<string, unknown>): string {
+  console.error("[" + source + "] AI error:", err);
+  captureServerError(err, source, extra);
+  var e = (err || {}) as { status?: number; name?: string; message?: string };
+  if (e.status === 529 || /overloaded/i.test(e.message || "")) return "Claude is overloaded right now.";
+  if (e.name === "APIConnectionTimeoutError" || /timed? ?out/i.test(e.message || "")) return "The AI request timed out.";
+  return "The AI request failed. Try again.";
+}
+
+/**
  * Capture a server-side warning/message (non-error events). Use for
  * notable conditions like budget threshold crossings.
  */

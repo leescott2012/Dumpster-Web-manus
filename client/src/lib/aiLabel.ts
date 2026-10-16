@@ -43,7 +43,7 @@ async function scanBatch(batch: ScanInput[], auto: boolean): Promise<PhotoLabel[
   if (!res.ok) {
     let msg = "Scan failed";
     try { const j = await res.json(); if (j && j.error) msg = j.error; } catch { /* ignore */ }
-    throw new Error(msg);
+    throw Object.assign(new Error(msg), { status: res.status });
   }
   const data = await res.json();
   return Array.isArray(data.labels) ? data.labels : [];
@@ -57,7 +57,15 @@ async function scanAll(
   const all: PhotoLabel[] = [];
   for (let i = 0; i < input.length; i += BATCH_SIZE) {
     const batch = input.slice(i, i + BATCH_SIZE);
-    const labels = await scanBatch(batch, auto);
+    let labels: PhotoLabel[];
+    try {
+      labels = await scanBatch(batch, auto);
+    } catch (e) {
+      // Free auto-heal hit its server quota (429) — stop quietly with what we
+      // have; the rest heals in a later session once the quota frees up.
+      if (auto && (e as { status?: number }).status === 429) break;
+      throw e;
+    }
     all.push(...labels);
     if (onBatch && labels.length > 0) onBatch(labels);
   }

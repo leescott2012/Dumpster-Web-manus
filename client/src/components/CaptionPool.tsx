@@ -4,9 +4,10 @@
  * Features: style chips, auto-generate from style banks, custom add, filter tabs, favorite/ban/remove.
  */
 import { useState, useCallback, useMemo, useEffect } from "react";
+import { toast } from "sonner";
 import { Heart, Trash2, Ban, Copy, Check, Sparkles, Plus, RotateCcw } from "lucide-react";
 import {
-  loadCaptions, toggleFavorite, toggleBanned, removeCaption,
+  loadCaptions, toggleFavorite, toggleBanned, removeCaption, restoreCaption,
   addCaption, importCaptions, markCaptionUsed,
   type PoolCaption, type CaptionStyle,
 } from "@/lib/captionPool";
@@ -100,7 +101,15 @@ export default function CaptionPool() {
 
   const handleFavorite = useCallback((id: string) => setList(toggleFavorite(id)), []);
   const handleBan = useCallback((id: string) => setList(toggleBanned(id)), []);
-  const handleRemove = useCallback((id: string) => setList(removeCaption(id)), []);
+  const handleRemove = useCallback((id: string) => {
+    const before = loadCaptions().find(c => c.id === id);
+    setList(removeCaption(id));
+    if (!before) return;
+    toast("Caption deleted", {
+      duration: 6000,
+      action: { label: "Undo", onClick: () => setList(restoreCaption(before)) },
+    });
+  }, []);
 
   const handleCopy = useCallback(async (text: string, id: string) => {
     try {

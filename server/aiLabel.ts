@@ -66,18 +66,18 @@ export async function handleAILabel(
   req: IncomingMessage,
   res: ServerResponse,
   preParsedBody?: AILabelBody
-): Promise<void> {
+): Promise<boolean> {
   if (req.method !== "POST") {
     res.writeHead(405, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Method not allowed" }));
-    return;
+    return false;
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey === "your_anthropic_api_key_here") {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "ANTHROPIC_API_KEY is not configured." }));
-    return;
+    return false;
   }
 
   let photos: LabelPhotoInput[];
@@ -89,13 +89,13 @@ export async function handleAILabel(
   } catch {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Invalid JSON body" }));
-    return;
+    return false;
   }
 
   if (photos.length === 0) {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "No photos to scan" }));
-    return;
+    return false;
   }
 
   const system = `You are an expert photo classifier. Look carefully at EACH photo, decide what it is PRIMARILY about, then pick the single best category and write a precise 2–5 word label that names the specific subject.
@@ -154,13 +154,15 @@ Return ONLY JSON, nothing else:
   if (usableIds.length === 0) {
     res.writeHead(502, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Could not load any images", code: "no_images" }));
-    return;
+    return false;
   }
 
   content.push({ type: "text", text: `Label all ${usableIds.length} photos now. Return JSON only.` });
 
   try {
-    const anthropic = new Anthropic({ apiKey });
+    // 40s, no retries: image fetch (≤8s) + this must finish inside the 60s
+    // maxDuration, or Vercel kills the function before the refund runs.
+    const anthropic = new Anthropic({ apiKey, timeout: 40000, maxRetries: 0 });
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 80 * usableIds.length + 250,
@@ -176,18 +178,27 @@ Return ONLY JSON, nothing else:
     // Validate + clamp categories to the taxonomy; drop anything unrecognized.
     const labels: LabelResult[] = [];
     for (const l of rawLabels) {
-      if (!l || typeof l.id !== "string") continue;
+      if (!l || typeof l.id !== "string" || usableIds.indexOf(l.id) === -1) continue; // only ids we sent
       const raw = typeof l.category === "string" ? l.category.toUpperCase() : "";
       const cat = CATEGORIES.indexOf(raw) >= 0 ? raw : FALLBACK_CATEGORY;
       const label = typeof l.label === "string" ? l.label.slice(0, 60) : "";
       labels.push({ id: l.id, category: cat, label, confidence: typeof l.confidence === "number" ? Math.max(0, Math.min(1, l.confidence)) : undefined });
     }
 
+    if (labels.length === 0) {
+      console.error("[AI Label] no usable labels in model output:", rawText.slice(0, 500));
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Scan failed — try again", code: "ai_empty_result" }));
+      return false;
+    }
+
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ labels }));
+    return true;
   } catch (e) {
     captureServerError(e, "aiLabel.handler", { count: usableIds.length });
     res.writeHead(502, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Scan failed — try again", code: "ai_error" }));
+    return false;
   }
 }

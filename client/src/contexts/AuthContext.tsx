@@ -7,6 +7,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import { supabase } from "@/lib/supabase";
 import { syncAIProfileOnSignIn, ensureAIProfileWired } from "@/lib/aiProfileSync";
 import { setCurrentUserId } from "@/lib/currentUser";
+import { CREDIT_COSTS } from "@/lib/credits";
 import type { User, Session } from "@supabase/supabase-js";
 
 export interface UserProfile {
@@ -62,21 +63,9 @@ export function useAuth(): AuthState {
   return ctx;
 }
 
-// Credit costs (duplicated from credits.ts to avoid circular imports in server)
-// Mirror of CREDIT_COSTS in client/src/lib/credits.ts. Duplicated here to
-// avoid the AuthContext importing from a sibling lib file (circular-import
-// risk via supabase). Keep these in sync with credits.ts AND with
-// server/creditGate.ts COSTS.
-var COSTS: Record<string, number> = {
-  ai_caption: 3,
-  ai_suggest: 25,
-  ai_chat: 1,
-  // planned, no server endpoint yet:
-  ai_caption_pro: 6,
-  ai_recycle: 3,
-  ai_vibe: 5,
-  ai_rescan_batch: 20,
-};
+// Credit costs come from credits.ts (it has no imports, so no circular-import
+// risk). Keep credits.ts in sync with server/creditGate.ts COSTS.
+var COSTS = CREDIT_COSTS;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   var [user, setUser] = useState<User | null>(null);
