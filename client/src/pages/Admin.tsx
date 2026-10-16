@@ -375,7 +375,7 @@ export default function Admin() {
       }
       const data = await res.json();
       setStats(data);
-      addLog(`[SUCCESS] Synchronized data for ${data.overview.total_users} active nodes.`);
+      addLog(`[SUCCESS] Loaded stats for ${data.overview.total_users} users.`);
       sfx.playBeep(600, 0.1);
     } catch (e: any) {
       const msg = e?.message ?? "Network error";
@@ -414,8 +414,7 @@ export default function Admin() {
       setTimeout(() => {
         setIsWarmingUp(false);
         sfx.playStartup();
-        addLog("[BOOT] Genius Neural HUD v4.2 Online.");
-        addLog("[INFO] Chamillion Collective secure link established.");
+        addLog("[INFO] Dashboard loaded.");
       }, 1500);
     }
   // Keyed on the user id: Supabase hands back a new session object on load and

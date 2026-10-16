@@ -294,10 +294,10 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, band
         {/* Perimeter HUD Markings */}
         <div className="absolute inset-4 border border-[#D4AF37]/10 pointer-events-none">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 px-4 py-1 bg-black border-x border-b border-[#D4AF37]/40 text-[9px] tracking-[0.5em]">
-            MARK_LXXXV
+            DUMPSTER ADMIN
           </div>
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 px-4 py-1 bg-black border-x border-t border-[#D4AF37]/40 text-[9px] tracking-[0.5em]">
-            SYSTEM_OVERRIDE_ACTIVE
+            LIVE DATA
           </div>
         </div>
       </div>
