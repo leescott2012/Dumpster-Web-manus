@@ -21,7 +21,7 @@ import {
 import GeniusHUD from "@/components/genius/GeniusHUD";
 import { useReactorAudio } from "@/components/genius/useReactorAudio";
 import ConsoleTerminal from "@/components/genius/ConsoleTerminal";
-import SystemWidget from "@/components/genius/SystemWidget";
+import SystemWidget, { type OpsData } from "@/components/genius/SystemWidget";
 import AgentControl from "@/components/genius/AgentControl";
 import UserDrillModal from "@/components/genius/UserDrillModal";
 import { sfx } from "@/lib/geniusAudio";
@@ -30,7 +30,7 @@ import { logBug } from "@/lib/bugLogger";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface FeatureUsageRow { action: string; count: number; credits: number; }
+interface FeatureUsageRow { action: string; count: number; credits: number; refunds: number; refunded_credits: number; }
 interface DauRow          { date: string;   count: number; }
 interface RevenueDay      { date: string;   amount_cents: number; }
 interface RevenueSummary {
@@ -39,14 +39,17 @@ interface RevenueSummary {
 }
 interface UserRow {
   id: string; email: string; created_at: string;
-  last_sign_in_at: string | null; tier: string; credits: number;
+  last_sign_in_at: string | null; last_active_at: string | null; is_owner: boolean;
+  tier: string; credits: number;
   ai_calls: number; credits_used: number; photos_uploaded: number; exports: number;
 }
 interface AdminStats {
   overview: {
     total_users: number; active_today: number; active_week: number;
     ai_calls_today: number; credits_spent_today: number;
+    refunds_today: number; credits_refunded_today: number;
   };
+  ops?: OpsData;
   feature_usage: FeatureUsageRow[];
   dau: DauRow[];
   users: UserRow[];
@@ -72,8 +75,8 @@ function fmtDate(iso: string | null): string {
 
 function fmtAction(action: string): string {
   const map: Record<string, string> = {
-    ai_suggest: "Auto Gen", ai_caption: "Caption", ai_chat: "Chat",
-    ai_recycle: "Recycle", ig_scrub: "IG Scrub",
+    ai_suggest: "Auto Gen", ai_caption: "Caption", ai_chat: "Valet",
+    ai_label: "Labels", ai_recycle: "Recycle", ig_scrub: "IG Scrub",
   };
   return map[action] ?? action;
 }
@@ -140,7 +143,7 @@ function SignInScreen({ onGoogle, signingIn, error }: { onGoogle: () => void; si
         )}
 
         <div className="mt-8 pt-8 border-t border-[#D4AF37]/10 flex justify-center">
-          <a href="/" className="text-[10px] text-gray-600 hover:text-[#D4AF37] transition-colors uppercase tracking-widest">
+          <a href="/" className="text-[10px] text-gray-400 hover:text-[#D4AF37] transition-colors uppercase tracking-widest">
             Return to Surface
           </a>
         </div>
@@ -153,6 +156,10 @@ function SignInScreen({ onGoogle, signingIn, error }: { onGoogle: () => void; si
 
 export default function Admin() {
   const [session, setSession] = useState<Session | null>(null);
+  const sessionRef = useRef<Session | null>(null);
+  sessionRef.current = session;
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [pingOk, setPingOk] = useState<boolean | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [stats, setStats]     = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -343,6 +350,7 @@ export default function Admin() {
 
   // Fetch stats
   const fetchStats = useCallback(async function() {
+    const session = sessionRef.current;
     if (!session) return;
     setLoading(true);
     setHudState('thinking');
@@ -378,11 +386,30 @@ export default function Admin() {
       setLoading(false);
       setHudState('idle');
     }
-  }, [session]);
+  }, []);
+
+  // Real API health: time a signed-in, owner-gated no-op round trip.
+  const pingApi = useCallback(async function() {
+    const token = sessionRef.current?.access_token;
+    if (!token) return;
+    const t0 = performance.now();
+    try {
+      const r = await fetch("/api/admin-stats?ping=1", { headers: { Authorization: "Bearer " + token } });
+      const ms = Math.round(performance.now() - t0);
+      setPingOk(r.ok);
+      setLatencyMs(r.ok ? ms : null);
+      addLog(r.ok ? `[INFO] API ping ${ms} ms.` : `[FAIL] API ping returned ${r.status}.`);
+    } catch {
+      setPingOk(false);
+      setLatencyMs(null);
+      addLog("[FAIL] API ping failed (network).");
+    }
+  }, []);
 
   useEffect(function() {
     if (session) {
       fetchStats();
+      pingApi();
       // Startup sequence
       setTimeout(() => {
         setIsWarmingUp(false);
@@ -391,7 +418,10 @@ export default function Admin() {
         addLog("[INFO] Chamillion Collective secure link established.");
       }, 1500);
     }
-  }, [session, fetchStats]);
+  // Keyed on the user id: Supabase hands back a new session object on load and
+  // every token refresh, which re-ran this 2-3x (each a full Stripe + DB fetch).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user.id]);
 
   // ── Sign-in flow ───────────────────────────────────────────────────────────
   const handleGoogle = useCallback(async function() {
@@ -425,25 +455,27 @@ export default function Admin() {
       id: Math.random().toString(36).substr(2, 9),
       name: taskName,
       status: 'running',
-      logs: [`[BOOT] Agent initialized.`, `[INFO] Connecting to neural matrix...`],
+      logs: [`[DEMO] No agent backend exists. This is a placeholder.`],
       agentType,
       timestamp: new Date().toISOString()
     };
     setTasks(prev => [newTask, ...prev]);
 
     try {
-      // Mock agent logic for now - in a real app, this would call an API
+      // ponytail: stub. No agent API exists. It used to fake a "completed"
+      // result with invented numbers ("growth 12% WoW"); now it says so plainly.
+      // Real questions about the data: use the orb (genius-chat, Claude).
       setTimeout(() => {
         setTasks(prev => prev.map(t => t.id === newTask.id ? {
           ...t,
           status: 'completed',
-          logs: [...t.logs, `[SUCCESS] Task analysis complete.`, `[INFO] Summarizing findings...`],
-          summary: `Genius has analyzed the Dumpster user data. Growth is trending at 12% WoW. Recommended move: Optimize caption generation for the 'Minimalist' aesthetic.`
+          logs: [...t.logs, `[DEMO] Nothing was analyzed and nothing was charged.`],
+          summary: `Demo only. No agent ran on "${taskName}". For real answers about your data, tap the reactor orb and ask out loud.`
         } : t));
-        addLog(`[AGENT] ${agentType} task completed successfully.`);
+        addLog(`[AGENT] Demo ${agentType} task finished (no real agent).`);
         setLoading(false);
         setHudState('idle');
-      }, 3000);
+      }, 800);
     } catch (e) {
       setTasks(prev => prev.map(t => t.id === newTask.id ? { ...t, status: 'failed', logs: [...t.logs, `[ERROR] Synaptic failure.`] } : t));
       setLoading(false);
@@ -488,9 +520,11 @@ export default function Admin() {
     // Fetch ElevenLabs audio for ONE chunk. null → caller falls back to browser TTS.
     const fetchTts = async (chunk: string): Promise<HTMLAudioElement | null> => {
       try {
+        // /api/tts is owner-gated. Without the bearer token it always 401'd
+        // and every reply silently fell back to the browser voice.
         const r = await fetch('/api/tts', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (sessionRef.current?.access_token ?? '') },
           body: JSON.stringify({ text: chunk, voiceId: voiceIdRef.current }),
         });
         if (r.ok && (r.headers.get('content-type') || '').startsWith('audio/')) {
@@ -721,39 +755,40 @@ export default function Admin() {
     <div className="min-h-screen bg-black text-[#D4AF37] font-mono selection:bg-[#D4AF37] selection:text-black overflow-x-hidden">
       
       {/* Top Navigation Bar */}
-      <div className="h-16 border-b border-[#D4AF37]/10 flex items-center justify-between px-8 bg-black/50 backdrop-blur-md sticky top-0 z-50">
+      <div className="h-16 border-b border-[#D4AF37]/10 flex items-center justify-between px-4 sm:px-8 bg-black/50 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-[#D4AF37] rounded-full animate-pulse" />
             <span className="text-xs font-bold tracking-[0.4em] uppercase">GENIUSS_v4.2</span>
           </div>
-          <div className="h-4 w-[1px] bg-[#D4AF37]/20" />
-          <div className="text-[10px] text-[#D4AF37]/50 uppercase tracking-widest">
+          <div className="hidden sm:block h-4 w-[1px] bg-[#D4AF37]/20" />
+          <div className="hidden sm:block text-[10px] text-[#D4AF37]/70 uppercase tracking-widest">
             Chamillion Collective Neural Link
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1 sm:gap-4">
           <button
             onClick={toggleMute}
             title={muted ? "Unmute audio" : "Mute audio"}
+            aria-label={muted ? "Unmute audio" : "Mute audio"}
             className={`p-2 rounded-lg transition-colors ${muted ? "text-red-500/70 hover:bg-red-500/10" : "hover:bg-[#D4AF37]/10"}`}
           >
             {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
-          <button onClick={fetchStats} className="p-2 hover:bg-[#D4AF37]/10 rounded-lg transition-colors group">
+          <button onClick={fetchStats} title="Refresh stats" aria-label="Refresh stats" className="p-2 hover:bg-[#D4AF37]/10 rounded-lg transition-colors group">
             <RefreshCw className="w-4 h-4 group-active:rotate-180 transition-transform duration-500" />
           </button>
-          <a href="/" className="p-2 hover:bg-[#D4AF37]/10 rounded-lg transition-colors">
+          <a href="/" title="Back to app" aria-label="Back to app" className="p-2 hover:bg-[#D4AF37]/10 rounded-lg transition-colors">
             <Home className="w-4 h-4" />
           </a>
-          <button onClick={handleSignOut} className="p-2 hover:bg-red-500/10 text-red-500/60 hover:text-red-500 rounded-lg transition-colors">
+          <button onClick={handleSignOut} title="Sign out" aria-label="Sign out" className="p-2 hover:bg-red-500/10 text-red-500/60 hover:text-red-500 rounded-lg transition-colors">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto p-8 grid grid-cols-12 gap-8">
+      <div className="max-w-[1600px] mx-auto p-4 sm:p-8 grid grid-cols-12 gap-6 sm:gap-8">
         
         {/* LEFT COLUMN: Main HUD & Stats */}
         <div className="col-span-12 lg:col-span-8 space-y-8">
@@ -790,6 +825,8 @@ export default function Admin() {
                 <button
                   key={s.label}
                   title={s.label}
+                  aria-label={`Reactor color ${s.label}`}
+                  aria-pressed={hudHueDeg === s.deg}
                   onClick={() => { setHudHueDeg(s.deg); localStorage.setItem('geniuss.hueDeg', String(s.deg)); }}
                   className={`w-5 h-5 rounded-full transition ${hudHueDeg === s.deg ? 'ring-2 ring-white/80' : 'ring-1 ring-white/10 hover:ring-white/40'}`}
                   style={{ background: s.css, boxShadow: `0 0 8px ${s.css}aa` }}
@@ -805,6 +842,7 @@ export default function Admin() {
               <span className="text-[9px] uppercase tracking-widest text-[#D4AF37]/50">Voice</span>
               <select
                 value={voiceId}
+                aria-label="Voice"
                 onChange={(e) => { setVoiceId(e.target.value); localStorage.setItem('geniuss.voiceId', e.target.value); }}
                 className="bg-slate-950 border border-[#D4AF37]/20 text-[#D4AF37] text-[10px] rounded px-2 py-1 outline-none"
               >
@@ -838,8 +876,8 @@ export default function Admin() {
               { label: "Total Users", value: String(overview.total_users) },
               { label: "Active Today", value: String(overview.active_today) },
               { label: "Active Week", value: String(overview.active_week) },
-              { label: "AI Calls", value: String(overview.ai_calls_today) },
-              { label: "Credits", value: String(overview.credits_spent_today) },
+              { label: "AI Calls 24h", value: String(overview.ai_calls_today) },
+              { label: "Credits 24h", value: String(overview.credits_spent_today) },
               { label: "Revenue Today", value: fmtMoney(revenue?.today_cents ?? 0) },
             ].map((stat, i) => (
               <motion.div 
@@ -849,7 +887,7 @@ export default function Admin() {
                 transition={{ delay: i * 0.1 }}
                 className="bg-[#0a0a0a] border border-[#D4AF37]/10 p-4 rounded-2xl"
               >
-                <div className="text-[9px] text-[#D4AF37]/40 uppercase tracking-widest mb-1">{stat.label}</div>
+                <div className="text-[9px] text-[#D4AF37]/70 uppercase tracking-widest mb-1">{stat.label}</div>
                 <div className="text-2xl font-bold text-white tracking-tight">{stat.value}</div>
               </motion.div>
             ))}
@@ -857,16 +895,16 @@ export default function Admin() {
 
           {/* Revenue Chart — full-width row above the DAU/Feature pair */}
           <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">
                 Revenue Stream {revenue?.source === "unavailable" && (
-                  <span className="ml-2 text-gray-600 normal-case tracking-normal">— Stripe key missing or offline</span>
+                  <span className="ml-2 text-gray-400 normal-case tracking-normal">— Stripe key missing or offline</span>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-[10px] uppercase">
-                <span className="text-gray-600">Week: <span className="text-white">{fmtMoney(revenue?.week_cents ?? 0)}</span></span>
-                <span className="text-gray-600">Month: <span className="text-white">{fmtMoney(revenue?.month_cents ?? 0)}</span></span>
-                <span className="text-gray-600">All-time: <span className="text-white">{fmtMoney(revenue?.total_cents ?? 0)}</span></span>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] uppercase">
+                <span className="text-gray-400">Week: <span className="text-white">{fmtMoney(revenue?.week_cents ?? 0)}</span></span>
+                <span className="text-gray-400">Month: <span className="text-white">{fmtMoney(revenue?.month_cents ?? 0)}</span></span>
+                <span className="text-gray-400">All-time: <span className="text-white">{fmtMoney(revenue?.total_cents ?? 0)}</span></span>
               </div>
             </div>
             <div className="h-[180px]">
@@ -908,12 +946,12 @@ export default function Admin() {
                 <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">Daily Active Users</div>
-                    <div className="text-[10px] text-gray-600 uppercase">Last 14 Days</div>
+                    <div className="text-[10px] text-gray-400 uppercase">Last 14 Days</div>
                   </div>
-                  <div className="flex items-center gap-5 text-[10px] mb-4">
-                    <span className="text-gray-600">Total unique-days: <span className="text-white font-bold">{dauTotal}</span></span>
-                    <span className="text-gray-600">Peak: <span className="text-white font-bold">{dauPeak}</span></span>
-                    <span className="text-gray-600">Avg: <span className="text-white font-bold">{dauAvg}/day</span></span>
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px] mb-4">
+                    <span className="text-gray-400">Total unique-days: <span className="text-white font-bold">{dauTotal}</span></span>
+                    <span className="text-gray-400">Peak: <span className="text-white font-bold">{dauPeak}</span></span>
+                    <span className="text-gray-400">Avg: <span className="text-white font-bold">{dauAvg}/day</span></span>
                     <span className={trend > 0 ? "text-green-500" : trend < 0 ? "text-red-500" : "text-gray-500"}>
                       {trend > 0 ? "▲" : trend < 0 ? "▼" : "—"} {Math.abs(trend)}% vs prior 7d
                     </span>
@@ -940,17 +978,19 @@ export default function Admin() {
             {(() => {
               const ftotal = featureLabelled.reduce((s, f) => s + f.count, 0);
               const top = [...featureLabelled].sort((a, b) => b.count - a.count)[0];
-              const totalCredits = featureLabelled.reduce((s, f) => s + (f.credits || 0), 0);
+              const totalCredits = featureLabelled.reduce((s, f) => s + (f.credits || 0) - (f.refunded_credits || 0), 0);
+              const totalRefunds = featureLabelled.reduce((s, f) => s + (f.refunds || 0), 0);
               return (
                 <div className="bg-[#0a0a0a] border border-[#D4AF37]/10 rounded-2xl p-6">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-[10px] text-[#D4AF37]/60 uppercase tracking-[0.2em] font-bold">AI Feature Usage</div>
-                    <div className="text-[10px] text-gray-600 uppercase">Last 30 Days</div>
+                    <div className="text-[10px] text-gray-400 uppercase">Last 30 Days</div>
                   </div>
-                  <div className="flex items-center gap-5 text-[10px] mb-4">
-                    <span className="text-gray-600">Total calls: <span className="text-white font-bold">{ftotal}</span></span>
-                    {top && <span className="text-gray-600">Top: <span className="text-white font-bold">{top.label} ({top.count})</span></span>}
-                    <span className="text-gray-600">Credits spent: <span className="text-white font-bold">{totalCredits}</span></span>
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px] mb-4">
+                    <span className="text-gray-400">Total calls: <span className="text-white font-bold">{ftotal}</span></span>
+                    {top && <span className="text-gray-400">Top: <span className="text-white font-bold">{top.label} ({top.count})</span></span>}
+                    <span className="text-gray-400">Credits (net): <span className="text-white font-bold">{totalCredits}</span></span>
+                    <span className="text-gray-400">Refunded: <span className="text-white font-bold">{totalRefunds}</span></span>
                   </div>
                   <div className="h-[200px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -960,9 +1000,10 @@ export default function Admin() {
                         <Tooltip
                           content={<ChartTooltip />}
                           cursor={{ fill: "rgba(212,175,55,0.05)" }}
-                          formatter={(v: number, _name, item: { payload?: { credits?: number } }) => {
+                          formatter={(v: number, _name, item: { payload?: { credits?: number; refunds?: number } }) => {
                             const creds = item?.payload?.credits;
-                            return v + " call" + (v === 1 ? "" : "s") + (creds != null ? ` · ${creds} credits` : "");
+                            const refs = item?.payload?.refunds;
+                            return v + " call" + (v === 1 ? "" : "s") + (creds != null ? ` · ${creds} credits` : "") + (refs ? ` · ${refs} refunded` : "");
                           }}
                         />
                         <Bar dataKey="count" radius={[4, 4, 0, 0]}>
@@ -986,10 +1027,10 @@ export default function Admin() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[11px] border-collapse">
                 <thead>
-                  <tr className="text-[#D4AF37]/40 uppercase tracking-widest border-b border-[#D4AF37]/5">
+                  <tr className="text-[#D4AF37]/70 uppercase tracking-widest border-b border-[#D4AF37]/5">
                     <th className="px-6 py-4 font-bold">Email</th>
                     <th className="px-6 py-4 font-bold">Joined</th>
-                    <th className="px-6 py-4 font-bold">Last Sync</th>
+                    <th className="px-6 py-4 font-bold" title="Latest of: sign-in, any tracked event, any AI charge (last 30 days)">Last Active</th>
                     <th className="px-6 py-4 font-bold">Tier</th>
                     <th className="px-6 py-4 font-bold">Credits</th>
                     <th className="px-6 py-4 font-bold">Calls</th>
@@ -1000,15 +1041,18 @@ export default function Admin() {
                     <tr
                       key={u.id}
                       onClick={() => setSelectedUser(u)}
-                      className="hover:bg-[#D4AF37]/10 transition-colors group cursor-pointer"
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedUser(u); } }}
+                      tabIndex={0}
+                      className="hover:bg-[#D4AF37]/10 focus:bg-[#D4AF37]/10 outline-none transition-colors group cursor-pointer"
                       title="Click for full user detail"
                     >
                       <td className="px-6 py-4 text-white font-bold">
                         {u.email || "ANON_NODE"}
+                        {u.is_owner && <span className="ml-2 text-[9px] text-[#D4AF37] border border-[#D4AF37]/40 rounded px-1">YOU</span>}
                         <span className="ml-2 text-[9px] text-[#D4AF37]/0 group-hover:text-[#D4AF37]/60 transition-opacity">→</span>
                       </td>
                       <td className="px-6 py-4 text-gray-500">{fmtDate(u.created_at)}</td>
-                      <td className="px-6 py-4 text-gray-500">{fmtDate(u.last_sign_in_at)}</td>
+                      <td className="px-6 py-4 text-gray-400">{fmtDate(u.last_active_at ?? u.last_sign_in_at)}</td>
                       <td className="px-6 py-4">
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${u.tier === 'pro' ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-gray-900 text-gray-500'}`}>
                           {u.tier}
@@ -1033,6 +1077,7 @@ export default function Admin() {
                 type="text"
                 value={sentryShortId}
                 onChange={(e) => setSentryShortId(e.target.value)}
+                aria-label="Sentry issue short ID"
                 placeholder="Short ID, e.g. JAVASCRIPT-REACT-1Z"
                 className="flex-1 bg-black border border-[#D4AF37]/20 rounded px-3 py-2 text-xs text-white outline-none"
               />
@@ -1061,6 +1106,7 @@ export default function Admin() {
                   <button
                     key={f}
                     onClick={() => setBugFilter(f)}
+                    aria-pressed={bugFilter === f}
                     className={`text-[10px] uppercase tracking-widest px-2 py-1 rounded ${
                       bugFilter === f
                         ? "bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/40"
@@ -1080,7 +1126,7 @@ export default function Admin() {
             </div>
 
             {bugs.length === 0 ? (
-              <div className="p-8 text-center text-gray-600 text-xs">
+              <div className="p-8 text-center text-gray-400 text-xs">
                 No bugs in this filter. The system is quiet.
               </div>
             ) : (
@@ -1100,7 +1146,7 @@ export default function Admin() {
                           <span className="text-gray-500 font-mono normal-case truncate">{b.error_code}</span>
                         )}
                       </div>
-                      <div className="text-[10px] text-gray-600 whitespace-nowrap">
+                      <div className="text-[10px] text-gray-400 whitespace-nowrap">
                         {new Date(b.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                       </div>
                     </div>
@@ -1115,7 +1161,7 @@ export default function Admin() {
                       </a>
                     )}
                     {(b.username || b.email || b.url) && (
-                      <div className="text-[10px] text-gray-600 mb-2 truncate">
+                      <div className="text-[10px] text-gray-400 mb-2 truncate">
                         {b.username ? <>by @{b.username}</> : b.email ? <>by {b.email}</> : null}
                         {(b.username || b.email) && b.url && <> · </>}
                         {b.url && <span className="font-mono">{b.url}</span>}
@@ -1128,7 +1174,7 @@ export default function Admin() {
                       </div>
                     )}
                     {b.stack && (
-                      <details className="text-[10px] text-gray-600 mb-2">
+                      <details className="text-[10px] text-gray-400 mb-2">
                         <summary className="cursor-pointer hover:text-[#D4AF37]">Stack</summary>
                         <pre className="mt-2 p-2 bg-black border border-[#D4AF37]/10 rounded text-[9px] overflow-x-auto font-mono whitespace-pre">{b.stack.slice(0, 1500)}</pre>
                       </details>
@@ -1155,6 +1201,7 @@ export default function Admin() {
                         <input
                           value={replyDrafts[b.id] || ""}
                           onChange={e => setReplyDrafts(prev => ({ ...prev, [b.id]: e.target.value }))}
+                          aria-label="Reply to reporter"
                           placeholder={b.admin_reply ? "Send another reply…" : "Reply to reporter…"}
                           className="flex-1 min-w-0 text-[11px] bg-black border border-[#D4AF37]/15 rounded px-2 py-1.5 text-white placeholder-gray-600 focus:outline-none focus:border-[#D4AF37]/40"
                         />
@@ -1183,23 +1230,23 @@ export default function Admin() {
             themeColor="reactor-orange" 
             onManualCommand={(cmd) => {
               addLog(`[USER] ${cmd}`);
-              if (cmd === "refresh") fetchStats();
-              else if (cmd === "clear") setLogs([]);
-              else addLog(`[Genius] Command unrecognized. Awaiting valid neural input.`);
+              const c = cmd.toLowerCase();
+              if (c === "refresh") fetchStats();
+              else if (c === "ping") pingApi();
+              else if (c === "clear" || c === "clear console") setLogs([]);
+              else addLog(`[Genius] Unknown command. Try: refresh, ping, clear.`);
             }} 
           />
 
           {/* System Telemetry */}
-          <SystemWidget 
-            themeColor="reactor-orange"
-            metrics={{
-              coreTemp: 42,
-              arcReactorPercent: 99.8,
-              cpuUsage: 12,
-              memoryUsage: 24,
-              synapseLatency: 18,
-              satelliteStatus: 'secured'
-            }}
+          <SystemWidget
+            ops={stats.ops}
+            features={feature_usage}
+            creditsSpentToday={overview.credits_spent_today}
+            creditsRefundedToday={overview.credits_refunded_today ?? 0}
+            latencyMs={latencyMs}
+            pingOk={pingOk}
+            onPing={pingApi}
           />
 
           {/* Agent Workspace */}

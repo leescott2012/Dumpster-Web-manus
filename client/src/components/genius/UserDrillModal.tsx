@@ -59,7 +59,11 @@ function fmtEvent(event: string): string {
     dump_exported: "Dump Exported",
     ai_caption: "Caption Generated",
     ai_suggest: "Auto-Gen",
-    ai_chat: "Chat",
+    ai_chat: "Valet",
+    ai_label: "Labels",
+    ai_label_auto: "Free Auto-Label",
+    photos_scanned: "Photos Scanned",
+    photos_auto_relabeled: "Auto Re-labeled",
     ai_recycle: "Recycle",
     ig_scrub: "IG Scrub",
   };
@@ -83,7 +87,7 @@ export default function UserDrillModal({ user, onClose }: Props) {
 
     supabase.auth.getSession().then(async ({ data }) => {
       const token = data.session?.access_token;
-      if (!token) return;
+      if (!token) { setLoading(false); return; }
 
       try {
         const res = await fetch(`/api/admin-user-detail?userId=${user.id}`, {

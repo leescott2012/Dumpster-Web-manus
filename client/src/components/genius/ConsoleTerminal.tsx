@@ -78,16 +78,16 @@ export default function ConsoleTerminal({
       <div className={`p-2.5 bg-slate-950 border-b border-slate-900 flex justify-between items-center text-[10px] tracking-widest ${choice.text}`}>
         <div className="flex items-center gap-1.5 font-bold">
           <Terminal className="w-3.5 h-3.5" />
-          <span>Genius NEURAL TERMINAL CLR_v3.5</span>
+          <span>Genius TERMINAL</span>
         </div>
         <div className="flex gap-2 items-center text-slate-500">
           <span className="flex items-center gap-1">
             <Shield className="w-2.5 h-2.5" />
-            <span>PROTECT: HIGH_SEC</span>
+            <span>OWNER ONLY</span>
           </span>
             <span className="flex items-center gap-1 text-[#D4AF37]">
             <Zap className="w-2.5 h-2.5 animate-pulse" />
-            <span>ARC_CORE: ACTIVE</span>
+            <span>LIVE</span>
           </span>
         </div>
       </div>
@@ -98,9 +98,9 @@ export default function ConsoleTerminal({
         className="flex-1 p-3 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent text-slate-300"
       >
         <div className="text-[10px] text-slate-500 pb-2 border-b border-slate-900/40 font-mono">
-          SYSTEM HARDWARE SYNAPSE COMMENCED AT {new Date().toLocaleDateString()}
+          SESSION STARTED {new Date().toLocaleDateString()}
           <br />
-          MODEL RESOLUTION: GEMINI 3.5 FLASH COGNITIVE PIPELINE
+          COMMANDS: refresh · ping · clear — voice questions go through the orb (Claude)
         </div>
 
         {logs.map((log, index) => {
@@ -130,25 +130,19 @@ export default function ConsoleTerminal({
       <div className="p-2 bg-slate-950/90 border-t border-slate-900/60 flex flex-wrap gap-1.5 items-center">
         <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mr-1">Routines:</span>
         <button 
-          onClick={() => executeCommandHeader("reactor diagnostics")}
+          onClick={() => executeCommandHeader("refresh")}
           className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-[#D4AF37] text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
         >
-          Diagnose Core
+          Refresh Stats
         </button>
         <button 
-          onClick={() => executeCommandHeader("agent status")}
+          onClick={() => executeCommandHeader("ping")}
           className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-[#D4AF37] text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
         >
-          Check Agents
+          Ping API
         </button>
         <button 
-          onClick={() => executeCommandHeader("weather update")}
-          className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-[#D4AF37] text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
-        >
-          Climate Scouting
-        </button>
-        <button 
-          onClick={() => executeCommandHeader("clear console")}
+          onClick={() => executeCommandHeader("clear")}
           className="text-[10px] border border-slate-850 bg-slate-950 hover:bg-slate-900 hover:text-[#D4AF37] text-slate-400 px-2 py-0.5 rounded transition font-mono uppercase"
         >
           Clear Logs
@@ -165,11 +159,13 @@ export default function ConsoleTerminal({
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Enter override command, or type query to Genius..."
+          aria-label="Terminal command"
+          placeholder="refresh · ping · clear"
           className="flex-1 bg-transparent text-slate-200 outline-none placeholder-slate-600 pr-2 font-mono text-[11px]"
         />
         <button 
           type="submit"
+          aria-label="Run command"
           className={`p-1.5 rounded-lg hover:bg-slate-900 transition-colors ${choice.text}`}
         >
           <Send className="w-4 h-4" />

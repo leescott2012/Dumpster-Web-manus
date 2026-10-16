@@ -13,7 +13,10 @@
  *   - auth.users          → total users, join dates, last sign-in
  *   - profiles            → credits, subscription tier
  *   - credit_transactions → AI feature usage and spend
- *   - activity_log        → DAU, photo uploads, exports
+ *   - activity_log        → DAU, photo uploads, exports, free auto-label calls
+ *   - Upstash Redis       → today's AI $ spend vs DAILY_BUDGET_USD, calls by feature
+ *
+ * ?ping=1 → auth + owner check only, returns { ok } (dashboard API latency).
  *
  * Set ADMIN_USER_ID in Vercel env to your Supabase user UUID.
  * Find it: Supabase → Authentication → Users → your row → copy UUID.
@@ -23,6 +26,7 @@ import Stripe from "stripe";
 import { getUserFromRequest } from "../creditGate.js";
 import { createClient } from "@supabase/supabase-js";
 import { captureServerError } from "../sentry.js";
+import { getTodaySpend } from "../dailyBudget.js";
 
 // Use service_role client directly for admin API access
 const supabaseAdmin = createClient(
@@ -35,8 +39,10 @@ const supabaseAdmin = createClient(
 
 interface FeatureUsageRow {
   action: string;
-  count: number;
-  credits: number;
+  count: number;          // charged calls
+  credits: number;        // credits charged (gross)
+  refunds: number;        // refunded calls (refund_<action> ledger rows)
+  refunded_credits: number;
 }
 
 interface DauRow {
@@ -64,6 +70,8 @@ interface UserRow {
   email: string;
   created_at: string;
   last_sign_in_at: string | null;
+  last_active_at: string | null; // latest of sign-in / activity_log / ledger row
+  is_owner: boolean;
   tier: string;
   credits: number;
   ai_calls: number;
@@ -77,8 +85,17 @@ interface AdminStats {
     total_users: number;
     active_today: number;
     active_week: number;
-    ai_calls_today: number;
-    credits_spent_today: number;
+    ai_calls_today: number;       // charged calls, rolling 24h
+    credits_spent_today: number;  // net of refunds, rolling 24h
+    refunds_today: number;
+    credits_refunded_today: number;
+  };
+  ops: {
+    // Redis daily-budget counters (UTC day). source=unavailable → Upstash not configured.
+    spend_cents: number;
+    budget_cents: number;
+    calls_by_action: Record<string, number>;
+    source: "redis" | "unavailable";
   };
   feature_usage: FeatureUsageRow[];
   dau: DauRow[];
@@ -193,6 +210,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ error: "Forbidden." });
   }
 
+  // Cheap authenticated health ping for the dashboard's API latency readout.
+  if (req.query.ping) return res.status(200).json({ ok: true });
+
   // 3) Parse date range
   const range = (req.query.range as string) ?? "30d";
   let rangeMs: number | null;
@@ -219,7 +239,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sevenDaysAgo = new Date(Date.now() -  7 * 24 * 60 * 60 * 1000).toISOString();
 
     // ── Parallel data fetches ─────────────────────────────────────────────────
-    const [usersResult, profilesResult, txResult, activityResult, revenue] = await Promise.all([
+    const [usersResult, profilesResult, txResult, activityResult, revenue, ops] = await Promise.all([
       supabaseAdmin.auth.admin.listUsers({ perPage: 1000 } as any),
 
       supabaseAdmin
@@ -229,7 +249,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       supabaseAdmin
         .from("credit_transactions")
         .select("user_id, amount, type, created_at")
-        .lt("amount", 0)
         .gte("created_at", rangeStart),
 
       supabaseAdmin
@@ -239,11 +258,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Stripe revenue (daily + sums). Independent of Supabase, so we parallelise.
       fetchRevenue(rangeStart, dauDays),
+
+      getTodaySpend().catch((err) => {
+        captureServerError(err, "admin-stats.daily_budget");
+        return { cents: 0, limitCents: 0, calls: {}, source: "unavailable" as const };
+      }),
     ]);
 
     const authUsers  = usersResult.data?.users ?? [];
     const profiles   = profilesResult.data ?? [];
-    const txRows     = txResult.data ?? [];
+    const allTx      = txResult.data ?? [];
+    // Charges are negative rows; refunds are positive `refund_<action>` rows
+    // (supabaseAdmin.refundCredits). Other positive rows are purchases/grants.
+    const txRows     = allTx.filter((r: any) => r.amount < 0);
+    const refundRows = allTx.filter((r: any) => typeof r.type === "string" && r.type.startsWith("refund_"));
     const actRows    = activityResult.data ?? [];
 
     // ── Index maps ────────────────────────────────────────────────────────────
@@ -255,35 +283,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ── Overview ──────────────────────────────────────────────────────────────
     const total_users = authUsers.length;
 
-    const sessionEvents = actRows.filter((r: any) => r.event === "session_start");
+    // "Active" = any activity_log event OR any AI charge — session_start alone
+    // misses users whose tab stayed open across days.
+    const activityEvents = [
+      ...actRows.map((r: any) => ({ user_id: r.user_id as string, created_at: r.created_at as string })),
+      ...txRows.map((r: any) => ({ user_id: r.user_id as string, created_at: r.created_at as string })),
+    ];
     const active_today = new Set(
-      sessionEvents.filter((r: any) => r.created_at >= oneDayAgo).map((r: any) => r.user_id)
+      activityEvents.filter(r => r.created_at >= oneDayAgo).map(r => r.user_id)
     ).size;
     const active_week = new Set(
-      sessionEvents.filter((r: any) => r.created_at >= sevenDaysAgo).map((r: any) => r.user_id)
+      activityEvents.filter(r => r.created_at >= sevenDaysAgo).map(r => r.user_id)
     ).size;
 
-    const txToday = txRows.filter((r: any) => r.created_at >= oneDayAgo);
-    const ai_calls_today      = txToday.length;
-    const credits_spent_today = txToday.reduce((s: number, r: any) => s + Math.abs(r.amount), 0);
+    const txToday      = txRows.filter((r: any) => r.created_at >= oneDayAgo);
+    const refundsToday = refundRows.filter((r: any) => r.created_at >= oneDayAgo);
+    const ai_calls_today         = txToday.length;
+    const credits_refunded_today = refundsToday.reduce((s: number, r: any) => s + r.amount, 0);
+    const credits_spent_today    = txToday.reduce((s: number, r: any) => s + Math.abs(r.amount), 0) - credits_refunded_today;
 
     // ── Feature usage ─────────────────────────────────────────────────────────
-    const featureMap = new Map<string, { count: number; credits: number }>();
+    const featureMap = new Map<string, Omit<FeatureUsageRow, "action">>();
+    const feat = (key: string) => {
+      let v = featureMap.get(key);
+      if (!v) { v = { count: 0, credits: 0, refunds: 0, refunded_credits: 0 }; featureMap.set(key, v); }
+      return v;
+    };
     for (const tx of txRows as any[]) {
-      const key = tx.type as string;
-      const existing = featureMap.get(key) ?? { count: 0, credits: 0 };
-      existing.count++;
-      existing.credits += Math.abs(tx.amount);
-      featureMap.set(key, existing);
+      const v = feat(tx.type as string);
+      v.count++;
+      v.credits += Math.abs(tx.amount);
+    }
+    for (const tx of refundRows as any[]) {
+      const v = feat((tx.type as string).slice("refund_".length));
+      v.refunds++;
+      v.refunded_credits += tx.amount;
     }
     const feature_usage: FeatureUsageRow[] = Array.from(featureMap.entries())
-      .map(([action, v]) => ({ action, count: v.count, credits: v.credits }))
+      .map(([action, v]) => ({ action, ...v }))
       .sort((a, b) => b.count - a.count);
 
     // ── DAU ───────────────────────────────────────────────────────────────────
     const dauWindowStart = new Date(Date.now() - dauDays * 24 * 60 * 60 * 1000).toISOString();
     const dauMap = new Map<string, Set<string>>();
-    for (const r of sessionEvents as any[]) {
+    for (const r of activityEvents) {
       if (r.created_at < dauWindowStart) continue;
       const day = r.created_at.slice(0, 10);
       if (!dauMap.has(day)) dauMap.set(day, new Set());
@@ -305,6 +348,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       existing.credits += Math.abs(tx.amount);
       userTx.set(uid, existing);
     }
+    for (const tx of refundRows) {
+      const existing = userTx.get(tx.user_id as string);
+      if (existing) existing.credits -= tx.amount; // net of refunds
+    }
+
+    // Latest real activity per user. auth.last_sign_in_at only moves on an
+    // explicit sign-in (token refreshes don't touch it), so on its own it
+    // reads days stale for anyone who stays signed in.
+    const lastActive = new Map<string, string>();
+    for (const r of [...activityEvents, ...refundRows as any[]]) {
+      const prev = lastActive.get(r.user_id);
+      if (!prev || r.created_at > prev) lastActive.set(r.user_id, r.created_at);
+    }
 
     const userPhotos  = new Map<string, number>();
     const userExports = new Map<string, number>();
@@ -322,11 +378,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const users: UserRow[] = authUsers.map(u => {
       const profile = profileById.get(u.id);
       const tx      = userTx.get(u.id);
+      const signIn  = u.last_sign_in_at ?? null;
+      const act     = lastActive.get(u.id) ?? null;
+      // Compare as Date: auth uses "Z", Postgres uses "+00:00" — string compare would lie.
+      const last_active_at = !act ? signIn : !signIn ? act
+        : (new Date(act).getTime() > new Date(signIn).getTime() ? act : signIn);
       return {
         id:              u.id,
         email:           u.email ?? "",
         created_at:      u.created_at,
-        last_sign_in_at: u.last_sign_in_at ?? null,
+        last_sign_in_at: signIn,
+        last_active_at,
+        is_owner:        u.id === adminId,
         tier:            profile?.subscription_tier ?? "free",
         credits:         profile?.credits ?? 0,
         ai_calls:        tx?.calls ?? 0,
@@ -335,13 +398,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         exports:         userExports.get(u.id) ?? 0,
       };
     }).sort((a, b) => {
-      const aTime = a.last_sign_in_at ?? a.created_at;
-      const bTime = b.last_sign_in_at ?? b.created_at;
-      return bTime.localeCompare(aTime);
+      const aTime = new Date(a.last_active_at ?? a.created_at).getTime();
+      const bTime = new Date(b.last_active_at ?? b.created_at).getTime();
+      return bTime - aTime;
     });
 
     const stats: AdminStats = {
-      overview: { total_users, active_today, active_week, ai_calls_today, credits_spent_today },
+      overview: {
+        total_users, active_today, active_week, ai_calls_today, credits_spent_today,
+        refunds_today: refundsToday.length, credits_refunded_today,
+      },
+      ops: { spend_cents: ops.cents, budget_cents: ops.limitCents, calls_by_action: ops.calls, source: ops.source },
       feature_usage,
       dau,
       users,

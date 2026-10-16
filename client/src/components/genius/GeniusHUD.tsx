@@ -99,7 +99,7 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, band
   }, [levelRef]);
 
   return (
-    <div className="relative w-full h-[600px] overflow-hidden bg-black flex items-center justify-center font-mono text-[#D4AF37]">
+    <div className="relative w-full h-[480px] sm:h-[600px] overflow-hidden bg-black flex items-center justify-center font-mono text-[#D4AF37]">
       {/* 3D Perspective Container */}
       <div className="relative w-full h-full flex items-center justify-center" style={{ perspective: '1000px' }}>
         
@@ -232,7 +232,7 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, band
         <div className="absolute inset-0 pointer-events-none" style={{ transform: 'translateZ(50px)' }}>
           
           {/* Top Left: Total Users */}
-          <div className="absolute top-10 left-10 w-48 p-4 border-l border-t border-[#D4AF37]/40 space-y-2">
+          <div className="absolute top-6 left-4 sm:top-10 sm:left-10 w-32 sm:w-48 p-2 sm:p-4 border-l border-t border-[#D4AF37]/40 space-y-2">
             <div className="text-[9px] text-[#D4AF37]/60 uppercase tracking-widest">Total Users</div>
             <div className="flex items-end gap-2">
               <div className="text-xl font-bold">{m.users}</div>
@@ -247,7 +247,7 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, band
           </div>
 
           {/* Top Right: AI Calls Today */}
-          <div className="absolute top-10 right-10 w-48 p-4 border-r border-t border-[#D4AF37]/40 text-right space-y-2">
+          <div className="absolute top-6 right-4 sm:top-10 sm:right-10 w-32 sm:w-48 p-2 sm:p-4 border-r border-t border-[#D4AF37]/40 text-right space-y-2">
             <div className="text-[9px] text-[#D4AF37]/60 uppercase tracking-widest">AI Calls · Today</div>
             <div className="flex items-end justify-end gap-2">
               <div className="text-xl font-bold">{m.aiCalls}</div>
@@ -261,7 +261,7 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, band
           </div>
 
           {/* Bottom Left: Revenue */}
-          <div className="absolute bottom-20 left-10 text-[10px] space-y-1">
+          <div className="absolute bottom-12 sm:bottom-20 left-4 sm:left-10 text-[10px] space-y-1">
             <div className="flex gap-4">
               <span className="opacity-40">TODAY:</span>
               <span className="font-bold">{m.revenueToday}</span>
@@ -276,7 +276,7 @@ const GeniusHUD: React.FC<HUDProps> = ({ state, isOnline, onTalk, levelRef, band
           </div>
 
           {/* Bottom Right: Usage Today */}
-          <div className="absolute bottom-20 right-10 text-[10px] text-right space-y-1">
+          <div className="absolute bottom-12 sm:bottom-20 right-4 sm:right-10 text-[10px] text-right space-y-1">
             <div className="flex justify-end gap-4">
               <span className="font-bold">{m.creditsToday}</span>
               <span className="opacity-40">CREDITS:</span>

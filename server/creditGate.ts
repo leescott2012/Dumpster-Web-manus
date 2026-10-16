@@ -11,7 +11,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import { createClient } from "@supabase/supabase-js";
-import { deductCredits, refundCredits } from "./supabaseAdmin.js";
+import { deductCredits, refundCredits, supabaseAdmin } from "./supabaseAdmin.js";
 import { enforceRateLimit } from "./rateLimit.js";
 import { checkBudget, recordCost } from "./dailyBudget.js";
 import { captureServerError } from "./sentry.js";
@@ -234,9 +234,16 @@ export async function checkAutoCredits(
   var budgetOk = await checkBudget(res);
   if (!budgetOk) return { userId: userId, proceed: false, refund: noopRefund };
 
-  recordCost(action).catch(function(e) {
+  recordCost(action, imageCount).catch(function(e) {
     console.warn("[creditGate] recordCost failed:", e);
     captureServerError(e, "creditGate.recordCost", { action: action, userId: userId });
+  });
+  // Free calls never hit credit_transactions — log them so the admin dashboard
+  // counts this user as active and can show per-user free auto-label usage.
+  supabaseAdmin.from("activity_log").insert({
+    user_id: userId, event: "ai_label_auto", metadata: { images: imageCount },
+  }).then(function(r) {
+    if (r.error) console.warn("[creditGate] activity_log insert failed:", r.error.message);
   });
 
   // No credits were deducted (system-initiated action) — nothing to refund.
