@@ -29,7 +29,7 @@ Channel strategy and content drafting are this agent's core hats.
 </commentary>
 </example>
 
-model: inherit
+model: sonnet
 color: magenta
 tools: ["Read", "Grep", "Glob", "WebSearch", "WebFetch", "mcp__mcp-obsidian__obsidian_get_file_contents", "mcp__mcp-obsidian__obsidian_patch_content", "mcp__mcp-obsidian__obsidian_append_content"]
 ---

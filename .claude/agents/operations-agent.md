@@ -38,7 +38,7 @@ Keeping trackers truthful is project-management work.
 </commentary>
 </example>
 
-model: inherit
+model: sonnet
 color: yellow
 tools: ["Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch", "mcp__mcp-obsidian__obsidian_get_file_contents", "mcp__mcp-obsidian__obsidian_patch_content", "mcp__mcp-obsidian__obsidian_append_content"]
 ---

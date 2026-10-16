@@ -10,3 +10,4 @@ create table if not exists public.apple_notifications (
   data jsonb,
   processed_at timestamptz default now()
 );
+alter table public.apple_notifications enable row level security; -- server-only (service role bypasses RLS)

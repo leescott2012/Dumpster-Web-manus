@@ -29,7 +29,7 @@ Turning a raw idea into a scoped, prioritized spec is product work.
 </commentary>
 </example>
 
-model: inherit
+model: sonnet
 color: blue
 tools: ["Read", "Grep", "Glob", "WebSearch", "WebFetch", "mcp__mcp-obsidian__obsidian_get_file_contents", "mcp__mcp-obsidian__obsidian_patch_content", "mcp__mcp-obsidian__obsidian_append_content"]
 ---
