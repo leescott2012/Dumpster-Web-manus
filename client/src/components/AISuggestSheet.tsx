@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { getAuthHeaders } from "@/lib/supabase";
 import { Sparkles, X, RefreshCcw, Plus, Loader2, Minus } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
-import { buildTasteBlock } from "@/lib/captionPool";
+import { buildTasteBlock, loadDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, type DumpStyle } from "@/lib/captionPool";
 import { compressDataUrlForVision } from "@/lib/imageDownscale";
 import { friendlyError } from "@/lib/friendlyError";
 import { offlineAutoGen } from "@/lib/offlineAutoGen";
@@ -53,8 +53,13 @@ export default function AISuggestSheet({
   const [errorHint, setErrorHint] = useState("");
   // Re-evaluate taste block each time the sheet opens so edits in MainMenu are picked up
   const [tasteActive, setTasteActive] = useState(false);
+  const [dumpStyles, setDumpStyles] = useState<DumpStyle[]>([]);
+  const [activeStyleId, setActiveStyleId] = useState("");
   useEffect(() => {
-    if (open) setTasteActive(Boolean(buildTasteBlock()));
+    if (!open) return;
+    setTasteActive(Boolean(buildTasteBlock()));
+    setDumpStyles(loadDumpStyles());
+    setActiveStyleId(loadActiveDumpStyleId());
   }, [open]);
   const variationRef = useRef(0);
 
@@ -396,6 +401,31 @@ export default function AISuggestSheet({
                       </div>
                     </div>
                   </div>
+
+                  {/* Dump style picker — sets the active style used by buildTasteBlock */}
+                  {dumpStyles.length > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                      <span style={{ fontSize: 11, color: "#8a8a8a", letterSpacing: "0.02em" }}>Style</span>
+                      <select
+                        value={activeStyleId}
+                        onChange={function(e) {
+                          setActiveStyleId(e.target.value);
+                          saveActiveDumpStyleId(e.target.value);
+                          setTasteActive(Boolean(buildTasteBlock()));
+                        }}
+                        style={{
+                          flex: 1, background: "#0a0a0a", color: "#e8e8e8",
+                          border: "1px solid #2a2a2a", borderRadius: 8,
+                          padding: "6px 8px", fontSize: 12, fontFamily: "inherit",
+                        }}
+                      >
+                        <option value="">None</option>
+                        {dumpStyles.map(function(st) {
+                          return <option key={st.id} value={st.id}>{st.name || "Untitled"}</option>;
+                        })}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Advanced filters — date, time, category, mix mode, vibe */}
                   <AutoGenAdvanced

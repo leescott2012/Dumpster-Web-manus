@@ -8,7 +8,7 @@ import {
   X, Sparkles, Archive, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Instagram,
   LogOut, User, Share2, Check, Cloud, CloudOff,
 } from "lucide-react";
-import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules } from "@/lib/captionPool";
+import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpStyles, saveDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, type DumpStyle } from "@/lib/captionPool";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -707,6 +707,136 @@ function TasteProfileSection() {
           }}
         />
       </div>
+
+      <DumpStylesSection signedIn={isSignedIn} />
+    </div>
+  );
+}
+
+// ── Dump Styles — named recipes; the active one is appended to the taste block ─
+
+const fieldStyle: React.CSSProperties = {
+  width: "100%", background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 8,
+  padding: "10px 12px", fontSize: 12, color: "#e8e8e8",
+  fontFamily: "inherit", lineHeight: 1.55, outline: "none", boxSizing: "border-box",
+};
+
+function styleChip(on: boolean): React.CSSProperties {
+  return {
+    padding: "6px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: "pointer",
+    border: on ? "1px solid var(--accent)" : "1px solid #2a2a2a",
+    background: on ? "rgba(var(--accent-rgb),0.15)" : "#0a0a0a",
+    color: on ? "#fff" : "rgba(255,255,255,0.6)",
+  };
+}
+
+function DumpStylesSection({ signedIn }: { signedIn: boolean }) {
+  const [styles, setStyles] = useState<DumpStyle[]>(() => loadDumpStyles());
+  const [activeId, setActiveId] = useState<string>(() => loadActiveDumpStyleId());
+  const [editId, setEditId] = useState<string>(() => loadActiveDumpStyleId() || (loadDumpStyles()[0] || { id: "" }).id);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [status, setStatus] = useState<SaveStatus>("idle");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirtyRef = useRef(false);
+  const latestRef = useRef(styles);
+  latestRef.current = styles;
+
+  // Same 1.2s debounced autosave as the textareas above.
+  useEffect(() => {
+    if (!dirtyRef.current) return;
+    setStatus("saving");
+    if (hideRef.current) clearTimeout(hideRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      saveDumpStyles(styles);
+      dirtyRef.current = false;
+      setStatus("saved");
+      hideRef.current = setTimeout(() => setStatus("idle"), 2500);
+    }, 1200);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [styles]);
+
+  // Flush on unmount so closing the menu mid-typing doesn't drop the edit.
+  useEffect(() => {
+    return () => {
+      if (dirtyRef.current) {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        saveDumpStyles(latestRef.current);
+      }
+    };
+  }, []);
+
+  function update(next: DumpStyle[]) {
+    dirtyRef.current = true;
+    setStyles(next);
+  }
+  function activate(id: string) {
+    setActiveId(id);
+    saveActiveDumpStyleId(id);
+    if (id) setEditId(id);
+    setConfirmDelete(false);
+  }
+  function addStyle() {
+    const s: DumpStyle = { id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36), name: "New style", profile: "", rules: "", updatedAt: new Date().toISOString() };
+    update(styles.concat(s));
+    setEditId(s.id);
+    setConfirmDelete(false);
+  }
+  function edit(field: "name" | "profile" | "rules", value: string) {
+    update(styles.map(s => s.id === editId ? { ...s, [field]: value, updatedAt: new Date().toISOString() } : s));
+  }
+  function remove() {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    update(styles.filter(s => s.id !== editId));
+    if (activeId === editId) activate("");
+    setEditId("");
+    setConfirmDelete(false);
+  }
+
+  const editing = styles.find(s => s.id === editId);
+
+  return (
+    <div style={{ background: "#141414", border: "1px solid rgba(200,160,110,0.18)", borderRadius: 12, padding: "14px 14px 12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
+          Dump Styles
+          <CloudSyncBadge signedIn={signedIn} />
+        </div>
+        <SaveStatusPill status={status} />
+      </div>
+      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
+        Saved recipes for how the AI builds your dumps. The active one is used on every AI suggestion.
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+        <button type="button" onClick={() => activate("")} style={styleChip(!activeId)}>None</button>
+        {styles.map(s => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => activate(s.id)}
+            style={{ ...styleChip(s.id === activeId), outline: s.id === editId && s.id !== activeId ? "1px dashed #555" : "none" }}
+          >
+            {s.name || "Untitled"}{s.id === activeId ? " · Active" : ""}
+          </button>
+        ))}
+        <button type="button" onClick={addStyle} style={{ ...styleChip(false), borderStyle: "dashed" }}>+ New style</button>
+      </div>
+      {editing && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <input value={editing.name} maxLength={40} onChange={e => edit("name", e.target.value)} placeholder="Style name (e.g. Fit check)" style={fieldStyle} />
+          <textarea value={editing.profile} maxLength={750} onChange={e => edit("profile", e.target.value)} placeholder="Recipe: structure, sequencing, poses, mix (e.g. open on a mirror fit, 2 detail shots, end on a candid)" style={{ ...fieldStyle, minHeight: 80, resize: "vertical" }} />
+          <textarea value={editing.rules} maxLength={500} onChange={e => edit("rules", e.target.value)} placeholder={"Rules for this style, one per line\nmax 8 photos\nno food shots"} style={{ ...fieldStyle, minHeight: 60, resize: "vertical" }} />
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            {confirmDelete && (
+              <button type="button" onClick={() => setConfirmDelete(false)} style={styleChip(false)}>Cancel</button>
+            )}
+            <button type="button" onClick={remove} style={{ ...styleChip(false), color: "#e5484d", borderColor: confirmDelete ? "#e5484d" : "#2a2a2a" }}>
+              {confirmDelete ? "Tap again to delete" : "Delete style"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
