@@ -9,6 +9,7 @@ import { X, Hand, Sparkles, Loader, Check } from "lucide-react";
 import { getAuthHeaders } from "@/lib/supabase";
 import type { Photo, Dump } from "@/lib/photoData";
 import { loadTasteProfile } from "@/lib/captionPool";
+import { notVideo } from "@/lib/videoStore";
 
 interface RecycleSheetProps {
   open: boolean;
@@ -75,10 +76,11 @@ export default function RecycleSheet({
         body: JSON.stringify({
           dumpId: dump.id,
           dumpTitle: dump.title,
-          dumpPhotos: dump.photos.map(function(p) {
+          // videos are device-only by owner decision
+          dumpPhotos: dump.photos.filter(notVideo).map(function(p) {
             return { id: p.id, url: p.url, alt: p.alt, category: p.category };
           }),
-          poolPhotos: pool.map(function(p) {
+          poolPhotos: pool.filter(notVideo).map(function(p) {
             return { id: p.id, url: p.url, alt: p.alt, category: p.category };
           }),
           history: [],

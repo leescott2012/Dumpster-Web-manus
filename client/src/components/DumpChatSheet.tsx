@@ -8,6 +8,7 @@ import { X, Send, Loader, ArrowUpDown, ArrowDownToLine, ArrowUpFromLine, Palette
 import type { Dump, Photo } from "@/lib/photoData";
 import { loadTasteProfile, saveTasteProfile, buildTasteBlock } from "@/lib/captionPool";
 import { friendlyError } from "@/lib/friendlyError";
+import { notVideo } from "@/lib/videoStore";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -145,10 +146,11 @@ export default function DumpChatSheet({
         body: JSON.stringify({
           dumpId: dump.id,
           dumpTitle: dump.title,
-          dumpPhotos: dump.photos.map(function(p) {
+          // videos are device-only by owner decision
+          dumpPhotos: dump.photos.filter(notVideo).map(function(p) {
             return { id: p.id, url: p.url, alt: p.alt, category: p.category };
           }),
-          poolPhotos: pool.map(function(p) {
+          poolPhotos: pool.filter(notVideo).map(function(p) {
             return { id: p.id, url: p.url, alt: p.alt, category: p.category };
           }),
           history: historyForApi,

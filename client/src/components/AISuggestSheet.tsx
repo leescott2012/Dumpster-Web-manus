@@ -18,6 +18,7 @@ import { compressDataUrlForVision } from "@/lib/imageDownscale";
 import { friendlyError } from "@/lib/friendlyError";
 import { offlineAutoGen } from "@/lib/offlineAutoGen";
 import AutoGenAdvanced, { EMPTY_FILTERS, applyAutoGenFilters, type AutoGenFilters } from "./AutoGenAdvanced";
+import { notVideo } from "@/lib/videoStore";
 
 export interface SuggestedCluster {
   name: string;
@@ -66,7 +67,7 @@ export default function AISuggestSheet({
   // Apply advanced filters BEFORE truncating to MAX_PHOTOS so the cap is
   // applied to the filtered subset (not the full pool).
   const filteredPool = useMemo(
-    () => applyAutoGenFilters(poolPhotos, filters, usedPhotoIds),
+    () => applyAutoGenFilters(poolPhotos.filter(notVideo), filters, usedPhotoIds), // videos are device-only by owner decision
     [poolPhotos, filters, usedPhotoIds]
   );
   const photosToAnalyze = filteredPool.slice(0, MAX_PHOTOS);

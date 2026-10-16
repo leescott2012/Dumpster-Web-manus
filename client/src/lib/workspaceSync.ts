@@ -20,6 +20,7 @@
  */
 import { supabase } from "./supabase";
 import { type Dump, type Photo } from "./photoData";
+import { notVideo } from "./videoStore";
 
 // Sync runs for ANY signed-in user. RLS scopes every query to the user's own
 // rows, so a user only ever loads their own workspace. Users without a cloud
@@ -137,6 +138,8 @@ export async function loadWorkspace(
 import { getAuthHeaders } from "./supabase";
 
 function isCloudUrl(url: string) { return url.startsWith("http"); }
+// videos are device-only by owner decision — never in the workspace payload.
+function syncable(p: Photo) { return notVideo(p) && isCloudUrl(p.url); }
 
 // Duplicate-signature fields only — never send GPS/camera/lens/etc to the
 // server (see photoData.ts PhotoMeta; those stay client-local by design).
@@ -153,12 +156,12 @@ function serialize(dumps: Dump[], pool: Photo[]) {
       return {
         id: d.id, title: d.title, subtitle: d.subtitle,
         photos: d.photos
-          .filter(function (p) { return isCloudUrl(p.url); })
+          .filter(syncable)
           .map(function (p) { return { id: p.id, url: p.url, category: p.category, alt: p.alt, meta: dupMeta(p) }; }),
       };
     }),
     pool: pool
-      .filter(function (p) { return isCloudUrl(p.url); })
+      .filter(syncable)
       .map(function (p) { return { id: p.id, url: p.url, category: p.category, meta: dupMeta(p) }; }),
   };
 }
@@ -216,6 +219,7 @@ export async function setDumpPublic(dumpId: string, isPublic: boolean): Promise<
 
 export async function uploadPhotoToCloud(id: string, dataUrl: string): Promise<string | null> {
   if (!dataUrl || dataUrl.indexOf("data:") !== 0) return null;
+  if (dataUrl.indexOf("data:video/") === 0) return null; // videos are device-only by owner decision
   try {
     var headers = await getAuthHeaders();
     if (!headers.Authorization) return null; // guest → stays local

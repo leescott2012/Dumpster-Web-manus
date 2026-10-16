@@ -9,6 +9,7 @@ import { useRef, useCallback, useState } from "react";
 import { useDrag } from "@/contexts/DragContext";
 import { Play } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
+import { videoThumb } from "@/lib/videoStore";
 
 interface PhotoCardProps {
   photo: Photo;
@@ -227,7 +228,7 @@ export default function PhotoCard({
       onDoubleClick={handleDoubleClick}
     >
       <img
-        src={photo.url} alt={photo.alt} draggable={false} loading="lazy"
+        src={(photo.category === "Video" && videoThumb(photo.id)) || photo.url} alt={photo.alt} draggable={false} loading="lazy"
         style={fill
           ? { width: "100%", aspectRatio: width + " / " + height, height: "auto", objectFit: "cover", display: "block", pointerEvents: "none" }
           : { width: widthPx, height: heightPx, objectFit: "cover", display: "block", pointerEvents: "none" }}

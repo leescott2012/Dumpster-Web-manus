@@ -9,6 +9,7 @@ import type { Dump } from "@/lib/photoData";
 import { buildTasteBlock } from "@/lib/captionPool";
 import { compressDataUrlForVision } from "@/lib/imageDownscale";
 import { friendlyError } from "@/lib/friendlyError";
+import { notVideo } from "@/lib/videoStore";
 
 interface CaptionSheetProps {
   open: boolean;
@@ -77,7 +78,8 @@ export default function CaptionSheet({
       var authH = await getAuthHeaders();
       // Compress any data-URL photos so the request fits Vercel's 4.5MB cap
       const compressedPhotos = await Promise.all(
-        selectedDump.photos.slice(0, 12).map(async (p) => ({
+        // videos are device-only by owner decision
+        selectedDump.photos.filter(notVideo).slice(0, 12).map(async (p) => ({
           id: p.id,
           url: await compressDataUrlForVision(p.url),
           alt: p.alt,
