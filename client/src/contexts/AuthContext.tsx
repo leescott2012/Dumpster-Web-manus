@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { syncAIProfileOnSignIn, ensureAIProfileWired } from "@/lib/aiProfileSync";
 import { setCurrentUserId } from "@/lib/currentUser";
 import { CREDIT_COSTS } from "@/lib/credits";
+import { onCreditChange } from "@/lib/creditSync";
 import type { User, Session } from "@supabase/supabase-js";
 
 export interface UserProfile {
@@ -178,6 +179,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   var refreshProfile = useCallback(async function() {
     if (user) await fetchProfile(user.id);
   }, [user, fetchProfile]);
+
+  // Keep the badge in sync after every AI call (aiFetch) and when the tab
+  // regains focus (another tab/device may have spent credits).
+  var userId = user ? user.id : null;
+  useEffect(function() {
+    if (!userId) return;
+    var uid = userId;
+    var timers: ReturnType<typeof setTimeout>[] = [];
+    var off = onCreditChange(function(remaining) {
+      if (remaining === null) {
+        // Failure/refund path: the server refunds after responding, so read
+        // now and once more after the refund has had time to land.
+        fetchProfile(uid);
+        timers.push(setTimeout(function() { fetchProfile(uid); }, 2500));
+        return;
+      }
+      setProfile(function(p) {
+        if (!p) return p;
+        // Server spends daily first, then purchased — mirror that split.
+        var spent = Math.max(0, p.credits + p.daily_credits_remaining - remaining);
+        var daily = Math.max(0, p.daily_credits_remaining - spent);
+        return { ...p, daily_credits_remaining: daily, credits: remaining - daily };
+      });
+    });
+    function onVisible() {
+      if (document.visibilityState === "visible") fetchProfile(uid);
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return function() {
+      off();
+      timers.forEach(clearTimeout);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [userId, fetchProfile]);
 
   var totalCredits = profile ? profile.credits + profile.daily_credits_remaining : 0;
 

@@ -5,6 +5,7 @@
  * Step 2b (AI): Call API, auto-swap, show result
  */
 import { useState, useCallback, useEffect } from "react";
+import { aiFetch } from "@/lib/creditSync";
 import { X, Hand, Sparkles, Loader, Check } from "lucide-react";
 import { getAuthHeaders } from "@/lib/supabase";
 import type { Photo, Dump } from "@/lib/photoData";
@@ -76,7 +77,7 @@ export default function RecycleSheet({
 
     try {
       var authH = await getAuthHeaders();
-      var res = await fetch("/api/ai-chat", {
+      var res = await aiFetch("/api/ai-chat", {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, authH),
         body: JSON.stringify({

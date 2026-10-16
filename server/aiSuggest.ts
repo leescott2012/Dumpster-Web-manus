@@ -8,6 +8,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
 import { publicAIError } from "./sentry.js";
+import { recordCost } from "./dailyBudget.js";
+import { MAX_SAME_RUN, longestRun, breakUpRuns, wantsVariety, extractRuleLines } from "./sequenceRules.js";
 
 export interface PhotoInput {
   id: string;
@@ -82,6 +84,7 @@ export async function handleAISuggest(
     return false;
   }
 
+  const startedAt = Date.now();
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey === "your_anthropic_api_key_here") {
     res.writeHead(500, { "Content-Type": "application/json" });
@@ -117,7 +120,8 @@ export async function handleAISuggest(
     return false;
   }
 
-  // Cap at 20 photos for cost/speed
+  // Cap at 20 photos for cost/speed. The client sends a rotating 20-photo
+  // window (client/src/lib/photoWindow.ts) and tells the user "AI sees N of M".
   const capped = photos.slice(0, 20);
   if (capped.length < 2) {
     res.writeHead(400, { "Content-Type": "application/json" });
@@ -157,9 +161,17 @@ export async function handleAISuggest(
     ? ` This is attempt #${variation + 1} — pick a DIFFERENT theme or photo selection than you would have chosen before.`
     : "";
 
-  // Put taste/rules BEFORE photos so they frame the entire analysis
+  // Rules go BEFORE photos (frames the analysis) in a clearly delimited
+  // REQUIRED block, and the key ones are restated right before the schema —
+  // a no-style live run ignored "variety" rules sitting only at the top.
   const tastePrefix = tasteBlock
-    ? `MANDATORY USER REQUIREMENTS — these apply to your photo selection, carousel name, and subtitle. Violations are not acceptable:\n${tasteBlock}\n\n`
+    ? `=== REQUIRED: USER RULES (apply to photo selection, ORDER, carousel name and subtitle; they override your own taste) ===\n${tasteBlock}\n=== END REQUIRED ===\n\n`
+    : "";
+  const checkVariety = wantsVariety(tasteBlock);
+  const keyRules = extractRuleLines(tasteBlock, 3);
+  if (checkVariety) keyRules.push(`No more than ${MAX_SAME_RUN} photos of the same category/subject in a row — mix shot types, angles and poses.`);
+  const restate = tasteBlock
+    ? `\n\nREQUIRED — re-read before answering:\n${keyRules.length ? keyRules.map((r) => "- " + r).join("\n") + "\n" : ""}- Every rule in the REQUIRED block above.\nBefore you answer, silently check your chosen photos and their order against each REQUIRED rule. If any rule is broken, change the selection or order until none are. Then output the JSON.`
     : "";
 
   content.push({
@@ -193,11 +205,53 @@ export async function handleAISuggest(
 
   content.push({
     type: "text",
-    text: `From these ${capped.length} photos: ${countInstruction} Give the carousel a punchy name (3–5 words) and a subtitle describing the vibe (under 10 words).${userHintBlock}
+    text: `From these ${capped.length} photos: ${countInstruction} Give the carousel a punchy name (3–5 words) and a subtitle describing the vibe (under 10 words).${userHintBlock}${restate}
 
 Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
 {"clusters":[{"name":"Name Here","subtitle":"Vibe here","photoIndices":[2,5,7,11]}]}`,
   });
+
+  // Parse + validate model text: 1-based integer indices in range, no
+  // duplicates, at most targetCount; drop clusters with fewer than 2 photos.
+  // Returns null if the text isn't JSON.
+  const parseClusters = (rawText: string): Cluster[] | null => {
+    const cleaned = rawText
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```\s*$/i, "")
+      .trim();
+    let parsed: { clusters?: unknown };
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      return null;
+    }
+    const rawClusters: any[] = Array.isArray(parsed.clusters) ? parsed.clusters : [];
+    const out: Cluster[] = [];
+    for (const c of rawClusters) {
+      if (!c || typeof c !== "object") continue;
+      const ids: string[] = [];
+      for (const idx of Array.isArray(c.photoIndices) ? c.photoIndices : []) {
+        if (!Number.isInteger(idx) || idx < 1 || idx > capped.length) continue;
+        const id = capped[idx - 1].id;
+        if (ids.indexOf(id) === -1) ids.push(id);
+      }
+      const photoIds = targetCount ? ids.slice(0, targetCount) : ids;
+      if (photoIds.length < 2) continue;
+      out.push({
+        name: typeof c.name === "string" && c.name.trim() ? c.name.trim().slice(0, 80) : "Untitled dump",
+        subtitle: typeof c.subtitle === "string" ? c.subtitle.trim().slice(0, 120) : "",
+        photoIds: photoIds,
+      });
+    }
+    return out;
+  };
+
+  const catById: Record<string, string> = {};
+  for (const p of capped) catById[p.id] = (p.category || "").toLowerCase();
+  const catOf = (id: string) => catById[id] || "";
+  const runTooLong = (c: Cluster) => longestRun(c.photoIds.map(catOf)) > MAX_SAME_RUN;
+  // Only enforce when the pool could actually be mixed.
+  const poolHasVariety = new Set(capped.map((p) => catOf(p.id))).size > 1;
 
   try {
     // 40s, no retries: image fetch (≤8s) + this must finish inside the 60s
@@ -212,49 +266,60 @@ Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
     const rawText =
       message.content[0].type === "text" ? message.content[0].text : "";
 
-    // Strip markdown fences if present
-    const cleaned = rawText
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```\s*$/i, "")
-      .trim();
-
-    let parsed: { clusters?: unknown };
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch {
+    const parsedClusters = parseClusters(rawText);
+    if (parsedClusters === null) {
       // Log the raw text server-side only — never echo model output to the client.
       console.error("[AI Suggest] invalid JSON from model:", rawText.slice(0, 500));
       res.writeHead(502, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "AI couldn't build a sequence. Try again.", code: "ai_invalid_output" }));
       return false;
     }
-
-    // Validate: 1-based integer indices in range, no duplicates, at most
-    // targetCount; drop clusters that end up with fewer than 2 photos.
-    const rawClusters: any[] = Array.isArray(parsed.clusters) ? parsed.clusters : [];
-    const clusters: Cluster[] = [];
-    for (const c of rawClusters) {
-      if (!c || typeof c !== "object") continue;
-      const ids: string[] = [];
-      for (const idx of Array.isArray(c.photoIndices) ? c.photoIndices : []) {
-        if (!Number.isInteger(idx) || idx < 1 || idx > capped.length) continue;
-        const id = capped[idx - 1].id;
-        if (ids.indexOf(id) === -1) ids.push(id);
-      }
-      const photoIds = targetCount ? ids.slice(0, targetCount) : ids;
-      if (photoIds.length < 2) continue;
-      clusters.push({
-        name: typeof c.name === "string" && c.name.trim() ? c.name.trim().slice(0, 80) : "Untitled dump",
-        subtitle: typeof c.subtitle === "string" ? c.subtitle.trim().slice(0, 120) : "",
-        photoIds: photoIds,
-      });
-    }
+    let clusters: Cluster[] = parsedClusters;
 
     if (clusters.length === 0) {
       console.error("[AI Suggest] no usable cluster in model output:", rawText.slice(0, 500));
       res.writeHead(502, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "AI couldn't build a sequence. Try again.", code: "ai_empty_result" }));
       return false;
+    }
+
+    // Variety post-check (only when the user's rules ask for it). One free
+    // re-ask (user isn't charged again; the $ still counts against the daily
+    // budget), then a deterministic reorder if the run is still too long.
+    // The first valid result is always kept as the fallback.
+    if (checkVariety && poolHasVariety && runTooLong(clusters[0])) {
+      // Leave ≥8s headroom under maxDuration (60s) so a slow re-ask can't get
+      // the function killed after the user was already charged.
+      const budgetMs = 52000 - (Date.now() - startedAt);
+      if (budgetMs > 10000) {
+        try {
+          recordCost("ai_suggest").catch(() => {});
+          const retryClient = new Anthropic({ apiKey, timeout: budgetMs, maxRetries: 0 });
+          const order = clusters[0].photoIds
+            .map((id) => (capped.findIndex((p) => p.id === id) + 1) + " [" + catOf(id) + "]")
+            .join(", ");
+          const retry = await retryClient.messages.create({
+            model: "claude-haiku-4-5",
+            max_tokens: 1024,
+            messages: [
+              { role: "user", content },
+              { role: "assistant", content: rawText },
+              {
+                role: "user",
+                content: `Your sequence (${order}) has more than ${MAX_SAME_RUN} photos of the same category in a row, which breaks the REQUIRED rules. Pick again: mix shot types and poses, and never put more than ${MAX_SAME_RUN} same-category photos back to back. Same JSON format only.`,
+              },
+            ],
+          });
+          const retryText = retry.content[0] && retry.content[0].type === "text" ? retry.content[0].text : "";
+          const retryClusters = parseClusters(retryText);
+          if (retryClusters && retryClusters.length > 0) clusters = retryClusters;
+        } catch (e) {
+          console.warn("[AI Suggest] variety re-ask failed, keeping first result:", e);
+        }
+      }
+      if (runTooLong(clusters[0])) {
+        clusters[0] = { ...clusters[0], photoIds: breakUpRuns(clusters[0].photoIds, catOf, MAX_SAME_RUN) };
+      }
     }
 
     const response: AISuggestResponse = { clusters };

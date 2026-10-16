@@ -4,6 +4,7 @@
  * Pulses orange when low, red when empty.
  * If not logged in, shows "Sign In" button.
  */
+import { useEffect, useRef, useState } from "react";
 import { Zap, User, LayoutDashboard } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { isOwnerId } from "@/lib/photoData";
@@ -16,6 +17,19 @@ interface CreditsBadgeProps {
 
 export default function CreditsBadge({ onCreditsClick, onAuthClick }: CreditsBadgeProps) {
   var { user, profile, totalCredits, loading } = useAuth();
+
+  // Brief "-25" / "+500" tick whenever the balance changes after first load.
+  var prevRef = useRef<number | null>(null);
+  var [tick, setTick] = useState<{ delta: number; key: number } | null>(null);
+  var hasProfile = profile !== null;
+  useEffect(function() {
+    var prev = prevRef.current;
+    prevRef.current = hasProfile ? totalCredits : null;
+    if (prev === null || !hasProfile || prev === totalCredits) return;
+    setTick({ delta: totalCredits - prev, key: Date.now() });
+    var t = setTimeout(function() { setTick(null); }, 1800);
+    return function() { clearTimeout(t); };
+  }, [totalCredits, hasProfile]);
 
   if (loading) return null;
 
@@ -145,6 +159,15 @@ export default function CreditsBadge({ onCreditsClick, onAuthClick }: CreditsBad
       }}>
         {totalCredits}
       </span>
+      {tick && (
+        <span key={tick.key} aria-hidden="true" style={{
+          fontSize: 11, fontWeight: 800,
+          color: tick.delta < 0 ? "#f87171" : "#4ade80",
+          animation: "creditsTick 1.8s ease-out forwards",
+        }}>
+          {(tick.delta > 0 ? "+" : "") + tick.delta}
+        </span>
+      )}
 
       {isPro && (
         <span style={{
@@ -157,7 +180,8 @@ export default function CreditsBadge({ onCreditsClick, onAuthClick }: CreditsBad
       )}
 
       <style>{
-        "@keyframes creditsPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }"
+        "@keyframes creditsPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }" +
+        " @keyframes creditsTick { 0% { opacity: 0; transform: translateY(4px); } 15% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }"
       }</style>
     </button>
     </div>

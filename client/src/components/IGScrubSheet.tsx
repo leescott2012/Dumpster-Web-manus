@@ -3,6 +3,7 @@
  * preview what was found, then add selected items to the pool.
  */
 import { useState, useCallback, useEffect } from "react";
+import { aiFetch } from "@/lib/creditSync";
 import { X, Instagram, Search, Plus, Check, AlertCircle, Loader } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
@@ -46,7 +47,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
     setLoading(true);
     setError(null);
     try {
-      var res = await fetch("/api/ig-scrub", {
+      var res = await aiFetch("/api/ig-scrub", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ urls: lines }),

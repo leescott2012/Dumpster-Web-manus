@@ -12,6 +12,7 @@
  * Only { id, url } is ever sent: no EXIF/GPS.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { aiFetch } from "@/lib/creditSync";
 import { getAuthHeaders } from "@/lib/supabase";
 import { compressDataUrlForVision } from "@/lib/imageDownscale";
 import { logBug } from "@/lib/bugLogger";
@@ -47,7 +48,7 @@ async function requestLabels(photos: Photo[], audit: boolean): Promise<PhotoLabe
     return { id: p.id, url: p.url.startsWith("data:") ? await compressDataUrlForVision(p.url, 1568, 0.82) : p.url };
   }));
   var headers = await getAuthHeaders();
-  var res = await fetch("/api/ai-label", {
+  var res = await aiFetch("/api/ai-label", {
     method: "POST",
     headers: Object.assign({ "Content-Type": "application/json" }, headers),
     body: JSON.stringify({ photos: body, auto: true, audit: audit }),

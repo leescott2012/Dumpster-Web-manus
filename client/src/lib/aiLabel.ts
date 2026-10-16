@@ -5,6 +5,7 @@
  * bodies stay small; HTTPS-URL photos are sent by reference (tiny).
  */
 import { getAuthHeaders } from "./supabase";
+import { aiFetch } from "@/lib/creditSync";
 import { compressDataUrlForVision } from "./imageDownscale";
 
 export interface PhotoLabel { id: string; category: string; label: string; confidence?: number }
@@ -35,7 +36,7 @@ async function scanBatch(batch: ScanInput[], auto: boolean): Promise<PhotoLabel[
   // One endpoint, two credit-gate modes (auto flag) — see api/ai-label.ts;
   // Vercel's Hobby plan caps a deployment at 12 serverless functions, so this
   // isn't split into a second route.
-  const res = await fetch("/api/ai-label", {
+  const res = await aiFetch("/api/ai-label", {
     method: "POST",
     headers: Object.assign({ "Content-Type": "application/json" }, headers),
     body: JSON.stringify({ photos, auto }),

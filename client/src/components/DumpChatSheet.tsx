@@ -3,6 +3,7 @@
  * The Valet can reorder, swap photos in/out, update vibe, and learn taste preferences.
  */
 import { useState, useCallback, useEffect, useRef } from "react";
+import { aiFetch } from "@/lib/creditSync";
 import { getAuthHeaders } from "@/lib/supabase";
 import { X, Send, Loader, ArrowUpDown, ArrowDownToLine, ArrowUpFromLine, Palette, Brain } from "lucide-react";
 import type { Dump, Photo } from "@/lib/photoData";
@@ -157,7 +158,7 @@ export default function DumpChatSheet({
 
     try {
       var authH = await getAuthHeaders();
-      var res = await fetch("/api/ai-chat", {
+      var res = await aiFetch("/api/ai-chat", {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, authH),
         body: JSON.stringify({

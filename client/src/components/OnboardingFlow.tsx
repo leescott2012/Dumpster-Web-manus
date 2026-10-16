@@ -13,6 +13,7 @@
  * Step 1 (username) is skipped for anyone who already has one.
  */
 import { useEffect, useRef, useState } from "react";
+import { aiFetch } from "@/lib/creditSync";
 import { Loader, Check, X as XIcon, Upload, Sparkles, Instagram } from "lucide-react";
 import { getAuthHeaders, supabase } from "@/lib/supabase";
 import { AVATAR_ICONS, AVATAR_COLORS, type AvatarIconName } from "@/lib/avatarIcons";
@@ -138,7 +139,7 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
     setScrubError(null);
     try {
       var headers = await getAuthHeaders();
-      var res = await fetch("/api/ig-scrub", {
+      var res = await aiFetch("/api/ig-scrub", {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, headers),
         body: JSON.stringify({ profileURL: url }),

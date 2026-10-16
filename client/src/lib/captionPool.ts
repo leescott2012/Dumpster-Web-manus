@@ -288,6 +288,9 @@ export function saveDumpStyles(styles: DumpStyle[]) {
 export function loadActiveDumpStyleId(): string {
   return localStorage.getItem("dumpster_active_dump_style") || "";
 }
+/** Shown after switching dump style — every buildTasteBlock() caller. */
+export const DUMP_STYLE_USED_BY = "Used by Auto-arrange, Captions and the Valet";
+
 export function saveActiveDumpStyleId(id: string) {
   localStorage.setItem("dumpster_active_dump_style", id);
   notifyAIProfileChanged();
