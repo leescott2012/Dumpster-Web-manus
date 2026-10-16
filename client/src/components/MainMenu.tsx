@@ -8,7 +8,7 @@ import {
   X, Sparkles, Archive, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Instagram,
   LogOut, User, Share2, Check, Cloud, CloudOff,
 } from "lucide-react";
-import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpStyles, saveDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, type DumpStyle } from "@/lib/captionPool";
+import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpStyles, saveDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, TASTE_PROFILE_MAX, AI_RULES_MAX, type DumpStyle } from "@/lib/captionPool";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -654,7 +654,7 @@ function TasteProfileSection() {
             </div>
             <SaveStatusPill status={profileStatus} />
           </div>
-          <span style={{ fontSize: 10, color: "#555" }}>{profile.length}/750</span>
+          <span style={{ fontSize: 10, color: "#555" }}>{profile.length + "/" + TASTE_PROFILE_MAX}</span>
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
           {isSignedIn
@@ -663,7 +663,7 @@ function TasteProfileSection() {
         </div>
         <textarea
           value={profile}
-          maxLength={750}
+          maxLength={TASTE_PROFILE_MAX}
           onChange={e => setProfile(e.target.value)}
           placeholder="dark editorial, gold accents, automotive, late-night, no clichés..."
           style={{
@@ -686,7 +686,7 @@ function TasteProfileSection() {
             </div>
             <SaveStatusPill status={rulesStatus} />
           </div>
-          <span style={{ fontSize: 10, color: "#555" }}>{rules.length}/500</span>
+          <span style={{ fontSize: 10, color: "#555" }}>{rules.length + "/" + AI_RULES_MAX}</span>
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
           {isSignedIn
@@ -695,7 +695,7 @@ function TasteProfileSection() {
         </div>
         <textarea
           value={rules}
-          maxLength={500}
+          maxLength={AI_RULES_MAX}
           onChange={e => setRules(e.target.value)}
           placeholder={"no emojis\nno hashtags\nlowercase only"}
           style={{
@@ -825,8 +825,8 @@ function DumpStylesSection({ signedIn }: { signedIn: boolean }) {
       {editing && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <input value={editing.name} maxLength={40} onChange={e => edit("name", e.target.value)} placeholder="Style name (e.g. Fit check)" style={fieldStyle} />
-          <textarea value={editing.profile} maxLength={750} onChange={e => edit("profile", e.target.value)} placeholder="Recipe: structure, sequencing, poses, mix (e.g. open on a mirror fit, 2 detail shots, end on a candid)" style={{ ...fieldStyle, minHeight: 80, resize: "vertical" }} />
-          <textarea value={editing.rules} maxLength={500} onChange={e => edit("rules", e.target.value)} placeholder={"Rules for this style, one per line\nmax 8 photos\nno food shots"} style={{ ...fieldStyle, minHeight: 60, resize: "vertical" }} />
+          <textarea value={editing.profile} maxLength={TASTE_PROFILE_MAX} onChange={e => edit("profile", e.target.value)} placeholder="Recipe: structure, sequencing, poses, mix (e.g. open on a mirror fit, 2 detail shots, end on a candid)" style={{ ...fieldStyle, minHeight: 80, resize: "vertical" }} />
+          <textarea value={editing.rules} maxLength={AI_RULES_MAX} onChange={e => edit("rules", e.target.value)} placeholder={"Rules for this style, one per line\nmax 8 photos\nno food shots"} style={{ ...fieldStyle, minHeight: 60, resize: "vertical" }} />
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             {confirmDelete && (
               <button type="button" onClick={() => setConfirmDelete(false)} style={styleChip(false)}>Cancel</button>

@@ -52,6 +52,7 @@ export default function AISuggestSheet({
   const [cluster, setCluster] = useState<SuggestedCluster | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [errorHint, setErrorHint] = useState("");
+  const [slow, setSlow] = useState(false); // >15s in flight → "still working…"
   // Re-evaluate taste block each time the sheet opens so edits in MainMenu are picked up
   const [tasteActive, setTasteActive] = useState(false);
   const [dumpStyles, setDumpStyles] = useState<DumpStyle[]>([]);
@@ -104,6 +105,8 @@ export default function AISuggestSheet({
     setPhase("loading");
     setErrorMsg("");
     setErrorHint("");
+    setSlow(false);
+    const slowTimer = setTimeout(() => setSlow(true), 15000);
 
     try {
       var authH = await getAuthHeaders();
@@ -122,10 +125,10 @@ export default function AISuggestSheet({
       const res = await fetch("/api/ai-suggest", {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, authH),
-        // Server function effectively times out around 15s; give it a little
-        // headroom to return its own error, then abort so the offline fallback
-        // (in the catch below) kicks in instead of spinning forever.
-        signal: AbortSignal.timeout(20000),
+        // api/ai-suggest maxDuration is 60s (vercel.json) and the server
+        // refunds on its own failures. Wait past that so we never abandon a
+        // call the user is being charged for; abort only if the platform hangs.
+        signal: AbortSignal.timeout(65000),
         body: JSON.stringify({
           photos: compressedPhotos,
           variation,
@@ -179,6 +182,9 @@ export default function AISuggestSheet({
       setErrorMsg(fe.message);
       setErrorHint(fe.hint || "");
       setPhase("error");
+    } finally {
+      clearTimeout(slowTimer);
+      setSlow(false);
     }
   }, [photosToAnalyze, targetCount, tryOfflineFallback, filters.vibeNote]);
 
@@ -491,10 +497,10 @@ export default function AISuggestSheet({
                 style={{ animation: "spin 1s linear infinite", margin: "0 auto 16px", display: "block" }}
               />
               <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 6 }}>
-                {variationRef.current > 0 ? "Finding a different angle..." : "Analyzing your photos..."}
+                {slow ? "Still working…" : variationRef.current > 0 ? "Finding a different angle..." : "Analyzing your photos..."}
               </div>
               <div style={{ fontSize: 12, color: "#555" }}>
-                Claude is picking the best sequence
+                {slow ? "Big pools can take up to a minute. Hang tight." : "Claude is picking the best sequence"}
               </div>
               <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             </div>
