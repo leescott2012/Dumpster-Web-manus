@@ -11,7 +11,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import { createClient } from "@supabase/supabase-js";
-import { deductCredits, addCredits } from "./supabaseAdmin.js";
+import { deductCredits, refundCredits } from "./supabaseAdmin.js";
 import { enforceRateLimit } from "./rateLimit.js";
 import { checkBudget, recordCost } from "./dailyBudget.js";
 import { captureServerError } from "./sentry.js";
@@ -99,6 +99,15 @@ export async function checkCredits(
   if (!creditsDisabled) {
     var cost = COSTS[action] || 2;
     var result = await deductCredits(userId, action, cost);
+    if (!result.ok && !result.insufficient) {
+      // DB write failed — don't run the AI for free, and don't blame the user's balance.
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        error: "Credits are temporarily unavailable. Try again in a moment.",
+        code: "credits_unavailable",
+      }));
+      return { userId: userId, proceed: false, refund: noopRefund };
+    }
     if (!result.ok) {
       res.writeHead(402, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
@@ -114,10 +123,16 @@ export async function checkCredits(
     // deducted before the Claude call with no rollback on failure, so a
     // timeout/rate-limit/error on Anthropic's side silently charged the user
     // for nothing).
+    // Refund goes back to the SAME buckets (daily vs purchased) that were
+    // charged, and only once even if called twice.
     var deductedUserId = userId;
+    var charged = { daily: result.fromDaily, purchased: result.fromPurchased };
+    var refunded = false;
     refund = async function() {
+      if (refunded) return;
+      refunded = true;
       try {
-        await addCredits(deductedUserId, cost, "refund_" + action);
+        await refundCredits(deductedUserId, charged.daily, charged.purchased, action);
       } catch (e) {
         console.warn("[creditGate] refund failed:", e);
         captureServerError(e, "creditGate.refund", { action: action, userId: deductedUserId });
