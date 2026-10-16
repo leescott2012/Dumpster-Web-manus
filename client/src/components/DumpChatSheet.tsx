@@ -6,7 +6,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { getAuthHeaders } from "@/lib/supabase";
 import { X, Send, Loader, ArrowUpDown, ArrowDownToLine, ArrowUpFromLine, Palette, Brain } from "lucide-react";
 import type { Dump, Photo } from "@/lib/photoData";
-import { loadTasteProfile, saveTasteProfile, buildTasteBlock } from "@/lib/captionPool";
+import { toast } from "sonner";
+import { buildTasteBlock, cleanTastePreference, appendTastePreference } from "@/lib/captionPool";
 import { friendlyError } from "@/lib/friendlyError";
 import { notVideo } from "@/lib/videoStore";
 
@@ -67,7 +68,7 @@ var ACTION_META: Record<string, { icon: typeof ArrowUpDown; label: string; color
   swap_in:      { icon: ArrowDownToLine,   label: "Added from pool", color: "#4ade80" },
   swap_out:     { icon: ArrowUpFromLine,   label: "Sent to pool",  color: "#f97316" },
   update_vibe:  { icon: Palette,           label: "Vibe updated",  color: "#a78bfa" },
-  taste_update: { icon: Brain,             label: "Remembered",    color: "#6ee7b7" },
+  taste_update: { icon: Brain,             label: "Suggested memory", color: "#6ee7b7" },
 };
 
 export default function DumpChatSheet({
@@ -78,6 +79,8 @@ export default function DumpChatSheet({
   var [messages, setMessages] = useState<ChatMessage[]>([]);
   var [input, setInput] = useState("");
   var [loading, setLoading] = useState(false);
+  // Valet-suggested taste preferences waiting for the user's Save / Dismiss.
+  var [pendingPrefs, setPendingPrefs] = useState<string[]>([]);
   var scrollRef = useRef<HTMLDivElement>(null);
   var autoSentRef = useRef<string | null>(null);
 
@@ -92,6 +95,7 @@ export default function DumpChatSheet({
       setMessages(saved);
       setInput("");
       setLoading(false);
+      setPendingPrefs([]);
       autoSentRef.current = null;
     }
   }, [open, dump ? dump.id : null]);
@@ -116,13 +120,26 @@ export default function DumpChatSheet({
       } else if (action.type === "update_vibe" && action.vibe) {
         onUpdateVibe(currentDump.id, action.vibe);
       } else if (action.type === "taste_update" && action.preference) {
-        // Append to taste profile
-        var current = loadTasteProfile();
-        var updated = current ? current + "\n" + action.preference : action.preference;
-        saveTasteProfile(updated);
+        // Never auto-save: model text can be steered by photo names/captions
+        // (prompt injection). Queue it as a chip the user must confirm.
+        var pref = cleanTastePreference(action.preference);
+        if (pref) {
+          setPendingPrefs(function(prev) {
+            return prev.some(function(p) { return p.toLowerCase() === pref.toLowerCase(); }) ? prev : prev.concat([pref]);
+          });
+        }
       }
     }
   }, [onReorder, onSwapIn, onSwapOut, onUpdateVibe]);
+
+  var resolvePref = useCallback(function(pref: string, save: boolean) {
+    setPendingPrefs(function(prev) { return prev.filter(function(p) { return p !== pref; }); });
+    if (!save) return;
+    var result = appendTastePreference(pref);
+    if (result === "saved") toast("Saved to your Taste Profile");
+    else if (result === "duplicate") toast("Already in your Taste Profile");
+    else if (result === "full") toast("Taste Profile is full — trim it in the menu first");
+  }, []);
 
   var sendMessage = useCallback(async function(messageText: string) {
     if (!messageText.trim() || !dump || loading) return;
@@ -421,6 +438,34 @@ export default function DumpChatSheet({
             </div>
           )}
         </div>
+
+        {/* Confirm chips for Valet-suggested taste preferences */}
+        {pendingPrefs.length > 0 && (
+          <div style={{ padding: "8px 24px 0", display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+            {pendingPrefs.map(function(pref) {
+              return (
+                <div key={pref} style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 10px", borderRadius: 10,
+                  background: "rgba(110,231,183,0.06)", border: "1px solid rgba(110,231,183,0.25)",
+                }}>
+                  <Brain size={13} color="#6ee7b7" style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 12, color: "#ccc", lineHeight: 1.4, wordBreak: "break-word" }}>
+                    {"Remember: “" + pref + "”?"}
+                  </span>
+                  <button type="button" onClick={function() { resolvePref(pref, true); }} style={{
+                    background: "#6ee7b7", color: "#0e0e0e", border: "none", borderRadius: 6,
+                    padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  }}>Save</button>
+                  <button type="button" onClick={function() { resolvePref(pref, false); }} style={{
+                    background: "transparent", color: "#8a8a8a", border: "1px solid #2a2a2a", borderRadius: 6,
+                    padding: "4px 10px", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+                  }}>Dismiss</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Input */}
         <div style={{
