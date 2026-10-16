@@ -140,7 +140,7 @@ export default function DumpStrip({
           )}
           {/* "..." menu button */}
           {onMenuClick && (
-            <button
+            <button aria-label="Dump options"
               data-tour="dump-menu"
               onClick={function() { onMenuClick(dump.id); }}
               style={{
@@ -193,8 +193,8 @@ export default function DumpStrip({
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                 {/* Copy button */}
-                <button onClick={handleCopy}
-                  style={{ background: "transparent", border: "none", cursor: "pointer", color: copied ? "#22c55e" : "#555", padding: "4px", display: "flex", alignItems: "center", transition: "color 0.15s" }}
+                <button aria-label="Copy caption" onClick={handleCopy}
+                  style={{ background: "transparent", border: "none", cursor: "pointer", color: copied ? "#22c55e" : "#8a8a8a", padding: "4px", display: "flex", alignItems: "center", transition: "color 0.15s" }}
                   title="Copy caption"
                 >
                   {copied ? <Check size={13} /> : <Copy size={13} />}
@@ -202,17 +202,17 @@ export default function DumpStrip({
                 {/* Prev / Next */}
                 {total > 1 && (
                   <>
-                    <button onClick={handlePrev}
-                      style={{ background: "transparent", border: "none", cursor: "pointer", color: "#555", padding: "4px", display: "flex", alignItems: "center", transition: "color 0.15s" }}
+                    <button aria-label="Previous caption" onClick={handlePrev}
+                      style={{ background: "transparent", border: "none", cursor: "pointer", color: "#8a8a8a", padding: "4px", display: "flex", alignItems: "center", transition: "color 0.15s" }}
                       onMouseEnter={function(e) { e.currentTarget.style.color = "var(--accent)"; }}
-                      onMouseLeave={function(e) { e.currentTarget.style.color = "#555"; }}
+                      onMouseLeave={function(e) { e.currentTarget.style.color = "#8a8a8a"; }}
                     >
                       <ChevronLeft size={14} />
                     </button>
-                    <button onClick={handleNext}
-                      style={{ background: "transparent", border: "none", cursor: "pointer", color: "#555", padding: "4px", display: "flex", alignItems: "center", transition: "color 0.15s" }}
+                    <button aria-label="Next caption" onClick={handleNext}
+                      style={{ background: "transparent", border: "none", cursor: "pointer", color: "#8a8a8a", padding: "4px", display: "flex", alignItems: "center", transition: "color 0.15s" }}
                       onMouseEnter={function(e) { e.currentTarget.style.color = "var(--accent)"; }}
-                      onMouseLeave={function(e) { e.currentTarget.style.color = "#555"; }}
+                      onMouseLeave={function(e) { e.currentTarget.style.color = "#8a8a8a"; }}
                     >
                       <ChevronRight size={14} />
                     </button>
@@ -225,7 +225,7 @@ export default function DumpStrip({
               {current}
             </div>
             {onCaptionClick && (
-              <div style={{ marginTop: "8px", fontSize: "10px", color: "#444", letterSpacing: "0.06em" }}>
+              <div style={{ marginTop: "8px", fontSize: "10px", color: "#8a8a8a", letterSpacing: "0.06em" }}>
                 tap to edit
               </div>
             )}

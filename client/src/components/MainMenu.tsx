@@ -228,7 +228,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
               {activeTab ? null : "Tap a folder to open"}
             </div>
           </div>
-          <button
+          <button aria-label="Close menu"
             onClick={onClose}
             style={{
               width: 36, height: 36, borderRadius: "50%",
@@ -284,7 +284,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
                     {(profile?.subscription_tier === "pro" ? "PRO" : "FREE") + " · " + (profile ? (profile.credits + profile.daily_credits_remaining) : 0) + " credits"}
                   </div>
                 </div>
-                <button
+                <button aria-label="Sign out"
                   onClick={function() { signOut(); onClose(); }}
                   style={{
                     background: "none", border: "none", color: "#555",
@@ -654,7 +654,7 @@ function TasteProfileSection() {
             </div>
             <SaveStatusPill status={profileStatus} />
           </div>
-          <span style={{ fontSize: 10, color: "#555" }}>{profile.length + "/" + TASTE_PROFILE_MAX}</span>
+          <span style={{ fontSize: 10, color: "#8a8a8a" }}>{profile.length + "/" + TASTE_PROFILE_MAX}</span>
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
           {isSignedIn
@@ -686,7 +686,7 @@ function TasteProfileSection() {
             </div>
             <SaveStatusPill status={rulesStatus} />
           </div>
-          <span style={{ fontSize: 10, color: "#555" }}>{rules.length + "/" + AI_RULES_MAX}</span>
+          <span style={{ fontSize: 10, color: "#8a8a8a" }}>{rules.length + "/" + AI_RULES_MAX}</span>
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
           {isSignedIn
@@ -1020,7 +1020,7 @@ function SocialMediaPanel() {
             </div>
             <div style={{
               fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
-              color: "#555", textTransform: "uppercase",
+              color: "#8a8a8a", textTransform: "uppercase",
               background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
               borderRadius: 6, padding: "4px 8px",
             }}>

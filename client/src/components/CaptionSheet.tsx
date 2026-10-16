@@ -203,7 +203,7 @@ export default function CaptionSheet({
               </div>
             </div>
           </div>
-          <button onClick={handleClose} style={{
+          <button aria-label="Close" onClick={handleClose} style={{
             width: 32, height: 32, borderRadius: "50%",
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -457,7 +457,7 @@ export default function CaptionSheet({
                     <div style={{ flex: 1, fontSize: 14, lineHeight: 1.55, color: "#e8e8e8" }}>
                       {cap}
                     </div>
-                    <button
+                    <button aria-label="Copy caption"
                       onClick={() => handleCopy(cap, i)}
                       style={{
                         background: "transparent", border: "none", cursor: "pointer",

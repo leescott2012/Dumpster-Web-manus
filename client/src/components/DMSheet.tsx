@@ -71,7 +71,7 @@ export default function DMSheet({ open, other, onClose }: DMSheetProps) {
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #1a1a1a", flexShrink: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>@{other.username}</div>
-          <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", background: "#1a1a1a", border: "1px solid #2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#8a8a8a" }}>
+          <button aria-label="Close" onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", background: "#1a1a1a", border: "1px solid #2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#8a8a8a" }}>
             <X size={14} />
           </button>
         </div>
@@ -109,7 +109,7 @@ export default function DMSheet({ open, other, onClose }: DMSheetProps) {
               fontSize: 14, fontFamily: "inherit", outline: "none",
             }}
           />
-          <button
+          <button aria-label="Send"
             onClick={send}
             disabled={!draft.trim() || sending}
             style={{

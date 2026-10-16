@@ -230,7 +230,7 @@ export default function Admin() {
     created_at: string;
   }
   const [bugs, setBugs] = useState<BugReportRow[]>([]);
-  const [bugFilter, setBugFilter] = useState<"all" | "new" | "seen" | "fixed">("new");
+  const [bugFilter, setBugFilter] = useState<"all" | "new" | "seen" | "fixed" | "wontfix">("new");
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replySending, setReplySending] = useState<string | null>(null);
 
@@ -304,7 +304,7 @@ export default function Admin() {
 
   useEffect(() => { if (session) fetchBugs(); }, [session, fetchBugs]);
 
-  const markBug = useCallback(async function(id: string, status: "seen" | "fixed" | "new") {
+  const markBug = useCallback(async function(id: string, status: "seen" | "fixed" | "new" | "wontfix") {
     if (!session) return;
     // Optimistic UI: if the new status no longer matches the active filter,
     // drop the row from view immediately so a bug labeled "fixed" clears at
@@ -1101,7 +1101,7 @@ export default function Admin() {
                 Bug Inventory ({bugs.length})
               </div>
               <div className="flex items-center gap-2">
-                {(["new", "seen", "fixed", "all"] as const).map(f => (
+                {(["new", "seen", "fixed", "wontfix", "all"] as const).map(f => (
                   <button
                     key={f}
                     onClick={() => setBugFilter(f)}
@@ -1112,7 +1112,7 @@ export default function Admin() {
                         : "text-gray-500 border border-transparent hover:text-[#D4AF37]"
                     }`}
                   >
-                    {f}
+                    {f === "wontfix" ? "won't fix" : f}
                   </button>
                 ))}
                 <button
@@ -1179,7 +1179,7 @@ export default function Admin() {
                       </details>
                     )}
                     <div className="flex gap-2 mt-2">
-                      {b.status !== "seen" && (
+                      {b.status === "new" && (
                         <button onClick={() => markBug(b.id, "seen")} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-[#D4AF37]/20 text-[#D4AF37]/70 hover:bg-[#D4AF37]/10 rounded">
                           Mark Seen
                         </button>
@@ -1189,7 +1189,12 @@ export default function Admin() {
                           Mark Fixed
                         </button>
                       )}
-                      {b.status === "fixed" && (
+                      {(b.status === "new" || b.status === "seen") && (
+                        <button onClick={() => markBug(b.id, "wontfix")} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-gray-700 text-gray-400 hover:bg-gray-800 rounded">
+                          Won't Fix
+                        </button>
+                      )}
+                      {(b.status === "fixed" || b.status === "wontfix") && (
                         <button onClick={() => markBug(b.id, "new")} className="text-[10px] uppercase tracking-widest px-2 py-1 border border-gray-700 text-gray-500 hover:bg-gray-800 rounded">
                           Reopen
                         </button>

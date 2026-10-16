@@ -283,7 +283,7 @@ export default function DumpChatSheet({
               </div>
             </div>
           </div>
-          <button onClick={onClose} style={{
+          <button aria-label="Close" onClick={onClose} style={{
             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -494,7 +494,7 @@ export default function DumpChatSheet({
               el.style.height = Math.min(el.scrollHeight, 120) + "px";
             }}
           />
-          <button
+          <button aria-label="Send"
             onClick={handleSend}
             disabled={loading || !input.trim()}
             style={{

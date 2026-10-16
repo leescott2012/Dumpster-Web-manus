@@ -797,7 +797,7 @@ function HomeContent() {
             </button>
           )}
           {user && <NotificationBell />}
-          <button
+          <button aria-label="Open menu"
             onClick={function(e) { e.stopPropagation(); setMenuOpen(true); }}
             style={{
               width: 36, height: 36, borderRadius: 9,
@@ -1063,7 +1063,7 @@ function HomeContent() {
         <div style={{ color: "#888", letterSpacing: "0.02em" }}>
           Dumpster &middot; Carousel Dump Builder
         </div>
-        <nav style={{ display: "flex", gap: 16, color: "#555" }}>
+        <nav style={{ display: "flex", gap: 16, color: "#8a8a8a" }}>
           <a href="/privacy" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
             Privacy
           </a>
@@ -1074,7 +1074,7 @@ function HomeContent() {
             Contact
           </a>
         </nav>
-        <div style={{ color: "#444", fontSize: "11px" }}>
+        <div style={{ color: "#8a8a8a", fontSize: "11px" }}>
           &copy; {new Date().getFullYear()} Dumpster. All rights reserved.
         </div>
       </footer>

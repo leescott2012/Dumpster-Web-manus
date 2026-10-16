@@ -97,7 +97,7 @@ export default function DemoBanner({ hasUserPhotos, onUploadClick, onVisibilityC
 
       {/* Close — extra marginLeft + larger tap target so it doesn't feel
           cramped against the upload button (feedback: too tight together) */}
-      <button
+      <button aria-label="Dismiss demo banner"
         onClick={handleDismiss}
         style={{
           width: 26, height: 26, marginLeft: 2, borderRadius: "50%", flexShrink: 0,
