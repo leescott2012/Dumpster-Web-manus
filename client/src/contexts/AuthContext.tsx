@@ -62,7 +62,7 @@ export function useAuth(): AuthState {
   return ctx;
 }
 
-// Credit costs come from credits.ts (it has no imports, so no circular-import
+// Credit costs come from credits.ts (it only imports a leaf shared/ file, so no circular-import
 // risk). Keep credits.ts in sync with server/creditGate.ts COSTS.
 var COSTS = CREDIT_COSTS;
 

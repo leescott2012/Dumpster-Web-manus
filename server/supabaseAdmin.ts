@@ -108,7 +108,8 @@ async function deductViaCompareAndSwap(userId: string, cost: number): Promise<De
 export async function deductCredits(
   userId: string,
   action: string,
-  cost: number
+  cost: number,
+  note?: string
 ): Promise<DeductResult> {
   var result: DeductResult;
   var { data, error } = await supabaseAdmin.rpc("deduct_credits", { p_user_id: userId, p_cost: cost });
@@ -132,7 +133,7 @@ export async function deductCredits(
       user_id: userId,
       amount: -cost,
       type: action,
-      description: "Used " + cost + " credits for " + action + " (daily " + result.fromDaily + ", purchased " + result.fromPurchased + ")",
+      description: "Used " + cost + " credits for " + action + " (" + (note ? note + "; " : "") + "daily " + result.fromDaily + ", purchased " + result.fromPurchased + ")",
     });
   }
   return result;

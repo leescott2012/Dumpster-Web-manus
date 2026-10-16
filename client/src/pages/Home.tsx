@@ -48,6 +48,8 @@ import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
 import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, scheduleArchivedDumpIdsSave, flushArchivedDumpIdsSave, setDumpPublic } from "@/lib/workspaceSync";
 import { scanPhotos } from "@/lib/aiLabel";
+import { CREDIT_COSTS } from "@/lib/credits";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { track } from "@/lib/analytics";
 import { logBug } from "@/lib/bugLogger";
 import { saveVideo, listVideos, deleteVideo, setVideoTags, setVideoTrim, notVideo, type VideoMeta } from "@/lib/videoStore";
@@ -239,7 +241,7 @@ function HomeContent() {
   var [creditsSheetOpen, setCreditsSheetOpen] = useState(false);
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
   var [demoBannerVisible, setDemoBannerVisible] = useState(false);
-  var { user, profile, canAfford, refreshProfile } = useAuth();
+  var { user, profile, canAfford, refreshProfile, totalCredits } = useAuth();
   var labelHealth = useLabelHealth({ photos: allWorkspacePhotos, signedIn: !!user, applyPhotoLabels: applyPhotoLabels });
   var [labelHealthOpen, setLabelHealthOpen] = useState(false);
 
@@ -694,30 +696,40 @@ function HomeContent() {
   // "City" — stale values written by the native app's old filename-guessing
   // labeler before it switched to server-side Claude Vision on 2026-07-10);
   // skips videos, and applies labels incrementally as each batch returns.
+  // Photos the paid Scan would label — same "needs a label" rule as the Label
+  // Health chip (videos already excluded there). Drives the price estimate.
+  var scanTargets = useMemo(function() {
+    var unlabeledIds = new Set(labelHealth.health.unlabeled.map(function(p) { return p.id; }));
+    return pool.filter(function(p) { return notVideo(p) && unlabeledIds.has(p.id); });
+  }, [pool, labelHealth.health]);
+  var [scanConfirmOpen, setScanConfirmOpen] = useState(false);
+
+  // Scan button → price confirm (paid: 1 credit/photo, see shared/aiLabelCost.ts).
   var handleScanPhotos = useCallback(function() {
     if (scanning) return;
     if (!user) { setAuthSheetOpen(true); toast("Sign in to scan photos"); return; }
-    // Same "needs a label" rule as the Label Health chip (videos already excluded there).
-    var unlabeledIds = new Set(labelHealth.health.unlabeled.map(function(p) { return p.id; }));
-    var toScan = pool.filter(function(p) { return notVideo(p) && unlabeledIds.has(p.id); });
-    if (toScan.length === 0) { toast("All photos are already labeled"); return; }
+    if (scanTargets.length === 0) { toast("All photos are already labeled"); return; }
+    setScanConfirmOpen(true);
+  }, [scanning, user, scanTargets.length]);
 
+  var runScan = useCallback(function() {
+    var toScan = scanTargets;
+    if (scanning || toScan.length === 0) return;
     setScanning(true);
     toast("Scanning " + toScan.length + (toScan.length === 1 ? " photo…" : " photos…"));
     var input = toScan.map(function(p) { return { id: p.id, url: p.url }; });
+    // scanPhotos → aiFetch (creditSync) updates the credits badge per batch.
     scanPhotos(input, function(labels) { labelHealth.applyAi(labels); })
       .then(function(all) {
         track("photos_scanned", { count: all.length });
         toast("Labeled " + all.length + (all.length === 1 ? " photo" : " photos"));
-        // Credits were deducted server-side (creditGate) — refetch so the
-        // header pill doesn't show a stale balance until next reload.
         refreshProfile();
       })
       .catch(function(e) {
         toast(e && e.message ? e.message : "Scan failed — try again");
       })
       .then(function() { setScanning(false); });
-  }, [scanning, user, pool, labelHealth.applyAi, labelHealth.health, refreshProfile]);
+  }, [scanning, scanTargets, labelHealth.applyAi, refreshProfile]);
 
   // Auto-heal of unlabeled/stale photos (free, quota-bounded) now lives in the
   // Label Health loop — see hooks/useLabelHealth.ts.
@@ -1239,9 +1251,34 @@ function HomeContent() {
         onClose={function() { setCreditsSheetOpen(false); }}
         onNeedAuth={function() { setCreditsSheetOpen(false); setAuthSheetOpen(true); }}
       />
+      {(function() {
+        var n = scanTargets.length;
+        var cost = n * CREDIT_COSTS.ai_label_per_photo;
+        var short = !!user && totalCredits < cost && import.meta.env.VITE_DISABLE_CREDIT_LIMIT !== "1";
+        var fx = labelHealth.fix;
+        var autoFixFree = labelHealth.store.autoFix && !(fx.kind === "paused" && Date.now() < fx.until);
+        return (
+          <AlertDialog open={scanConfirmOpen} onOpenChange={setScanConfirmOpen}>
+            <AlertDialogContent style={{ background: "#141414", border: "1px solid #2a2a2a", color: "#eee" }}>
+              <AlertDialogTitle>{"Scan " + n + " unlabeled " + (n === 1 ? "photo" : "photos") + "?"}</AlertDialogTitle>
+              <AlertDialogDescription style={{ color: "#aaa" }}>
+                {"This uses " + cost + (cost === 1 ? " credit" : " credits") + " (you have " + totalCredits + ")."}
+                {short && <><br /><span style={{ color: "#f87171" }}>{"You need " + (cost - totalCredits) + " more."}</span></>}
+                {autoFixFree && <><br />Auto-fix labels photos for free (daily limit applies).</>}
+              </AlertDialogDescription>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                {short && <AlertDialogAction onClick={function() { setOutOfCreditsAction("ai_label_per_photo"); }}>Get credits</AlertDialogAction>}
+                <AlertDialogAction disabled={short} onClick={runScan}>{"Confirm · " + cost + (cost === 1 ? " credit" : " credits")}</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        );
+      })()}
       <OutOfCreditsOverlay
         open={outOfCreditsAction !== null}
         action={outOfCreditsAction || ""}
+        cost={outOfCreditsAction === "ai_label_per_photo" ? scanTargets.length * CREDIT_COSTS.ai_label_per_photo : undefined}
         onClose={function() { setOutOfCreditsAction(null); }}
         onAuthClick={function() { setOutOfCreditsAction(null); setAuthSheetOpen(true); }}
         onProClick={function() { setOutOfCreditsAction(null); setCreditsSheetOpen(true); }}

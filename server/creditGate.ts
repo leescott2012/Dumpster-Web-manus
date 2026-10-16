@@ -45,7 +45,7 @@ export async function getUserFromRequest(req: IncomingMessage): Promise<string |
 var COSTS: Record<string, number> = {
   ai_suggest: 25, // Claude vision, up to 20 images (~25¢)
   ai_caption: 3,  // Claude Haiku vision (~3¢)
-  ai_label: 12,   // Claude Sonnet vision, up to 12 images per batch (~12¢)
+  // ai_label: no flat cost — priced per photo, see shared/aiLabelCost.ts (api/ai-label.ts passes opts.cost)
   ai_chat: 1,     // Valet (~1¢)
   ai_recycle: 1,  // unused: Recycle AI Pick calls /api/ai-chat and is charged ai_chat
   ig_scrub: 5,    // Apify scraping costs us ~5¢/call — charge accordingly
@@ -61,7 +61,8 @@ var COSTS: Record<string, number> = {
 export async function checkCredits(
   req: IncomingMessage,
   res: ServerResponse,
-  action: string
+  action: string,
+  opts?: { cost?: number; note?: string } // dynamic per-request cost (ai_label: 1/photo) + ledger note
 ): Promise<{ userId: string | null; proceed: boolean; refund: () => Promise<void> }> {
   // 1) Auth required — no more guest-mode AI calls
   var userId = await getUserFromRequest(req);
@@ -97,8 +98,8 @@ export async function checkCredits(
   var creditsDisabled = !isProd && process.env.DISABLE_CREDIT_LIMIT === "1";
   var refund = noopRefund;
   if (!creditsDisabled) {
-    var cost = COSTS[action] || 2;
-    var result = await deductCredits(userId, action, cost);
+    var cost = opts && opts.cost !== undefined ? opts.cost : (COSTS[action] || 2);
+    var result = await deductCredits(userId, action, cost, opts && opts.note);
     if (!result.ok && !result.insufficient) {
       // DB write failed — don't run the AI for free, and don't blame the user's balance.
       res.writeHead(503, { "Content-Type": "application/json" });

@@ -15,9 +15,10 @@ interface OutOfCreditsOverlayProps {
   onClose: () => void;
   onAuthClick: () => void; // open sign-in sheet
   onProClick: () => void;  // open credits sheet on Pro tab
+  cost?: number;           // overrides CREDIT_COSTS[action] for per-photo pricing (Scan)
 }
 
-export default function OutOfCreditsOverlay({ open, action, onClose, onAuthClick, onProClick }: OutOfCreditsOverlayProps) {
+export default function OutOfCreditsOverlay({ open, action, onClose, onAuthClick, onProClick, cost: costOverride }: OutOfCreditsOverlayProps) {
   var { user, totalCredits } = useAuth();
   var [loading, setLoading] = useState<string | null>(null);
   var [lifetimeSlots, setLifetimeSlots] = useState<number | null>(null);
@@ -31,7 +32,7 @@ export default function OutOfCreditsOverlay({ open, action, onClose, onAuthClick
       .catch(function() { /* noop */ });
   }, [open, user]);
 
-  var cost = CREDIT_COSTS[action] || 0;
+  var cost = costOverride !== undefined ? costOverride : (CREDIT_COSTS[action] || 0);
   var label = CREDIT_LABELS[action] || action;
   var deficit = Math.max(0, cost - totalCredits);
 

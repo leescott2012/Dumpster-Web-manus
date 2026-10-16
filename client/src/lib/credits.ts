@@ -5,6 +5,8 @@
  * Cheap models = fewer credits, premium models = more.
  */
 
+import { AI_LABEL_PER_PHOTO } from "@shared/aiLabelCost";
+
 // Server-side action names live in server/creditGate.ts COSTS. Keep these in
 // sync — same key, same cost — or the local affordability check will lie.
 // Entries marked "(planned)" don't have a server endpoint yet but are kept
@@ -26,6 +28,9 @@ export var CREDIT_COSTS: Record<string, number> = {
   ai_chat: VALET_COST,       // Valet — chat to reorder / swap / set vibe (~1¢)
   ai_recycle: VALET_COST,    // Recycle AI Pick — rides /api/ai-chat, charged as ai_chat
 
+  // Pool Scan — server charges ai_label at this rate × photos (shared/aiLabelCost.ts)
+  ai_label_per_photo: AI_LABEL_PER_PHOTO,
+
   // Planned — costs reserved for future endpoints (also ~1¢/credit)
   ai_caption_pro: 6,         // (planned) Sonnet caption upgrade
   ai_vibe: 5,                // (planned) Vibe analysis
@@ -38,6 +43,7 @@ export var CREDIT_LABELS: Record<string, string> = {
   ai_chat: "Valet",
   ai_caption_pro: "Pro Caption",
   ai_recycle: "AI Recycle Pick",
+  ai_label_per_photo: "AI Scan",
   ai_vibe: "Vibe Analysis",
   ai_rescan_batch: "Batch Rescan",
 };

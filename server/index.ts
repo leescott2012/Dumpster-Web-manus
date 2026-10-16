@@ -5,8 +5,6 @@ import { fileURLToPath } from "url";
 import { handleAISuggest } from "./aiSuggest.js";
 import { handleAICaption } from "./aiCaption.js";
 import { handleAIChat } from "./aiChat.js";
-import { handleAILabel } from "./aiLabel.js";
-import { checkCredits } from "./creditGate.js";
 import adminStats from "./handlers/admin-stats.js";
 import adminUserDetail from "./handlers/admin-user-detail.js";
 import bugReport from "./handlers/bug-report.js";
@@ -19,6 +17,7 @@ import stripeWebhookHandler from "../api/stripe-webhook.js";
 import workspaceHandler from "../api/workspace.js";
 import uploadPhotoHandler from "../api/upload-photo.js";
 import lifetimeSlotsHandler from "../api/lifetime-slots.js";
+import aiLabelHandler from "../api/ai-label.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,10 +40,10 @@ async function startServer() {
   });
 
   // AI Label — credit-gated like the Vercel function
-  app.post("/api/ai-label", async (req, res) => {
-    const gate = await checkCredits(req, res, "ai_label");
-    if (!gate.proceed) return;
-    handleAILabel(req, res);
+  // Delegates to the Vercel function so dev gets the same per-photo pricing,
+  // free auto path, and refund-on-failure.
+  app.post("/api/ai-label", (req, res) => {
+    aiLabelHandler(req, res);
   });
 
   // ─── Stripe Routes ─────────────────────────────────────────────────────────
