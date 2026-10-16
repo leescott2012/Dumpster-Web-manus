@@ -6,7 +6,7 @@
  */
 import { useState, useCallback, useEffect } from "react";
 import { X, Hand, Sparkles, Loader, Check } from "lucide-react";
-import { getAuthHeaders } from "@/lib/supabase";
+import { getAiHeaders } from "@/lib/supabase";
 import type { Photo, Dump } from "@/lib/photoData";
 import { loadTasteProfile } from "@/lib/captionPool";
 
@@ -68,7 +68,7 @@ export default function RecycleSheet({
     setPhase("ai-loading");
 
     try {
-      var authH = await getAuthHeaders();
+      var authH = await getAiHeaders();
       var res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, authH),

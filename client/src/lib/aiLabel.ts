@@ -4,7 +4,7 @@
  * for each. Data-URL photos are compressed to vision size first so request
  * bodies stay small; HTTPS-URL photos are sent by reference (tiny).
  */
-import { getAuthHeaders } from "./supabase";
+import { getAiHeaders } from "./supabase";
 import { compressDataUrlForVision } from "./imageDownscale";
 
 export interface PhotoLabel { id: string; category: string; label: string }
@@ -27,7 +27,7 @@ async function scanBatch(batch: ScanInput[], auto: boolean): Promise<PhotoLabel[
   const photos = await Promise.all(
     batch.map(async (p) => ({ id: p.id, url: await prepareUrl(p.url) }))
   );
-  const headers = await getAuthHeaders();
+  const headers = await getAiHeaders();
   // One endpoint, two credit-gate modes (auto flag) — see api/ai-label.ts;
   // Vercel's Hobby plan caps a deployment at 12 serverless functions, so this
   // isn't split into a second route.
