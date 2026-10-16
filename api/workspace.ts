@@ -120,6 +120,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     for (var i = 0; i < all.length; i++) {
       var ph = all[i];
+      // videos are device-only by owner decision — refuse to store any, even if
+      // a client sends one. Before `seen` so no dump_photos link is made either.
+      if (ph.category === "Video" || (ph.url && (ph.url.indexOf("data:video/") === 0 || ph.url.indexOf("blob:") === 0))) continue;
       var dbId = normId(ph.id);
       idMap[ph.id] = dbId;
       if (seen[dbId]) continue;

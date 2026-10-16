@@ -217,7 +217,44 @@ export function useCarouselState() {
       hydrationDoneRef.current = true;
     }).catch(function() {
       hydrationDoneRef.current = true; // don't strand persistence on an IDB error
+    }).then(function() {
+      // Video Pool rehydrate requested before hydration finished — apply now.
+      var pv = pendingVideosRef.current;
+      pendingVideosRef.current = null;
+      if (pv) applyVideos(pv);
     });
+  }, []);
+
+  // ── Device-only Video Pool rehydrate ──────────────────────────────────────
+  // videos are device-only by owner decision: their bytes live in videoStore
+  // (IndexedDB), never in the cloud. Blob URLs die on refresh, so on load Home
+  // hands us fresh ones: swap them in wherever the video sits (pool or dump),
+  // add store videos the pool lost, and drop dead blob: videos the store no
+  // longer has. Deferred until hydration so it can't pre-empt the IDB adopt.
+  var pendingVideosRef = useRef<Array<{ id: string; url: string; name: string }> | null>(null);
+  function applyVideos(list: Array<{ id: string; url: string; name: string }>) {
+    var urls: Record<string, string> = {};
+    for (var i = 0; i < list.length; i++) urls[list[i].id] = list[i].url;
+    var keep = function(p: Photo) { return !(p.category === "Video" && p.url.startsWith("blob:") && !urls[p.id]); };
+    var swap = function(p: Photo) { return urls[p.id] ? { ...p, url: urls[p.id] } : p; };
+    var inDumps = new Set<string>();
+    var dumpHasVideo = false;
+    dumpsRef.current.forEach(function(d) { d.photos.forEach(function(p) { inDumps.add(p.id); if (p.category === "Video") dumpHasVideo = true; }); });
+    if (dumpHasVideo) setDumps(function(prev) {
+      return prev.map(function(d) { return { ...d, photos: d.photos.filter(keep).map(swap) }; });
+    });
+    setPool(function(prev) {
+      var have = new Set(prev.map(function(p) { return p.id; }));
+      var missing: Photo[] = list
+        .filter(function(v) { return !have.has(v.id) && !inDumps.has(v.id); })
+        .map(function(v) { return { id: v.id, url: v.url, alt: v.name, isFavorite: false, category: "Video" }; });
+      return prev.filter(keep).map(swap).concat(missing);
+    });
+  }
+  var attachVideos = useCallback(function(list: Array<{ id: string; url: string; name: string }>) {
+    if (hydrationDoneRef.current) applyVideos(list);
+    else pendingVideosRef.current = list;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   var resetAll = useCallback(function() {
@@ -253,7 +290,13 @@ export function useCarouselState() {
       // without this check the load drops exactly those photos (bug report
       // 2026-07-10). Session-scoped so uploads rehydrated from IndexedDB still
       // follow the cloud (deletes on other devices don't resurrect).
-      return (p.url.startsWith("data:") || sessionUploadIds.current.has(p.id)) && !cloudIds.has(p.id);
+      // Category "Video" = device-only (never synced), so the cloud never
+      // knows about it — always keep it local (videos are device-only by owner decision).
+      return (p.url.startsWith("data:") || sessionUploadIds.current.has(p.id) || p.category === "Video") && !cloudIds.has(p.id);
+    });
+    // Videos sitting in dumps would vanish with the cloud's dump list — park them in the pool.
+    dumpsRef.current.forEach(function(d) {
+      d.photos.forEach(function(p) { if (p.category === "Video" && !cloudIds.has(p.id)) localOnly.push(p); });
     });
     var mergedPool = localOnly.length > 0 ? newPool.concat(localOnly) : newPool;
     rawSetDumps(newDumps);
@@ -759,7 +802,7 @@ export function useCarouselState() {
   }, []);
 
   return {
-    dumps, pool, resetAll, clearDemoContent, replaceState,
+    dumps, pool, resetAll, clearDemoContent, replaceState, attachVideos,
     movePhotoWithinDump, movePhotoBetweenDumps,
     movePhotoFromPoolToDump, movePhotoFromDumpToPool,
     removePhotoFromPool, removeMultiplePhotosFromPool, createNewDump, deleteDump,

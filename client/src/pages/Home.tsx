@@ -49,6 +49,8 @@ import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoTo
 import { scanPhotos, autoScanPhotos } from "@/lib/aiLabel";
 import { track } from "@/lib/analytics";
 import { logBug } from "@/lib/bugLogger";
+import { saveVideo, listVideos, deleteVideo, setVideoTags, setVideoTrim, notVideo, type VideoMeta } from "@/lib/videoStore";
+import VideoSheet from "@/components/VideoSheet";
 
 // Mirror of CATEGORIES in server/aiLabel.ts — used to decide whether a pool
 // photo's existing category is a real AI label or a stale/legacy value that
@@ -68,8 +70,54 @@ function HomeContent() {
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto, setDumpChatHistory,
     archivedDumpIds, archiveDump, unarchiveDump, mergeArchivedDumpIds,
-    dupeDismissedIds, dismissDuplicate,
+    dupeDismissedIds, dismissDuplicate, attachVideos,
   } = useCarouselState();
+
+  // ── Device-only Video Pool ─────────────────────────────────────────────────
+  // videos are device-only by owner decision: bytes live in videoStore
+  // (IndexedDB) and get a fresh blob: URL each load. Meta (thumb, duration,
+  // tags, trim) is kept here, keyed by photo id; blobs are never sent anywhere.
+  var [videos, setVideos] = useState<Record<string, VideoMeta>>({});
+  var videoUrls = useRef<Record<string, string>>({});
+  var [videoSheetId, setVideoSheetId] = useState<string | null>(null);
+  useEffect(function() {
+    listVideos().then(function(recs) {
+      // Runs even with zero records so dead blob: videos from older sessions get dropped.
+      var meta: Record<string, VideoMeta> = {};
+      var list = recs.map(function(r) {
+        var url = URL.createObjectURL(r.blob);
+        videoUrls.current[r.id] = url;
+        meta[r.id] = r;
+        return { id: r.id, url: url, name: r.name };
+      });
+      setVideos(function(prev) { return Object.assign({}, meta, prev); });
+      attachVideos(list);
+    });
+  }, [attachVideos]);
+  var forgetVideos = useCallback(function(ids: string[]) {
+    var hit = ids.filter(function(id) { return videoUrls.current[id] || videos[id]; });
+    if (hit.length === 0) return;
+    for (var i = 0; i < hit.length; i++) {
+      void deleteVideo(hit[i]);
+      if (videoUrls.current[hit[i]]) URL.revokeObjectURL(videoUrls.current[hit[i]]);
+      delete videoUrls.current[hit[i]];
+    }
+    setVideos(function(prev) {
+      var next = Object.assign({}, prev);
+      for (var j = 0; j < hit.length; j++) delete next[hit[j]];
+      return next;
+    });
+  }, [videos]);
+  var patchVideo = useCallback(function(id: string, patch: Partial<VideoMeta>) {
+    setVideos(function(prev) {
+      if (!prev[id]) return prev;
+      var next = Object.assign({}, prev);
+      next[id] = Object.assign({}, prev[id], patch);
+      return next;
+    });
+    if ("tags" in patch) void setVideoTags(id, patch.tags || []);
+    if ("trimStart" in patch || "trimEnd" in patch) void setVideoTrim(id, patch.trimStart, patch.trimEnd);
+  }, []);
 
   // Split dumps into the active list (shown up top) and the archived list
   // (collapsed below). Archived dumps stay in `dumps` so nothing is lost.
@@ -329,10 +377,11 @@ function HomeContent() {
     var count = selectedDeleteIds.length;
     if (count === 0) return;
     removeMultiplePhotosFromPool(selectedDeleteIds);
+    forgetVideos(selectedDeleteIds);
     setDeleteMode(false);
     setSelectedDeleteIds([]);
     toast("Deleted " + count + " photo" + (count !== 1 ? "s" : ""));
-  }, [selectedDeleteIds, removeMultiplePhotosFromPool]);
+  }, [selectedDeleteIds, removeMultiplePhotosFromPool, forgetVideos]);
 
   var handleCancelDeleteMode = useCallback(function() {
     setDeleteMode(false);
@@ -390,7 +439,8 @@ function HomeContent() {
 
   // Double tap -> lightbox
   var handleDoubleTapPhoto = useCallback(function(photo: Photo) {
-    setLightboxPhoto(photo);
+    if (photo.category === "Video") setVideoSheetId(photo.id);
+    else setLightboxPhoto(photo);
     setSelectedPhotoId(null);
     setContextMenu(null);
   }, []);
@@ -508,10 +558,35 @@ function HomeContent() {
     } else {
       // Photo is in pool — remove entirely
       removePhotoFromPool(photoId);
+      forgetVideos([photoId]);
       toast("Photo removed");
     }
     setSelectedPhotoId(null);
-  }, [contextMenu, dumps, movePhotoFromDumpToPool, removePhotoFromPool]);
+  }, [contextMenu, dumps, movePhotoFromDumpToPool, removePhotoFromPool, forgetVideos]);
+
+  // Inline delete from the Videos view / video sheet — pool only.
+  var handleDeleteVideo = useCallback(function(id: string) {
+    removePhotoFromPool(id);
+    forgetVideos([id]);
+    setVideoSheetId(null);
+    toast("Video deleted from this device");
+  }, [removePhotoFromPool, forgetVideos]);
+
+  // Trimmed copy recorded on-device by VideoSheet → store it as a NEW pool
+  // video (original untouched). Device-only, same as any other video.
+  var handleTrimmedCopy = useCallback(function(sourceId: string, blob: Blob, duration: number): Promise<string> {
+    var src = videos[sourceId];
+    var ext = blob.type.indexOf("mp4") >= 0 ? ".mp4" : ".webm";
+    var name = (src ? src.name.replace(/\.[^.]+$/, "") : "video") + "-trim" + ext;
+    return saveVideo(blob, { id: "upload-" + nanoid(8), name: name, duration: duration, fallbackThumb: src ? src.thumbDataUrl : "" })
+      .then(function(rec) {
+        var url = URL.createObjectURL(blob);
+        videoUrls.current[rec.id] = url;
+        setVideos(function(prev) { var n = Object.assign({}, prev); n[rec.id] = rec; return n; });
+        addUploadedPhotos([{ id: rec.id, url: url, alt: name, isFavorite: false, category: "Video" }]);
+        return name;
+      });
+  }, [videos, addUploadedPhotos]);
 
   // Upload photos/videos from device.
   //   Signed-in user: downscale → upload to Supabase Storage → store HTTPS URL.
@@ -535,12 +610,13 @@ function HomeContent() {
         var photoId = "upload-" + nanoid(8);
 
         if (isVideo) {
-          tasks.push(Promise.resolve({
-            id: photoId,
-            url: URL.createObjectURL(file),
-            alt: file.name,
-            isFavorite: false,
-            category: "Video",
+          // videos are device-only by owner decision — saved to IndexedDB
+          // (videoStore), never uploaded. saveVideo never rejects.
+          tasks.push(saveVideo(file, { id: photoId }).then(function(rec) {
+            var url = URL.createObjectURL(file);
+            videoUrls.current[photoId] = url;
+            setVideos(function(prev) { var n = Object.assign({}, prev); n[photoId] = rec; return n; });
+            return { id: photoId, url: url, alt: file.name, isFavorite: false, category: "Video" } as Photo;
           }));
         } else {
           // Extract EXIF from the ORIGINAL file in parallel with the downscale
@@ -587,7 +663,8 @@ function HomeContent() {
 
       // Upload data-URL photos with limited concurrency, swapping each pool
       // entry's url to the cloud URL as it lands. Failures keep the data URL.
-      var uploadable = photos.filter(function(p) { return p.url.indexOf("data:") === 0; });
+      // videos are device-only by owner decision — never uploaded.
+      var uploadable = photos.filter(function(p) { return notVideo(p) && p.url.indexOf("data:") === 0; });
       var idx = 0;
       function next(): Promise<void> {
         if (idx >= uploadable.length) return Promise.resolve();
@@ -613,7 +690,7 @@ function HomeContent() {
     if (scanning) return;
     if (!user) { setAuthSheetOpen(true); toast("Sign in to scan photos"); return; }
     var toScan = pool.filter(function(p) {
-      if (p.category === "Video") return false;
+      if (!notVideo(p)) return false; // videos are device-only by owner decision
       if (p.category === "" || p.category === "Uploaded") return true;
       return VALID_CATEGORIES.indexOf(p.category.toUpperCase()) === -1;
     });
@@ -647,7 +724,7 @@ function HomeContent() {
   useEffect(function() {
     if (!user || autoHealTriggeredRef.current) return;
     var stale = allWorkspacePhotos.filter(function(p) {
-      if (p.category === "Video") return false;
+      if (!notVideo(p)) return false; // videos are device-only by owner decision
       if (p.category === "" || p.category === "Uploaded") return true;
       return VALID_CATEGORIES.indexOf(p.category.toUpperCase()) === -1;
     });
@@ -992,6 +1069,10 @@ function HomeContent() {
             onCancelDeleteMode={handleCancelDeleteMode}
             onScan={handleScanPhotos}
             scanning={scanning}
+            videos={videos}
+            onOpenVideo={function(p) { setVideoSheetId(p.id); }}
+            onDeleteVideo={handleDeleteVideo}
+            onSetVideoTags={function(id, tags) { patchVideo(id, { tags: tags }); }}
           />
         ) : (
           <CaptionPool />
@@ -1109,6 +1190,15 @@ function HomeContent() {
       />
       <DragGhost />
       <PhotoLightbox photo={lightboxPhoto} onClose={function() { setLightboxPhoto(null); }} />
+      {videoSheetId && videos[videoSheetId] && videoUrls.current[videoSheetId] && (
+        <VideoSheet
+          video={videos[videoSheetId]}
+          url={videoUrls.current[videoSheetId]}
+          onClose={function() { setVideoSheetId(null); }}
+          onTrim={function(start, end) { patchVideo(videoSheetId!, { trimStart: start, trimEnd: end }); }}
+          onTrimmedCopy={function(blob, duration) { return handleTrimmedCopy(videoSheetId!, blob, duration); }}
+        />
+      )}
       <PhotoContextMenu
         photo={contextMenu ? contextMenu.photo : null}
         position={contextMenu ? contextMenu.position : null}

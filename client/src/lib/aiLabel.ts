@@ -24,6 +24,10 @@ async function prepareUrl(url: string): Promise<string> {
 }
 
 async function scanBatch(batch: ScanInput[], auto: boolean): Promise<PhotoLabel[]> {
+  // videos are device-only by owner decision — callers filter by category; this
+  // catches any device-local video URL (blob:/data:video) that slips through.
+  batch = batch.filter((p) => !p.url.startsWith("blob:") && !p.url.startsWith("data:video/"));
+  if (batch.length === 0) return [];
   const photos = await Promise.all(
     batch.map(async (p) => ({ id: p.id, url: await prepareUrl(p.url) }))
   );
