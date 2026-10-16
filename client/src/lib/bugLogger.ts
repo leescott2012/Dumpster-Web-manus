@@ -14,8 +14,6 @@
  * Reports go to Supabase via /api/bug-report (auth-optional). Even crashes
  * before sign-in get captured (user_id stays null in the row).
  */
-import { supabase } from "./supabase";
-
 export interface BugInput {
   source:      string;          // e.g. "auto-gen", "orb-stt", "stripe-checkout", "unhandled"
   message:     string;          // short human-readable summary
@@ -116,7 +114,12 @@ function isDupe(args: BugInput): boolean {
 
 async function postBug(body: Awaited<ReturnType<typeof buildBody>>): Promise<boolean> {
   try {
-    // Best-effort attach JWT — endpoint accepts unauth too
+    // Best-effort attach JWT — endpoint accepts unauth too.
+    // Imported lazily: this module is installed at boot (App.tsx) on every
+    // route, and a static import pulled the whole ~200 kB supabase client into
+    // the entry chunk for visitors who never sign in. Only a bug report needs
+    // it, and the surrounding catch already covers a failed load.
+    const { supabase } = await import("./supabase");
     const { data: { session } } = await supabase.auth.getSession();
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (session) headers["Authorization"] = "Bearer " + session.access_token;

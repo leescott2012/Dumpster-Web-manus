@@ -1,8 +1,13 @@
 import { useLocation } from 'wouter';
-import { useRef, useState, useEffect, memo, type ReactNode } from 'react';
+import { useRef, useState, useEffect, memo, lazy, Suspense, type ReactNode } from 'react';
 import { motion, animate, useAnimationFrame, useReducedMotion, useMotionValue, useTransform, useSpring, useVelocity, type MotionValue } from 'framer-motion';
-import { ColorPanels } from '@paper-design/shaders-react';
 import './LandingPage.css';
+
+// The shader pulls in regl (~150 kB) purely for background decoration. Loading
+// it lazily lets the hero copy paint first; it fades in when it arrives.
+const ColorPanels = lazy(() =>
+  import('@paper-design/shaders-react').then((m) => ({ default: m.ColorPanels }))
+);
 
 const HeroShader = memo(function HeroShader() {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -20,6 +25,7 @@ const HeroShader = memo(function HeroShader() {
   return (
     <div className="lp-hero__shader" aria-hidden="true">
       {webgl2Supported && (
+        <Suspense fallback={null}>
         <ColorPanels
           colors={['#C8A96E', '#8B6F3A', '#d4b87a', '#5a4620']}
           colorBack="#08080800"
@@ -37,6 +43,7 @@ const HeroShader = memo(function HeroShader() {
           rotation={180}
           style={{ width: '100%', height: '100%' }}
         />
+        </Suspense>
       )}
     </div>
   );

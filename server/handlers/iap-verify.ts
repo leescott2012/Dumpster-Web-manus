@@ -1,5 +1,6 @@
 /**
- * POST /api/iap-verify — server-side verification for native StoreKit 2 credit-pack purchases.
+ * POST /api/iap-verify — server-side verification for native StoreKit 2 purchases:
+ * one-time credit packs and Pro auto-renewing subscriptions.
  *
  * Why this exists: StoreKit 2 only verifies transactions on-device (CreditManager.swift).
  * A tampered client could previously call CreditManager.addCredits() directly without a
@@ -12,44 +13,18 @@
  * userId is always taken from the caller's Supabase JWT — never trust a userId in the body.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { SignedDataVerifier, Environment, VerificationException } from "@apple/app-store-server-library";
+import { VerificationException } from "@apple/app-store-server-library";
 import { getUserFromRequest } from "../creditGate.js";
 import { enforceRateLimit } from "../rateLimit.js";
-import { addCredits } from "../supabaseAdmin.js";
+import { addCredits, supabaseAdmin } from "../supabaseAdmin.js";
 import { captureServerError } from "../sentry.js";
-
-// Public root cert from https://www.apple.com/certificateauthority/ — not a secret,
-// safe to inline. Apple signs StoreKit 2 transactions with a chain up to this root.
-const APPLE_ROOT_CA_G3_BASE64 =
-  "MIICQzCCAcmgAwIBAgIILcX8iNLFS5UwCgYIKoZIzj0EAwMwZzEbMBkGA1UEAwwSQXBwbGUgUm9vdCBDQSAtIEczMSYwJAYDVQQL" +
-  "DB1BcHBsZSBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTETMBEGA1UECgwKQXBwbGUgSW5jLjELMAkGA1UEBhMCVVMwHhcNMTQwNDMw" +
-  "MTgxOTA2WhcNMzkwNDMwMTgxOTA2WjBnMRswGQYDVQQDDBJBcHBsZSBSb290IENBIC0gRzMxJjAkBgNVBAsMHUFwcGxlIENlcnRp" +
-  "ZmljYXRpb24gQXV0aG9yaXR5MRMwEQYDVQQKDApBcHBsZSBJbmMuMQswCQYDVQQGEwJVUzB2MBAGByqGSM49AgEGBSuBBAAiA2IA" +
-  "BJjpLz1AcqTtkyJygRMc3RCV8cWjTnHcFBbZDuWmBSp3ZHtfTjjTuxxEtX/1H7YyYl3J6YRbTzBPEVoA/VhYDKX1DyxNB0cTddqX" +
-  "l5dvMVztK517IDvYuVTZXpmkOlEKMaNCMEAwHQYDVR0OBBYEFLuw3qFYM4iapIqZ3r6966/ayySrMA8GA1UdEwEB/wQFMAMBAf8w" +
-  "DgYDVR0PAQH/BAQDAgEGMAoGCCqGSM49BAMDA2gAMGUCMQCD6cHEFl4aXTQY2e3v9GwOAEZLuN+yRhHFD/3meoyhpmvOwgPUnPWT" +
-  "xnS4at+qIxUCMG1mihDK1A3UT82NQz60imOlM27jbdoXt2QfyFMm+YhidDkLF1vLUagM6BgD56KyKA==";
-
-const APPLE_ROOT_CERTS = [Buffer.from(APPLE_ROOT_CA_G3_BASE64, "base64")];
-const BUNDLE_ID = "com.leescott.dumpster.ios";
-
-// Matches CreditManager.CreditPack.all on the native side.
-const CREDIT_PACKS: Record<string, number> = {
-  "com.dumpster.credits.50": 50,
-  "com.dumpster.credits.200": 200,
-  "com.dumpster.credits.500": 500,
-};
-
-let verifiers: { production: SignedDataVerifier; sandbox: SignedDataVerifier } | null = null;
-function getVerifiers() {
-  if (!verifiers) {
-    verifiers = {
-      production: new SignedDataVerifier(APPLE_ROOT_CERTS, true, Environment.PRODUCTION, BUNDLE_ID),
-      sandbox: new SignedDataVerifier(APPLE_ROOT_CERTS, true, Environment.SANDBOX, BUNDLE_ID),
-    };
-  }
-  return verifiers;
-}
+import {
+  BUNDLE_ID,
+  CREDIT_PACKS,
+  SUBSCRIPTION_PRODUCTS,
+  SUBSCRIPTION_CREDIT_DROP,
+  verifyTransaction,
+} from "../appleIAP.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -66,32 +41,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "signedTransaction required", code: "invalid_request" });
     }
 
-    // TestFlight/sandbox purchases are signed with Environment.SANDBOX even though they
-    // hit the same production API — try Production first, fall back to Sandbox.
-    const { production, sandbox } = getVerifiers();
-    let decoded;
-    try {
-      decoded = await production.verifyAndDecodeTransaction(signedTransaction);
-    } catch (prodErr) {
-      if (prodErr instanceof VerificationException) {
-        decoded = await sandbox.verifyAndDecodeTransaction(signedTransaction);
-      } else {
-        throw prodErr;
-      }
-    }
+    const decoded = await verifyTransaction(signedTransaction);
 
     if (decoded.bundleId !== BUNDLE_ID) {
       return res.status(400).json({ error: "Bundle ID mismatch", code: "invalid_transaction" });
     }
 
     const productId = decoded.productId;
+    if (!decoded.transactionId) {
+      return res.status(400).json({ error: "Missing transactionId", code: "invalid_transaction" });
+    }
+
+    if (productId && SUBSCRIPTION_PRODUCTS.has(productId)) {
+      // Refunded or expired — a stale client re-reporting an old entitlement.
+      // Not an error, just nothing to grant. Downgrade-on-cancellation itself
+      // is handled by apple-webhook.ts, since that can happen while the app
+      // isn't open to report it.
+      const now = Date.now();
+      if (decoded.revocationDate || (decoded.expiresDate && decoded.expiresDate < now)) {
+        return res.status(200).json({ ok: true, subscription: false, reason: "expired_or_revoked" });
+      }
+
+      await supabaseAdmin
+        .from("profiles")
+        .update({
+          subscription_tier: "pro",
+          apple_original_transaction_id: decoded.originalTransactionId || decoded.transactionId,
+          daily_credits_remaining: 200,
+        })
+        .eq("id", userId);
+
+      // Idempotent per Apple transaction — each renewal mints a new transactionId,
+      // so this naturally grants once per billing period without double-crediting
+      // a client that re-reports the same still-current transaction on relaunch.
+      await addCredits(userId, SUBSCRIPTION_CREDIT_DROP, "subscription_drop", "apple_" + decoded.transactionId);
+
+      return res.status(200).json({ ok: true, subscription: true, productId: productId });
+    }
+
     const credits = productId ? CREDIT_PACKS[productId] : undefined;
     if (!credits) {
       return res.status(400).json({ error: "Unknown product: " + productId, code: "invalid_product" });
-    }
-
-    if (!decoded.transactionId) {
-      return res.status(400).json({ error: "Missing transactionId", code: "invalid_transaction" });
     }
 
     // Idempotency + atomic grant reuses the same path as Stripe purchases (addCredits

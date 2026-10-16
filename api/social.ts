@@ -12,6 +12,7 @@ import dm from "../server/handlers/dm.js";
 import notifications from "../server/handlers/notifications.js";
 import dumpVisibility from "../server/handlers/dump-visibility.js";
 import iapVerify from "../server/handlers/iap-verify.js";
+import appleWebhook from "../server/handlers/apple-webhook.js";
 import { captureServerError } from "../server/sentry.js";
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>;
@@ -23,6 +24,7 @@ const ROUTES: Record<string, Handler> = {
   "notifications": notifications as Handler,
   "dump-visibility": dumpVisibility as Handler,
   "iap-verify": iapVerify as Handler,
+  "apple-webhook": appleWebhook as Handler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

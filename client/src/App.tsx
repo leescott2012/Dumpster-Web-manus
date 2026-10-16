@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
@@ -6,11 +6,22 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import ErrorToaster from "./components/ErrorToaster";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { installGlobalBugHandlers } from "./lib/bugLogger";
-import Home from "./pages/Home";
-import LandingPage from "./pages/LandingPage";
-import Privacy from "./pages/Privacy";
-import Terms from "./pages/Terms";
-import Admin from "./pages/Admin";
+
+/**
+ * Every route is code-split: a visitor only downloads the page they land on.
+ * "/" picks Home or LandingPage at runtime (see RootGate) so shipping both in
+ * the entry chunk meant every new visitor paid for the whole app, and every
+ * signed-in user paid for the landing page's WebGL shader.
+ *   Admin  → recharts + d3 + the genius HUD's regl reactor (~330 kB)
+ *   LandingPage → @paper-design/shaders + regl (~150 kB)
+ * Fallback is null on purpose — body background is already #0a0a0a, so a
+ * chunk fetch shows the app's own backdrop instead of a spinner flash.
+ */
+const Home = lazy(() => import("./pages/Home"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Terms = lazy(() => import("./pages/Terms"));
+const Admin = lazy(() => import("./pages/Admin"));
 
 /**
  * "/" gate: marketing landing page for brand-new visitors ONLY.
@@ -66,7 +77,9 @@ function App() {
               },
             }}
           />
-          <Router />
+          <Suspense fallback={null}>
+            <Router />
+          </Suspense>
           {/* Visible red error notifier with "Send to bug log" button.
               Mounted once at the top so it's available on every route. */}
           <ErrorToaster />

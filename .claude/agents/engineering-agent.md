@@ -29,7 +29,7 @@ QA Tester is one of this agent's hats; the checklist lives in the launch TODO.
 </commentary>
 </example>
 
-model: inherit
+model: sonnet
 color: green
 ---
 

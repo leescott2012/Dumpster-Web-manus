@@ -242,6 +242,13 @@ export default function PhotoCard({
         opacity: isBeingDragged ? 0.3 : 1,
         WebkitTouchCallout: "none",
         cursor: "pointer",
+        // ponytail: native off-screen skipping instead of a virtualization lib —
+        // the browser drops layout/paint/decode for cards outside the viewport,
+        // which is what makes a 1000-photo pool scroll. contain-intrinsic-size
+        // keeps the scrollbar honest (auto = reuse the last real size once seen).
+        // Ignored by browsers without support, so no fallback needed.
+        contentVisibility: "auto",
+        containIntrinsicSize: "auto " + widthPx + " auto " + heightPx,
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
