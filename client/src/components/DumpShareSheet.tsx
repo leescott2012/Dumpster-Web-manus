@@ -229,7 +229,7 @@ export default function DumpShareSheet({ dump, open, onClose, onArchive }: DumpS
               </div>
             </div>
           </div>
-          <button onClick={handleClose} style={{
+          <button aria-label="Close" onClick={handleClose} style={{
             width: 32, height: 32, borderRadius: "50%",
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -376,7 +376,7 @@ export default function DumpShareSheet({ dump, open, onClose, onArchive }: DumpS
                     }}>
                       {cap}
                     </div>
-                    <button
+                    <button aria-label="Copy caption"
                       onClick={() => handleCopy(cap, i)}
                       style={{
                         background: "transparent", border: "none", cursor: "pointer",

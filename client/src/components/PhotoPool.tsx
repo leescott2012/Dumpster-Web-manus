@@ -48,7 +48,7 @@ function VideoTagChips({ v, onChange }: { v: VideoMeta; onChange: (tags: string[
   return (
     <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "4px", marginTop: "6px" }}>
       {all.map(function(t) {
-        return <button key={t} onClick={function() { toggle(t); }} style={chip(v.tags.indexOf(t) >= 0)}>{t}</button>;
+        return <button key={t} aria-pressed={v.tags.indexOf(t) >= 0} onClick={function() { toggle(t); }} style={chip(v.tags.indexOf(t) >= 0)}>{t}</button>;
       })}
       <input value={text} placeholder="+ tag" maxLength={24}
         onChange={function(e) { setText(e.target.value); }}
@@ -193,6 +193,13 @@ export default function PhotoPool({
     if (fileInputRef.current) fileInputRef.current.click();
   };
 
+  // Enter/Space on a role="button" div.
+  var keyActivate = function(fn: () => void) {
+    return function(e: React.KeyboardEvent) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); }
+    };
+  };
+
   var handleFileChange = function(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files && e.target.files.length > 0) {
       onUploadPhotos(e.target.files);
@@ -260,8 +267,8 @@ export default function PhotoPool({
         <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
           {/* Row 1 — filter chips, flush left */}
           {!videosOnly && <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "center" }}>
-            <button onClick={function() { setFilter("all"); }} style={filterBtnStyle(filter === "all")}>All</button>
-            <button onClick={function() { setFilter("starred"); }} style={filterBtnStyle(filter === "starred")}>
+            <button aria-pressed={filter === "all"} onClick={function() { setFilter("all"); }} style={filterBtnStyle(filter === "all")}>All</button>
+            <button aria-pressed={filter === "starred"} onClick={function() { setFilter("starred"); }} style={filterBtnStyle(filter === "starred")}>
               <span style={{ marginRight: "4px" }}>{"★"}</span>Starred
               {starredCount > 0 && (
                 <span style={{ marginLeft: "5px", background: "rgba(var(--accent-rgb),0.2)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
@@ -269,7 +276,7 @@ export default function PhotoPool({
                 </span>
               )}
             </button>
-            <button onClick={function() { setFilter("used"); }} style={filterBtnStyle(filter === "used")}>
+            <button aria-pressed={filter === "used"} onClick={function() { setFilter("used"); }} style={filterBtnStyle(filter === "used")}>
               <span style={{ marginRight: "4px" }}>{"✓"}</span>Used
               {usedCount > 0 && (
                 <span style={{ marginLeft: "5px", background: filter === "used" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
@@ -278,7 +285,7 @@ export default function PhotoPool({
               )}
             </button>
             {videoCount > 0 && (
-              <button onClick={function() { setFilter("videos"); }} style={filterBtnStyle(filter === "videos")}>
+              <button aria-pressed={filter === "videos"} onClick={function() { setFilter("videos"); }} style={filterBtnStyle(filter === "videos")}>
                 <Play size={10} style={{ marginRight: "4px" }} />Videos
                 <span style={{ marginLeft: "5px", background: filter === "videos" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
                   {videoCount}
@@ -298,7 +305,7 @@ export default function PhotoPool({
                 {(["S", "M", "L"] as PoolSize[]).map(function(s) {
                   var active = poolSize === s;
                   return (
-                    <button key={s} onClick={function() { changeSize(s); }}
+                    <button key={s} aria-pressed={active} onClick={function() { changeSize(s); }}
                       aria-label={"Photo size " + s} title={"Photo size " + s}
                       style={{
                         width: "30px", height: "24px", borderRadius: "100px", border: "none",
@@ -336,6 +343,7 @@ export default function PhotoPool({
                   </button>
                 )}
                 <button
+                  className="pool-delete-btn"
                   onClick={onEnterDeleteMode}
                   style={{
                     background: "transparent", border: "1px solid #2a2a2a",
@@ -343,8 +351,6 @@ export default function PhotoPool({
                     cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
                     display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
                   }}
-                  onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
-                  onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#8a8a8a"; }}
                 >
                   <Trash2 size={11} />Select to Delete
                 </button>
@@ -444,6 +450,8 @@ export default function PhotoPool({
           {/* Upload "+" card at end of pool */}
           {!selectionMode && !deleteMode && (
             <div data-tour="upload-card" onClick={handleUploadClick}
+              className="pool-add-card" role="button" tabIndex={0} aria-label="Add photos"
+              onKeyDown={keyActivate(handleUploadClick)}
               style={{
                 width: "100%", aspectRatio: size.w + " / " + size.h,
                 borderRadius: "10px", border: "2px dashed #2a2a2a",
@@ -452,8 +460,6 @@ export default function PhotoPool({
                 transition: "all 0.2s", background: "rgba(255,255,255,0.02)",
                 boxSizing: "border-box" as const,
               }}
-              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#8a8a8a"; }}
             >
               <Plus size={28} strokeWidth={1.5} />
               <span style={{ marginTop: "6px", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>Add Photos</span>
@@ -469,7 +475,7 @@ export default function PhotoPool({
           {/* Prominent empty-pool onboarding state — only when filter is 'all' and pool is empty */}
           {displayPhotos.length === 0 && !selectionMode && filter === "all" && (
             <div
-              onClick={handleUploadClick}
+              onClick={handleUploadClick} className="pool-empty-card" role="button" tabIndex={0} onKeyDown={keyActivate(handleUploadClick)}
               style={{
                 gridColumn: "1 / -1",
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
@@ -480,8 +486,6 @@ export default function PhotoPool({
                 cursor: "pointer", transition: "all 0.2s",
                 textAlign: "center",
               }}
-              onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.08)"; e.currentTarget.style.borderColor = "var(--accent)"; }}
-              onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.04)"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.35)"; }}
             >
               <div style={{
                 width: 56, height: 56, borderRadius: 14,
@@ -518,7 +522,7 @@ export default function PhotoPool({
               but Cancel. Give an upload affordance instead. */}
           {displayPhotos.length === 0 && selectionMode && (
             <div
-              onClick={handleUploadClick}
+              onClick={handleUploadClick} className="pool-empty-card" role="button" tabIndex={0} onKeyDown={keyActivate(handleUploadClick)}
               style={{
                 gridColumn: "1 / -1",
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",

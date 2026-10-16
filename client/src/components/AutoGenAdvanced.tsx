@@ -160,7 +160,7 @@ export default function AutoGenAdvanced({
       {/* Header row — disclosure toggle */}
       <button
         type="button"
-        onClick={onToggleOpen}
+        onClick={onToggleOpen} aria-expanded={open}
         style={{
           width: "100%",
           display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -215,14 +215,14 @@ export default function AutoGenAdvanced({
           {/* Mix mode — top, since it can grey out everything below */}
           <div>
             <button
-              type="button"
+              type="button" role="switch" aria-checked={value.mix.on}
               onClick={function() { updateMix({ on: !value.mix.on }); }}
               style={smallToggle(value.mix.on)}
             >
               <Shuffle size={14} />
               <span style={{ flex: 1, textAlign: "left" }}>Mix it up</span>
               <span style={{
-                fontSize: 10, color: value.mix.on ? "var(--accent)" : "#555",
+                fontSize: 10, color: value.mix.on ? "var(--accent)" : "#8a8a8a",
                 letterSpacing: "0.1em", textTransform: "uppercase" as const, fontWeight: 700,
               }}>
                 {value.mix.on ? "On" : "Off"}
@@ -294,7 +294,7 @@ export default function AutoGenAdvanced({
                 aria-label="End time"
               />
             </div>
-            <div style={{ fontSize: 10, color: "#555", marginTop: 6, letterSpacing: "0.04em" }}>
+            <div style={{ fontSize: 10, color: "#8a8a8a", marginTop: 6, letterSpacing: "0.04em" }}>
               Photos without EXIF time data are excluded.
             </div>
           </div>
@@ -308,7 +308,7 @@ export default function AutoGenAdvanced({
                   var active = value.categories.indexOf(c) >= 0;
                   return (
                     <button
-                      type="button"
+                      type="button" aria-pressed={active}
                       key={c}
                       onClick={function() { toggleCategory(c); }}
                       disabled={disabled}

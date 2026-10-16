@@ -274,7 +274,7 @@ export default function AISuggestSheet({
               </div>
             </div>
           </div>
-          <button onClick={handleClose} style={{
+          <button aria-label="Close" onClick={handleClose} style={{
             width: 32, height: 32, borderRadius: "50%",
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -362,7 +362,7 @@ export default function AISuggestSheet({
                         background: "#0a0a0a", border: "1px solid #2a2a2a",
                         borderRadius: 18, padding: 3,
                       }}>
-                        <button
+                        <button aria-label="Fewer photos"
                           onClick={() => {
                             const cur = targetCount ?? 5;
                             const next = Math.max(stepperMin, cur - 1);
@@ -387,7 +387,7 @@ export default function AISuggestSheet({
                         }}>
                           {targetCount ?? 5}
                         </div>
-                        <button
+                        <button aria-label="More photos"
                           onClick={() => {
                             const cur = targetCount ?? 5;
                             const next = Math.min(stepperMax, cur + 1);

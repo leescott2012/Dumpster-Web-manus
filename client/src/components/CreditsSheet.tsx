@@ -126,7 +126,7 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
               }
             </div>
           </div>
-          <button onClick={onClose} style={{
+          <button aria-label="Close" onClick={onClose} style={{
             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",

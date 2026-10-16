@@ -103,7 +103,7 @@ export default function PhotoLightbox({ photo, onClose }: PhotoLightboxProps) {
       >
         <img
           src={photo.url}
-          alt={photo.alt}
+          alt={photo.alt || "Photo"}
           draggable={false}
           style={{
             width: "100%",

@@ -102,6 +102,29 @@ body {
   overscroll-behavior: none;
 }
 
+/* Visible keyboard focus everywhere (mouse/touch clicks don't trigger :focus-visible). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Pool "Select to Delete" — CSS hover/focus instead of JS mouseenter. */
+.pool-delete-btn:hover,
+.pool-delete-btn:focus-visible {
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+}
+.pool-add-card:hover,
+.pool-add-card:focus-visible {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+.pool-empty-card:hover,
+.pool-empty-card:focus-visible {
+  background: rgba(var(--accent-rgb), 0.08) !important;
+  border-color: var(--accent) !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

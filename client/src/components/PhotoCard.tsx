@@ -153,8 +153,20 @@ export default function PhotoCard({
     if (dragState.isDragging || longPressTriggered.current) return;
     // Stop propagation so background deselect never fires on a card click
     e.stopPropagation();
+    // Second click of a double-click: skip it, the dblclick handler owns it.
+    // Otherwise click 1 selects, click 2 un-selects, then the lightbox opens.
+    if (e.detail > 1 && onDoubleTap && !selectionMode) return;
     if (onSelect) onSelect(photo);
-  }, [dragState.isDragging, onSelect, photo]);
+  }, [dragState.isDragging, onSelect, onDoubleTap, photo, selectionMode]);
+
+  // Keyboard: Enter/Space = tap (select). Only on the card itself, not the dots button.
+  var handleKeyDown = useCallback(function(e: React.KeyboardEvent) {
+    if (e.target !== e.currentTarget) return;
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (onSelect) onSelect(photo);
+  }, [onSelect, photo]);
 
   var handleDoubleClick = useCallback(function(e: React.MouseEvent) {
     e.preventDefault();
@@ -175,7 +187,14 @@ export default function PhotoCard({
   var handleDotsClick = useCallback(function(e: React.MouseEvent) {
     e.stopPropagation();
     e.preventDefault();
-    if (onDotsClick) onDotsClick(photo, { x: e.clientX, y: e.clientY });
+    if (!onDotsClick) return;
+    // Keyboard activation (detail 0) has no pointer coords — anchor to the button.
+    if (e.detail === 0) {
+      var r = e.currentTarget.getBoundingClientRect();
+      onDotsClick(photo, { x: r.left + r.width / 2, y: r.bottom });
+    } else {
+      onDotsClick(photo, { x: e.clientX, y: e.clientY });
+    }
   }, [onDotsClick, photo]);
 
   // ── STYLES ───────────────────────────────────────────────────────────────
@@ -209,7 +228,12 @@ export default function PhotoCard({
       data-source-type={source.type}
       data-source-dump={source.dumpId || ""}
       data-index={index}
-      className="relative flex-shrink-0 overflow-hidden select-none"
+      className="photo-card relative flex-shrink-0 overflow-hidden select-none"
+      role="button"
+      tabIndex={0}
+      aria-label={(photo.alt || "Photo") + ", " + badgeLabel}
+      aria-pressed={isSelected}
+      onKeyDown={handleKeyDown}
       style={{
         width: fill ? "100%" : widthPx, borderRadius: "10px", border: borderVal,
         transition: "border-color 0.2s, transform 0.15s, opacity 0.15s, box-shadow 0.15s",
@@ -228,7 +252,7 @@ export default function PhotoCard({
       onDoubleClick={handleDoubleClick}
     >
       <img
-        src={(photo.category === "Video" && videoThumb(photo.id)) || photo.url} alt={photo.alt} draggable={false} loading="lazy"
+        src={(photo.category === "Video" && videoThumb(photo.id)) || photo.url} alt={photo.alt || "Photo " + badgeLabel} draggable={false} loading="lazy"
         style={fill
           ? { width: "100%", aspectRatio: width + " / " + height, height: "auto", objectFit: "cover", display: "block", pointerEvents: "none" }
           : { width: widthPx, height: heightPx, objectFit: "cover", display: "block", pointerEvents: "none" }}
@@ -290,26 +314,31 @@ export default function PhotoCard({
 
       {/* "..." dots button — appears when selected (not in pool selection mode) */}
       {isSelected && !selectionMode && (
-        <div
+        <button
+          type="button"
+          className="photo-card-dots"
+          aria-label="Photo options"
+          aria-haspopup="menu"
           onTouchStart={function(e) { e.stopPropagation(); }}
           onMouseDown={function(e) { e.stopPropagation(); }}
           onTouchEnd={handleDotsTouch}
           onClick={handleDotsClick}
+          onKeyDown={function(e) { e.stopPropagation(); }}
           style={{
             position: "absolute", top: "6px", right: "6px",
-            width: "28px", height: "28px", borderRadius: "50%",
+            width: "28px", height: "28px", borderRadius: "50%", border: "none", padding: 0,
             background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", zIndex: 10,
             WebkitTapHighlightColor: "transparent",
           }}
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <circle cx="4" cy="8" r="1.5" fill="var(--accent)" />
             <circle cx="8" cy="8" r="1.5" fill="var(--accent)" />
             <circle cx="12" cy="8" r="1.5" fill="var(--accent)" />
           </svg>
-        </div>
+        </button>
       )}
 
       {/* Green selection index badge — pool selection mode */}

@@ -63,7 +63,7 @@ export default function CreditsBadge({ onCreditsClick, onAuthClick }: CreditsBad
       {isOwnerId(user.id) && (
         <a
           href="/admin"
-          data-tour="owner-dashboard"
+          data-tour="owner-dashboard" aria-label="Open dashboard"
           title="Open GENIUSS Dashboard"
           style={{
             display: "flex", alignItems: "center", gap: 6,
@@ -79,7 +79,7 @@ export default function CreditsBadge({ onCreditsClick, onAuthClick }: CreditsBad
           <LayoutDashboard size={13} /> <span className="owner-dashboard-label">Dashboard</span>
         </a>
       )}
-    <button
+    <button aria-label={totalCredits + " credits" + (isPro ? ", Pro" : "") + ". Open credits"}
       onClick={onCreditsClick}
       style={{
         display: "flex", alignItems: "center", gap: 6,
