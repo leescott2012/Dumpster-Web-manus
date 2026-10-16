@@ -162,7 +162,9 @@ function serialize(dumps: Dump[], pool: Photo[]) {
     }),
     pool: pool
       .filter(syncable)
-      .map(function (p) { return { id: p.id, url: p.url, category: p.category, meta: dupMeta(p) }; }),
+      // alt (the AI label) must be sent for pool photos too — the server writes label: alt || null,
+      // so omitting it blanked every pool photo's saved label on each save.
+      .map(function (p) { return { id: p.id, url: p.url, category: p.category, alt: p.alt, meta: dupMeta(p) }; }),
   };
 }
 
