@@ -14,7 +14,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import { handleAILabel, readBody, type AILabelBody } from "../server/aiLabel.js";
-import { checkCredits, checkAutoCredits } from "../server/creditGate.js";
+import { checkCredits, checkAutoCredits, runCharged } from "../server/creditGate.js";
 
 export const config = {
   runtime: "nodejs",
@@ -38,9 +38,5 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     : await checkCredits(req, res, "ai_label");
   if (!gate.proceed) return;
 
-  try {
-    await handleAILabel(req, res, body);
-  } finally {
-    if (res.statusCode >= 400) await gate.refund();
-  }
+  await runCharged(res, gate, "ai-label", function() { return handleAILabel(req, res, body); });
 }

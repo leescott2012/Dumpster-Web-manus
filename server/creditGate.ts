@@ -151,6 +151,35 @@ export async function checkCredits(
 }
 
 /**
+ * Run a credit-gated AI handler and refund unless it reports success.
+ * Handlers return true only after writing a useful 200. Everything else —
+ * a thrown error, any 4xx/5xx, an empty/invalid model result, all images
+ * failing to load — returns false (or throws) and is refunded in `finally`.
+ * Vercel killing the function at maxDuration skips `finally`, so handlers set
+ * an Anthropic timeout below maxDuration to fail (and refund) before that.
+ */
+export async function runCharged(
+  res: ServerResponse,
+  gate: { refund: () => Promise<void> },
+  source: string,
+  fn: () => Promise<boolean>
+): Promise<void> {
+  var succeeded = false;
+  try {
+    succeeded = (await fn()) === true;
+  } catch (e) {
+    console.error("[" + source + "] handler threw:", e);
+    captureServerError(e, source + ".handler");
+    if (!res.headersSent) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Something went wrong. Try again.", code: "ai_error" }));
+    }
+  } finally {
+    if (!succeeded) await gate.refund();
+  }
+}
+
+/**
  * Free auto-label abuse limits. The `auto` flag comes from the client, so the
  * server can't prove a request is really system-initiated — instead the free
  * path is bounded so abusing it is worth little:

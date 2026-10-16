@@ -4,7 +4,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import { handleAISuggest } from "../server/aiSuggest.js";
-import { checkCredits } from "../server/creditGate.js";
+import { checkCredits, runCharged } from "../server/creditGate.js";
 
 export const config = {
   runtime: "nodejs",
@@ -14,11 +14,7 @@ export const config = {
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   var gate = await checkCredits(req, res, "ai_suggest");
   if (!gate.proceed) return;
-  try {
-    await handleAISuggest(req, res);
-  } finally {
-    // Refund credits if the request didn't actually succeed — no reason to
-    // charge the user for a failed/errored Claude call.
-    if (res.statusCode >= 400) await gate.refund();
-  }
+  // Refund unless the handler reports success — no reason to charge the user
+  // for a failed/errored/empty Claude call.
+  await runCharged(res, gate, "ai-suggest", function() { return handleAISuggest(req, res); });
 }

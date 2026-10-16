@@ -6,7 +6,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { IncomingMessage, ServerResponse } from "http";
-import { captureServerError } from "./sentry.js";
+import { publicAIError } from "./sentry.js";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -70,18 +70,18 @@ function readBody(req: IncomingMessage): Promise<string> {
 export async function handleAIChat(
   req: IncomingMessage,
   res: ServerResponse
-): Promise<void> {
+): Promise<boolean> {
   if (req.method !== "POST") {
     res.writeHead(405, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Method not allowed" }));
-    return;
+    return false;
   }
 
   var apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey === "your_anthropic_api_key_here") {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "ANTHROPIC_API_KEY is not configured." }));
-    return;
+    return false;
   }
 
   var body: RequestBody;
@@ -91,14 +91,18 @@ export async function handleAIChat(
   } catch {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Invalid JSON body" }));
-    return;
+    return false;
   }
 
-  if (!body.message || !body.message.trim()) {
+  if (!body || typeof body.message !== "string" || !body.message.trim()) {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Message is required" }));
-    return;
+    return false;
   }
+  // Missing/non-array fields used to throw (500, no refund) — default them.
+  if (!Array.isArray(body.dumpPhotos)) body.dumpPhotos = [];
+  if (!Array.isArray(body.poolPhotos)) body.poolPhotos = [];
+  if (!Array.isArray(body.history)) body.history = [];
 
   // Build dump photos description
   var dumpDesc = body.dumpPhotos.map(function(p, i) {
@@ -158,10 +162,12 @@ export async function handleAIChat(
   messages.push({ role: "user", content: body.message });
 
   try {
-    var anthropic = new Anthropic({ apiKey: apiKey });
+    // 22s, no retries: must finish inside the 30s maxDuration, or Vercel kills
+    // the function before the refund runs.
+    var anthropic = new Anthropic({ apiKey: apiKey, timeout: 22000, maxRetries: 0 });
     var response = await anthropic.messages.create({
       model: "claude-haiku-4-5",
-      max_tokens: 1024,
+      max_tokens: 1500, // 1024 truncated JSON reorders of 20 photo ids
       system: systemPrompt,
       messages: messages,
     });
@@ -178,7 +184,14 @@ export async function handleAIChat(
     try {
       parsed = JSON.parse(cleaned) as AIChatResponse;
     } catch {
-      // If JSON parsing fails, treat the whole response as a plain reply
+      if (cleaned.charAt(0) === "{") {
+        // Broken/truncated JSON — fail (and refund) instead of showing raw JSON.
+        console.error("[AI Chat] invalid JSON from model:", rawText.slice(0, 500));
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "The AI reply came back garbled. Try again.", code: "ai_invalid_output" }));
+        return false;
+      }
+      // Plain prose reply — fine to show as-is
       parsed = { reply: rawText, actions: [] };
     }
 
@@ -187,6 +200,7 @@ export async function handleAIChat(
     if (Array.isArray(parsed.actions)) {
       for (var ai = 0; ai < parsed.actions.length; ai++) {
         var action = parsed.actions[ai];
+        if (!action || typeof action !== "object") continue;
         if (action.type === "reorder" && Array.isArray(action.photoIds)) {
           validActions.push(action);
         } else if (action.type === "swap_in" && action.photoId) {
@@ -201,18 +215,26 @@ export async function handleAIChat(
       }
     }
 
+    var reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+    if (!reply && validActions.length === 0) {
+      // Nothing usable came back — fail (and refund).
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "The AI didn't reply. Try again.", code: "ai_empty_result" }));
+      return false;
+    }
+
     var result: AIChatResponse = {
-      reply: parsed.reply || "I'm not sure what to do with that. Try telling me what vibe you want.",
+      reply: reply || "Done.",
       actions: validActions,
     };
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(result));
+    return true;
   } catch (err: unknown) {
-    console.error("[AI Chat] Anthropic error:", err);
-    captureServerError(err, "ai-chat");
-    var errMsg = err instanceof Error ? err.message : "Unknown error";
-    res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Claude API error: " + errMsg }));
+    var safe = publicAIError(err, "ai-chat");
+    res.writeHead(502, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: safe, code: "ai_error" }));
+    return false;
   }
 }

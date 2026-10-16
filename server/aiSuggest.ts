@@ -7,7 +7,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
-import { captureServerError } from "./sentry.js";
+import { publicAIError } from "./sentry.js";
 
 export interface PhotoInput {
   id: string;
@@ -75,11 +75,11 @@ function readBody(req: IncomingMessage): Promise<string> {
 export async function handleAISuggest(
   req: IncomingMessage,
   res: ServerResponse
-): Promise<void> {
+): Promise<boolean> {
   if (req.method !== "POST") {
     res.writeHead(405, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Method not allowed" }));
-    return;
+    return false;
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -91,7 +91,7 @@ export async function handleAISuggest(
           "ANTHROPIC_API_KEY is not configured. Add it to your .env file.",
       })
     );
-    return;
+    return false;
   }
 
   let photos: PhotoInput[] = [];
@@ -113,7 +113,7 @@ export async function handleAISuggest(
   } catch {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Invalid JSON body" }));
-    return;
+    return false;
   }
 
   // Cap at 20 photos for cost/speed
@@ -123,13 +123,20 @@ export async function handleAISuggest(
     res.end(
       JSON.stringify({ error: "Need at least 2 photos to generate suggestions" })
     );
-    return;
+    return false;
   }
 
   // Fetch images in parallel
   const fetched = await Promise.all(
     capped.map((p) => fetchImageAsBase64(p.url))
   );
+  if (fetched.every((img) => !img)) {
+    // Nothing for the vision model to look at — fail (and refund) instead of
+    // paying for a text-only guess.
+    res.writeHead(502, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Could not load any images", code: "no_images" }));
+    return false;
+  }
 
   // Build the message content: one image block per photo + caption
   type ContentBlock =
@@ -192,7 +199,9 @@ Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
   });
 
   try {
-    const anthropic = new Anthropic({ apiKey });
+    // 40s, no retries: image fetch (≤8s) + this must finish inside the 60s
+    // maxDuration, or Vercel kills the function before the refund runs.
+    const anthropic = new Anthropic({ apiKey, timeout: 40000, maxRetries: 0 });
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5",
       max_tokens: 1024,
@@ -208,34 +217,53 @@ Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
       .replace(/\s*```\s*$/i, "")
       .trim();
 
-    let parsed: { clusters: { name: string; subtitle: string; photoIndices: number[] }[] };
+    let parsed: { clusters?: unknown };
     try {
       parsed = JSON.parse(cleaned);
     } catch {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify({ error: "Claude returned invalid JSON", raw: rawText })
-      );
-      return;
+      // Log the raw text server-side only — never echo model output to the client.
+      console.error("[AI Suggest] invalid JSON from model:", rawText.slice(0, 500));
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "AI couldn't build a sequence. Try again.", code: "ai_invalid_output" }));
+      return false;
     }
 
-    // Map photoIndices → photoIds
-    const clusters: Cluster[] = (parsed.clusters || []).map((c) => ({
-      name: c.name,
-      subtitle: c.subtitle,
-      photoIds: (c.photoIndices || [])
-        .map((idx: number) => capped[idx - 1]?.id)
-        .filter(Boolean) as string[],
-    }));
+    // Validate: 1-based integer indices in range, no duplicates, at most
+    // targetCount; drop clusters that end up with fewer than 2 photos.
+    const rawClusters: any[] = Array.isArray(parsed.clusters) ? parsed.clusters : [];
+    const clusters: Cluster[] = [];
+    for (const c of rawClusters) {
+      if (!c || typeof c !== "object") continue;
+      const ids: string[] = [];
+      for (const idx of Array.isArray(c.photoIndices) ? c.photoIndices : []) {
+        if (!Number.isInteger(idx) || idx < 1 || idx > capped.length) continue;
+        const id = capped[idx - 1].id;
+        if (ids.indexOf(id) === -1) ids.push(id);
+      }
+      const photoIds = targetCount ? ids.slice(0, targetCount) : ids;
+      if (photoIds.length < 2) continue;
+      clusters.push({
+        name: typeof c.name === "string" && c.name.trim() ? c.name.trim().slice(0, 80) : "Untitled dump",
+        subtitle: typeof c.subtitle === "string" ? c.subtitle.trim().slice(0, 120) : "",
+        photoIds: photoIds,
+      });
+    }
+
+    if (clusters.length === 0) {
+      console.error("[AI Suggest] no usable cluster in model output:", rawText.slice(0, 500));
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "AI couldn't build a sequence. Try again.", code: "ai_empty_result" }));
+      return false;
+    }
 
     const response: AISuggestResponse = { clusters };
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(response));
+    return true;
   } catch (err: unknown) {
-    console.error("[AI Suggest] Anthropic error:", err);
-    captureServerError(err, "ai-suggest", { photoCount: capped.length });
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Claude API error: " + msg }));
+    const safe = publicAIError(err, "ai-suggest", { photoCount: capped.length });
+    res.writeHead(502, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: safe, code: "ai_error" }));
+    return false;
   }
 }

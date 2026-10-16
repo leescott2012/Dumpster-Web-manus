@@ -3,7 +3,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import { handleAIChat } from "../server/aiChat.js";
-import { checkCredits } from "../server/creditGate.js";
+import { checkCredits, runCharged } from "../server/creditGate.js";
 
 export const config = {
   runtime: "nodejs",
@@ -14,9 +14,5 @@ export const config = {
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   var gate = await checkCredits(req, res, "ai_chat");
   if (!gate.proceed) return;
-  try {
-    await handleAIChat(req, res);
-  } finally {
-    if (res.statusCode >= 400) await gate.refund();
-  }
+  await runCharged(res, gate, "ai-chat", function() { return handleAIChat(req, res); });
 }

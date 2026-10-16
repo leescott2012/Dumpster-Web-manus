@@ -8,7 +8,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
-import { captureServerError } from "./sentry.js";
+import { publicAIError } from "./sentry.js";
 
 export interface CaptionPhotoInput {
   id: string;
@@ -91,18 +91,18 @@ function readBody(req: IncomingMessage): Promise<string> {
 export async function handleAICaption(
   req: IncomingMessage,
   res: ServerResponse
-): Promise<void> {
+): Promise<boolean> {
   if (req.method !== "POST") {
     res.writeHead(405, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Method not allowed" }));
-    return;
+    return false;
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey === "your_anthropic_api_key_here") {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "ANTHROPIC_API_KEY is not configured." }));
-    return;
+    return false;
   }
 
   let payload: CaptionRequest;
@@ -112,13 +112,13 @@ export async function handleAICaption(
   } catch {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Invalid JSON body" }));
-    return;
+    return false;
   }
 
   if (!payload.dumpTitle) {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "dumpTitle is required" }));
-    return;
+    return false;
   }
 
   const tone = payload.tone ?? "default";
@@ -159,6 +159,13 @@ Respond ONLY with valid JSON, no markdown, no code fences:
   // Photos
   if (photos.length > 0) {
     const fetched = await Promise.all(photos.map((p) => fetchImageAsBase64(p.url)));
+    if (fetched.every((img) => !img)) {
+      // Photos were sent but none loaded — fail (and refund) rather than
+      // charging for captions written blind.
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Could not load any images", code: "no_images" }));
+      return false;
+    }
     content.push({
       type: "text",
       text: `Here are the ${photos.length} photo${photos.length === 1 ? "" : "s"} in the carousel:`,
@@ -188,7 +195,9 @@ Respond ONLY with valid JSON, no markdown, no code fences:
   });
 
   try {
-    const anthropic = new Anthropic({ apiKey });
+    // 18s, no retries: image fetch (≤8s) + this must finish inside the 30s
+    // maxDuration, or Vercel kills the function before the refund runs.
+    const anthropic = new Anthropic({ apiKey, timeout: 18000, maxRetries: 0 });
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5",
       max_tokens: 700,
@@ -199,38 +208,45 @@ Respond ONLY with valid JSON, no markdown, no code fences:
     const rawText = message.content[0].type === "text" ? message.content[0].text : "";
     const cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 
-    let parsed: { captions?: string[]; vibe?: string };
+    let parsed: { captions?: unknown; vibe?: unknown };
     try {
       parsed = JSON.parse(cleaned);
     } catch {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Claude returned invalid JSON", raw: rawText }));
-      return;
+      // Log raw model text server-side only — never echo it to the client.
+      console.error("[AI Caption] invalid JSON from model:", rawText.slice(0, 500));
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "AI couldn't write captions. Try again.", code: "ai_invalid_output" }));
+      return false;
     }
 
+    const captions = (Array.isArray(parsed.captions) ? parsed.captions : [])
+      .filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+      .slice(0, 3)
+      .map((c) => c.trim().slice(0, 500));
     const result: CaptionResult = {
       dumpTitle: payload.dumpTitle,
-      captions: Array.isArray(parsed.captions) ? parsed.captions.slice(0, 3) : [],
-      vibe: typeof parsed.vibe === "string" ? parsed.vibe : "curated",
+      captions: captions,
+      vibe: typeof parsed.vibe === "string" ? parsed.vibe.slice(0, 40) : "curated",
     };
 
     if (result.captions.length === 0) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "No captions returned", raw: rawText }));
-      return;
+      console.error("[AI Caption] no captions in model output:", rawText.slice(0, 500));
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "AI couldn't write captions. Try again.", code: "ai_empty_result" }));
+      return false;
     }
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(result));
+    return true;
   } catch (err: unknown) {
-    console.error("[AI Caption] Anthropic error:", err);
-    captureServerError(err, "ai-caption", {
+    const safe = publicAIError(err, "ai-caption", {
       photoCount: photos.length,
       hasUserPrompt: !!payload.userPrompt,
       tone: tone,
     });
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Claude API error: " + msg }));
+    res.writeHead(502, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: safe, code: "ai_error" }));
+    return false;
   }
 }
