@@ -11,6 +11,7 @@ import { useDrag } from "@/contexts/DragContext";
 import type { Dump, Photo } from "@/lib/photoData";
 import { Plus, Play, Trash2, Sparkles, Loader2 } from "lucide-react";
 import { fmtTime, trimRange, type VideoMeta } from "@/lib/videoStore";
+import { CREDIT_COSTS } from "@/lib/credits";
 
 var VIDEO_TAGS = ["Outfit", "Travel", "Car", "Other"];
 
@@ -334,12 +335,12 @@ export default function PhotoPool({
                       display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
                       opacity: scanning ? 0.85 : 1,
                     }}
-                    title="Scan photos with AI and auto-label them"
+                    title="Scan photos with AI and auto-label them (1 credit per photo)"
                   >
                     {scanning
                       ? <Loader2 size={11} className="animate-spin" />
                       : <Sparkles size={11} />}
-                    {scanning ? "Scanning…" : "Scan"}
+                    {scanning ? "Scanning…" : "Scan · " + CREDIT_COSTS.ai_label_per_photo + " credit/photo"}
                   </button>
                 )}
                 <button

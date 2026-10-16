@@ -9,11 +9,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
 import { captureServerError } from "./sentry.js";
+import { AI_LABEL_MAX_PER_REQUEST } from "../shared/aiLabelCost.js";
 
 export interface LabelPhotoInput { id: string; url: string }
 export interface LabelResult { id: string; category: string; label: string; confidence?: number }
 
-const MAX_PHOTOS = 12; // per request — client chunks larger sets
+const MAX_PHOTOS = AI_LABEL_MAX_PER_REQUEST; // per request — client chunks larger sets; paid cost is clamped to this too
 
 // Taxonomy mirrors the native iOS PhotoAnalyzer (Apple Vision) categories EXACTLY
 // so a photo lands in the same bucket whether it's scanned on web or on device.
