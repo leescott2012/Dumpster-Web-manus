@@ -1,217 +1,154 @@
-import { useState, useEffect } from "react";
-import { Gauge, ShieldAlert, Cpu, HardDrive, Wifi, Activity } from "lucide-react";
-import { SystemMetrics } from "../types";
+/**
+ * Ops telemetry panel — every number here is REAL (from /api/admin-stats or a
+ * live ping). It used to show randomly-fluctuating fake gauges ("core temp",
+ * "reactor fuel", "neural CPU") and claimed Gemini on Cloud Run; the app runs
+ * on Vercel serverless with Claude. Only the styling is decorative now.
+ */
+import { Gauge, Cpu, HardDrive, Wifi, Activity, RotateCw } from "lucide-react";
+
+export interface OpsData {
+  spend_cents: number;
+  budget_cents: number;
+  calls_by_action: Record<string, number>;
+  source: "redis" | "unavailable";
+}
+
+interface FeatureRow { action: string; count: number; refunds: number; }
 
 interface SystemWidgetProps {
-  metrics: SystemMetrics;
-  themeColor: 'arc-blue' | 'reactor-orange' | 'matrix-green' | 'crimson-alert';
+  ops: OpsData | undefined;
+  features: FeatureRow[];
+  creditsSpentToday: number;
+  creditsRefundedToday: number;
+  latencyMs: number | null;
+  pingOk: boolean | null;
+  onPing: () => void;
+}
+
+const FEATURE_LABELS: Record<string, string> = {
+  ai_suggest: "Auto Gen", ai_caption: "Caption", ai_chat: "Valet",
+  ai_label: "Labels", ai_label_auto: "Free Labels", ig_scrub: "IG Scrub", ai_recycle: "Recycle",
+};
+
+// Mirrors server/rateLimit.ts ai_label_auto_daily (per user, rolling 24h).
+const FREE_LABEL_IMAGES_PER_USER = 60;
+
+function Tile({ icon: Icon, label, value, sub, pct, warn }: {
+  icon: typeof Gauge; label: string; value: string; sub: string; pct?: number; warn?: boolean;
+}) {
+  return (
+    <div className="p-3.5 rounded-xl border border-slate-900 bg-slate-950/60 flex flex-col justify-between items-start min-w-0">
+      <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-400 uppercase tracking-widest leading-none">
+        <Icon className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+        <span>{label}</span>
+      </div>
+      <div className="my-2.5">
+        <span className={`text-2xl font-mono font-black ${warn ? "text-rose-400" : "text-amber-400"}`}>{value}</span>
+        <div className="text-[9px] font-mono text-slate-400 mt-0.5">{sub}</div>
+      </div>
+      {pct != null && (
+        <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden" role="presentation">
+          <div className={`h-full ${warn ? "bg-rose-500" : "bg-amber-500"}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function SystemWidget({
-  metrics,
-  themeColor
+  ops, features, creditsSpentToday, creditsRefundedToday, latencyMs, pingOk, onPing,
 }: SystemWidgetProps) {
-  const [internalMetrics, setInternalMetrics] = useState<SystemMetrics>(metrics);
+  const live = ops?.source === "redis";
+  const spendPct = ops && ops.budget_cents > 0 ? (ops.spend_cents / ops.budget_cents) * 100 : 0;
+  const calls = ops?.calls_by_action ?? {};
+  const callRows = Object.entries(calls)
+    .filter(([k]) => !k.endsWith("_images"))
+    .sort((a, b) => b[1] - a[1]);
+  const totalCalls = callRows.reduce((s, [, n]) => s + n, 0);
 
-  // Fluctuating values for aesthetic realism
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setInternalMetrics(prev => {
-        const deltaTemp = (Math.random() - 0.5) * 1.5;
-        const deltaCpu = (Math.random() - 0.5) * 12;
-        const deltaMem = (Math.random() - 0.5) * 1.0;
-        const deltaLatency = (Math.random() - 0.5) * 4;
+  const charged = features.reduce((s, f) => s + f.count, 0);
+  const refunded = features.reduce((s, f) => s + (f.refunds || 0), 0);
+  const refundPct = charged > 0 ? (refunded / charged) * 100 : 0;
 
-        return {
-          coreTemp: Math.min(110, Math.max(30, Number((prev.coreTemp + deltaTemp).toFixed(1)))),
-          arcReactorPercent: Math.min(100, Math.max(90, Number((prev.arcReactorPercent + (Math.random() - 0.5) * 0.15).toFixed(2)))),
-          cpuUsage: Math.min(100, Math.max(10, Math.round(prev.cpuUsage + deltaCpu))),
-          memoryUsage: Math.min(100, Math.max(5, Number((prev.memoryUsage + deltaMem).toFixed(1)))),
-          synapseLatency: Math.min(60, Math.max(5, Math.round(prev.synapseLatency + deltaLatency))),
-          satelliteStatus: Math.random() > 0.98 ? 'syncing' : prev.satelliteStatus
-        };
-      });
-    }, 1500);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  const colorThemeMap = {
-    'arc-blue': {
-      text: "text-cyan-400",
-      border: "border-cyan-500/30",
-      accent: "#22d3ee",
-      bgFill: "bg-cyan-500",
-      bgFillAlpha: "bg-cyan-500/10",
-      gaugeText: "text-cyan-300",
-      glowClass: "shadow-[inset_0_0_12px_rgba(34,211,238,0.15)]"
-    },
-    'reactor-orange': {
-      text: "text-amber-500",
-      border: "border-amber-500/30",
-      accent: "#f59e0b",
-      bgFill: "bg-amber-500",
-      bgFillAlpha: "bg-amber-500/10",
-      gaugeText: "text-amber-400",
-      glowClass: "shadow-[inset_0_0_12px_rgba(245,158,11,0.15)]"
-    },
-    'matrix-green': {
-      text: "text-emerald-400",
-      border: "border-emerald-400/30",
-      accent: "#10b981",
-      bgFill: "bg-emerald-500",
-      bgFillAlpha: "bg-emerald-500/10",
-      gaugeText: "text-emerald-300",
-      glowClass: "shadow-[inset_0_0_12px_rgba(16,185,129,0.15)]"
-    },
-    'crimson-alert': {
-      text: "text-rose-500",
-      border: "border-rose-500/30",
-      accent: "#ef4444",
-      bgFill: "bg-rose-500",
-      bgFillAlpha: "bg-rose-500/10",
-      gaugeText: "text-rose-400",
-      glowClass: "shadow-[inset_0_0_12px_rgba(239,68,68,0.15)]"
-    }
-  };
-
-  const choice = colorThemeMap[themeColor];
-
-  // Danger check for Temperature
-  const isTempCritical = internalMetrics.coreTemp > 85;
+  const freeCalls = calls.ai_label_auto ?? 0;
+  const freeImages = calls.ai_label_auto_images ?? 0;
 
   return (
-    <div className="bg-slate-900/30 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 space-y-4" id="system-hardware-monitoring">
-      
-      {/* Widget Header with Status logo */}
+    <section aria-labelledby="ops-telemetry-title" className="bg-slate-900/30 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 space-y-4" id="system-hardware-monitoring">
       <div className="flex items-center justify-between border-b border-slate-800/50 pb-3">
         <div className="flex items-center gap-2">
-          <Activity className={`w-5 h-5 ${choice.text}`} />
+          <Activity className="w-5 h-5 text-amber-500" aria-hidden="true" />
           <div>
-            <h2 className="text-sm font-mono font-bold text-slate-200">Genius CORE TELEMETRY</h2>
-            <p className="text-[10px] font-mono text-slate-500">System metrics and subsystem diagnostics</p>
+            <h2 id="ops-telemetry-title" className="text-sm font-mono font-bold text-slate-200">Genius OPS TELEMETRY</h2>
+            <p className="text-[10px] font-mono text-slate-400">Live AI spend, usage and API health</p>
           </div>
         </div>
-        <Wifi className="w-4 h-4 text-slate-500" />
+        <Wifi className={`w-4 h-4 ${pingOk === false ? "text-rose-500" : pingOk ? "text-emerald-400" : "text-slate-500"}`} aria-label={pingOk === false ? "API unreachable" : pingOk ? "API reachable" : "API not checked"} />
       </div>
 
-      {/* Grid of hardware gauges */}
       <div className="grid grid-cols-2 gap-4">
-        
-        {/* Core Temperature gauge */}
-        <div className={`p-3.5 rounded-xl border border-slate-900 bg-slate-950/60 flex flex-col justify-between items-start relative overflow-hidden`}>
-          <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-500 uppercase tracking-widest leading-none">
-            <Gauge className="w-3.5 h-3.5 text-slate-400" />
-            <span>Core Temperature</span>
+        <Tile
+          icon={Gauge}
+          label="AI Spend · Today"
+          value={live ? "$" + (ops!.spend_cents / 100).toFixed(2) : "—"}
+          sub={live ? `of $${(ops!.budget_cents / 100).toFixed(0)}/day cap · UTC day · est.` : "Budget counter offline (Upstash)"}
+          pct={live ? spendPct : undefined}
+          warn={spendPct >= 80}
+        />
+        <Tile
+          icon={HardDrive}
+          label="Credits · 24h"
+          value={String(creditsSpentToday)}
+          sub={`net spent · ${creditsRefundedToday} refunded`}
+        />
+        <Tile
+          icon={Cpu}
+          label="Refund Rate · 30d"
+          value={charged > 0 ? refundPct.toFixed(0) + "%" : "—"}
+          sub={`${refunded} of ${charged} charged calls failed`}
+          pct={charged > 0 ? refundPct : undefined}
+          warn={refundPct >= 10}
+        />
+        <div className="p-3.5 rounded-xl border border-slate-900 bg-slate-950/60 flex flex-col justify-between items-start min-w-0">
+          <div className="flex items-center justify-between w-full text-[9px] font-mono text-slate-400 uppercase tracking-widest leading-none">
+            <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5" aria-hidden="true" />API Latency</span>
+            <button onClick={onPing} aria-label="Re-check API latency" className="p-1 -m-1 hover:text-amber-400">
+              <RotateCw className="w-3 h-3" aria-hidden="true" />
+            </button>
           </div>
-
           <div className="my-2.5">
-            <span className={`text-2xl font-mono font-black ${isTempCritical ? 'text-amber-500 animate-pulse' : choice.gaugeText}`}>
-              {internalMetrics.coreTemp}°C
+            <span className={`text-2xl font-mono font-black ${pingOk === false ? "text-rose-400" : "text-slate-100"}`}>
+              {pingOk === false ? "DOWN" : latencyMs != null ? `${latencyMs} ms` : "—"}
             </span>
-            <div className="text-[8px] font-mono text-slate-600 mt-0.5">PEAK COEFF: 120.0C</div>
+            <div className="text-[9px] font-mono text-slate-400 mt-0.5 uppercase">Signed-in round trip</div>
           </div>
-
-          {/* Temperature status bar */}
-          <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
-            <div 
-              className={`h-full transition-all duration-500 ${isTempCritical ? 'bg-amber-500' : choice.bgFill}`} 
-              style={{ width: `${Math.min(100, (internalMetrics.coreTemp / 120) * 100)}%` }}
-            />
-          </div>
-
-          {isTempCritical && (
-            <div className="absolute top-2 right-2 text-amber-500 text-[8px] font-mono font-bold flex items-center gap-0.5 uppercase">
-              <ShieldAlert className="w-2.5 h-2.5" />
-              <span>Overheat Risk</span>
-            </div>
-          )}
-        </div>
-
-        {/* Arc Reactor Level tracker */}
-        <div className="p-3.5 rounded-xl border border-slate-900 bg-slate-950/60 flex flex-col justify-between items-start relative">
-          <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-500 uppercase tracking-widest leading-none">
-            <HardDrive className="w-3.5 h-3.5 text-slate-400" />
-            <span>Reactor Fuel</span>
-          </div>
-
-          <div className="my-2.5">
-            <span className={`text-2xl font-mono font-black text-[#D4AF37]`}>
-              {internalMetrics.arcReactorPercent}%
-            </span>
-            <div className="text-[8px] font-mono text-slate-600 mt-0.5 font-bold text-[#D4AF37]/70">CORE DECAY: CALIBRATED</div>
-          </div>
-
-          <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-[#D4AF37] transition-all duration-300" 
-              style={{ width: `${internalMetrics.arcReactorPercent}%` }}
-            />
-          </div>
-        </div>
-
-        {/* CPU Synapse Usage */}
-        <div className="p-3.5 rounded-xl border border-slate-900 bg-slate-950/60 flex flex-col justify-between items-start">
-          <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-500 uppercase tracking-widest leading-none">
-            <Cpu className="w-3.5 h-3.5 text-slate-400" />
-            <span>Neural CPU Core</span>
-          </div>
-
-          <div className="my-2.5">
-            <span className={`text-2xl font-mono font-black ${choice.gaugeText}`}>
-              {internalMetrics.cpuUsage}%
-            </span>
-            <div className="text-[8px] font-mono text-slate-600 mt-0.5">8 ACTIVE THREADS</div>
-          </div>
-
-          <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
-            <div 
-              className={`h-full ${choice.bgFill} transition-all duration-300`} 
-              style={{ width: `${internalMetrics.cpuUsage}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Cognitive Processing Synaptic Latency */}
-        <div className="p-3.5 rounded-xl border border-slate-900 bg-slate-950/60 flex flex-col justify-between items-start">
-          <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-500 uppercase tracking-widest leading-none">
-            <Activity className="w-3.5 h-3.5 text-slate-400" />
-            <span>Synaptic Latency</span>
-          </div>
-
-          <div className="my-2.5">
-            <span className="text-2xl font-mono font-black text-slate-100">
-              {internalMetrics.synapseLatency} ms
-            </span>
-            <div className="text-[8px] font-mono text-slate-600 mt-0.5 uppercase">LINK: SATELLITE_A12</div>
-          </div>
-
-          <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-slate-400 transition-all duration-300" 
-              style={{ width: `${Math.min(100, (internalMetrics.synapseLatency / 60) * 100)}%` }}
-            />
-          </div>
-        </div>
-
-      </div>
-
-      {/* Grid bottom: general system summaries */}
-      <div className="p-3 bg-slate-950/40 rounded-xl border border-slate-900 overflow-hidden font-mono text-[9px] leading-relaxed text-slate-500 space-y-1">
-        <div className="flex justify-between">
-          <span>HOST PROTOCOL:</span>
-          <span className="text-slate-300 uppercase">Secure Cloud Run Instance</span>
-        </div>
-        <div className="flex justify-between">
-          <span>COGNITIVE MATRIX:</span>
-          <span className="text-slate-300 uppercase">Gemini Generative Synapse v3.5</span>
-        </div>
-        <div className="flex justify-between">
-          <span>SYS WORKSPACE VOLUME:</span>
-          <span className="text-slate-400">STATELESS PERSISTENT (LOCALSTORAGE EXT)</span>
         </div>
       </div>
 
-    </div>
+      <div className="p-3 bg-slate-950/40 rounded-xl border border-slate-900 font-mono text-[10px] leading-relaxed text-slate-400 space-y-1">
+        <div className="flex justify-between text-slate-300 uppercase tracking-widest text-[9px] pb-1">
+          <span>AI calls today by feature</span><span>{live ? totalCalls : "—"}</span>
+        </div>
+        {!live && <div>Unavailable — UPSTASH_REDIS_REST_URL/TOKEN not set.</div>}
+        {live && callRows.length === 0 && <div>No AI calls yet today (UTC).</div>}
+        {callRows.map(([k, n]) => (
+          <div key={k} className="flex justify-between">
+            <span>{FEATURE_LABELS[k] ?? k}</span><span className="text-slate-200">{n}</span>
+          </div>
+        ))}
+        {live && (
+          <div className="flex justify-between pt-1 border-t border-slate-900">
+            <span>Free auto-labels (images)</span>
+            <span className="text-slate-200">{freeImages} · {freeCalls} req · cap {FREE_LABEL_IMAGES_PER_USER}/user/day</span>
+          </div>
+        )}
+      </div>
+
+      <div className="p-3 bg-slate-950/40 rounded-xl border border-slate-900 font-mono text-[9px] leading-relaxed text-slate-400 space-y-1">
+        <div className="flex justify-between gap-2"><span>HOST:</span><span className="text-slate-300 uppercase text-right">Vercel serverless</span></div>
+        <div className="flex justify-between gap-2"><span>AI MODELS:</span><span className="text-slate-300 uppercase text-right">Anthropic Claude (Haiku / Sonnet vision)</span></div>
+        <div className="flex justify-between gap-2"><span>DATA:</span><span className="text-slate-300 uppercase text-right">Supabase · Upstash Redis · Stripe</span></div>
+      </div>
+    </section>
   );
 }

@@ -248,8 +248,10 @@ function HomeContent() {
     var handleUnload = function() { flushAIProfileSave(); };
     window.addEventListener("beforeunload", handleUnload);
     return function() { window.removeEventListener("beforeunload", handleUnload); };
+  // Keyed on the id, not the object: Supabase hands back a new `user` object on
+  // every token refresh, which re-fired session_start (and the sync) hourly.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user?.id]);
 
   // ── Cloud photo sync (beta) ────────────────────────────────────────────────
   // On sign-in, pull THIS user's workspace from the DB (RLS scopes to their own
