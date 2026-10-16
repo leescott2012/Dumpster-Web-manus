@@ -11,7 +11,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { aiFetch } from "@/lib/creditSync";
 import { toast } from "sonner";
-import { getAuthHeaders } from "@/lib/supabase";
+import { getAiHeaders } from "@/lib/supabase";
 import { Sparkles, X, RefreshCcw, Plus, Loader2, Minus } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
 import { buildTasteBlock, loadDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, type DumpStyle } from "@/lib/captionPool";
@@ -138,7 +138,7 @@ export default function AISuggestSheet({
     const slowTimer = setTimeout(() => setSlow(true), 15000);
 
     try {
-      var authH = await getAuthHeaders();
+      var authH = await getAiHeaders();
       // Compress data-URL photos down to ~1024px / 0.65 quality so the JSON
       // request body fits under Vercel's 4.5 MB limit. Cloud-hosted URLs pass
       // through untouched.

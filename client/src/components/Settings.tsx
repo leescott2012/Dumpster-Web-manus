@@ -4,6 +4,7 @@
  */
 import { useState } from "react";
 import { Palette, ChevronLeft, Keyboard } from "lucide-react";
+import ApiKeysCard from "./ApiKeysCard";
 import { useTheme } from "@/contexts/ThemeContext";
 
 interface SettingsProps {
@@ -185,6 +186,7 @@ export default function Settings({ open, onClose }: SettingsProps) {
         {/* Content */}
         {activeTab === "general" && (
           <div style={{ padding: "0 24px 40px" }}>
+            <ApiKeysCard />
             {/* Dark Mode Section */}
             <div style={{
               background: "#141414",

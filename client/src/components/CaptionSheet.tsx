@@ -4,7 +4,7 @@
  */
 import { useState, useCallback, useEffect, useRef } from "react";
 import { aiFetch } from "@/lib/creditSync";
-import { getAuthHeaders } from "@/lib/supabase";
+import { getAiHeaders } from "@/lib/supabase";
 import { Type, X, Copy, RefreshCcw, Loader2, Check, Sparkles } from "lucide-react";
 import type { Dump } from "@/lib/photoData";
 import { buildTasteBlock } from "@/lib/captionPool";
@@ -84,7 +84,7 @@ export default function CaptionSheet({
     setErrorMsg("");
 
     try {
-      var authH = await getAuthHeaders();
+      var authH = await getAiHeaders();
       // Compress any data-URL photos so the request fits Vercel's 4.5MB cap
       const compressedPhotos = await Promise.all(
         // videos are device-only by owner decision

@@ -58,6 +58,10 @@
       "destination": "/api/social?fn=iap-verify"
     },
     {
+      "source": "/api/api-key-test",
+      "destination": "/api/social?fn=api-key-test"
+    },
+    {
       "source": "/api/apple-webhook",
       "destination": "/api/social?fn=apple-webhook"
     },

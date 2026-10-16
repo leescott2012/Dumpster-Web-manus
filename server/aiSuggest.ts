@@ -5,6 +5,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { userAnthropicKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
 import { publicAIError } from "./sentry.js";
@@ -85,7 +86,7 @@ export async function handleAISuggest(
   }
 
   const startedAt = Date.now();
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = userAnthropicKey(req) || process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey === "your_anthropic_api_key_here") {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(

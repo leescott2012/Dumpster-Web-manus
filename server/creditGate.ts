@@ -11,6 +11,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import { createClient } from "@supabase/supabase-js";
+import { userAnthropicKey } from "./userKey.js";
 import { deductCredits, refundCredits, supabaseAdmin } from "./supabaseAdmin.js";
 import { enforceRateLimit } from "./rateLimit.js";
 import { checkBudget, recordCost } from "./dailyBudget.js";
@@ -78,6 +79,10 @@ export async function checkCredits(
   // 2) Per-user rate limit
   var rlOk = await enforceRateLimit(req, res, action, userId);
   if (!rlOk) return { userId: userId, proceed: false, refund: noopRefund };
+
+  // Own verified Claude key: the user pays their provider, so no credits and
+  // no draw on our daily $ budget (auth + rate limit above still apply).
+  if (userAnthropicKey(req)) return { userId: userId, proceed: true, refund: noopRefund };
 
   // 3) Global daily budget
   var budgetOk = await checkBudget(res);
