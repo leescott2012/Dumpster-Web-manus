@@ -2,7 +2,8 @@
  * CaptionSheet — Generate Instagram captions for any dump using Claude.
  * Mirrors iOS CaptionService / LLMService.generateCaption flow.
  */
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { aiFetch } from "@/lib/creditSync";
 import { getAuthHeaders } from "@/lib/supabase";
 import { Type, X, Copy, RefreshCcw, Loader2, Check, Sparkles } from "lucide-react";
 import type { Dump } from "@/lib/photoData";
@@ -10,6 +11,7 @@ import { buildTasteBlock } from "@/lib/captionPool";
 import { compressDataUrlForVision } from "@/lib/imageDownscale";
 import { friendlyError } from "@/lib/friendlyError";
 import { notVideo } from "@/lib/videoStore";
+import { CREDIT_COSTS } from "@/lib/credits";
 
 interface CaptionSheetProps {
   open: boolean;
@@ -44,10 +46,17 @@ export default function CaptionSheet({
   const [titleOverride, setTitleOverride] = useState("");
   const [categoryOverride, setCategoryOverride] = useState("");
 
+  const [usedIdx, setUsedIdx] = useState(0);
+  // Read dumps through a ref: saving the generated captions updates `dumps`,
+  // and resetting on that change bounced the sheet back to the input form
+  // right after a paid generation (live test 2026-10: charged 3, no captions shown).
+  const dumpsRef = useRef(dumps);
+  dumpsRef.current = dumps;
+
   // When the sheet opens, pre-select the deep-linked dump if any
   useEffect(() => {
     if (open) {
-      const startDumpId = initialDumpId ?? (dumps[0]?.id ?? null);
+      const startDumpId = initialDumpId ?? (dumpsRef.current[0]?.id ?? null);
       setSelectedDumpId(startDumpId);
       setPhase("picker");
       setCaptions([]);
@@ -57,7 +66,7 @@ export default function CaptionSheet({
       setUserPrompt("");
       setTasteActive(Boolean(buildTasteBlock()));
     }
-  }, [open, initialDumpId, dumps]);
+  }, [open, initialDumpId]);
 
   const selectedDump = dumps.find(d => d.id === selectedDumpId) || null;
 
@@ -87,7 +96,7 @@ export default function CaptionSheet({
           meta: p.meta,
         }))
       );
-      const res = await fetch("/api/ai-caption", {
+      const res = await aiFetch("/api/ai-caption", {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, authH),
         body: JSON.stringify({
@@ -119,9 +128,17 @@ export default function CaptionSheet({
         setPhase("error");
         return;
       }
-      const caps: string[] = data.captions || [];
+      const caps: string[] = (data.captions || []).filter((c) => typeof c === "string" && c.trim());
+      if (caps.length === 0) {
+        // Server refunds empty output with a 502; this only guards a malformed 200.
+        setErrorMsg("Couldn't write captions this time.");
+        setErrorHint("Try again.");
+        setPhase("error");
+        return;
+      }
       const vibeStr: string = data.vibe || "curated";
       setCaptions(caps);
+      setUsedIdx(0);
       setVibe(vibeStr);
       onCaptionsGenerated(selectedDump.id, caps, vibeStr);
       setPhase("result");
@@ -142,6 +159,13 @@ export default function CaptionSheet({
       // fallback ignored
     }
   }, []);
+
+  const handleUse = useCallback((idx: number) => {
+    if (!selectedDump) return;
+    const chosen = captions[idx];
+    onCaptionsGenerated(selectedDump.id, [chosen].concat(captions.filter((_, i) => i !== idx)), vibe);
+    setUsedIdx(idx);
+  }, [selectedDump, captions, vibe, onCaptionsGenerated]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -383,7 +407,7 @@ export default function CaptionSheet({
                   letterSpacing: "0.02em", fontFamily: "inherit",
                 }}
               >
-                <Sparkles size={15} /> Generate Captions
+                <Sparkles size={15} /> Generate Captions · {CREDIT_COSTS.ai_caption} credits
               </button>
             </>
           )}
@@ -438,6 +462,10 @@ export default function CaptionSheet({
                 </span>
               </div>
 
+              <div style={{ fontSize: 11, color: "#8a8a8a", marginBottom: 12 }}>
+                Saved to "{selectedDump?.title}". "Use" picks the caption that's shared first.
+              </div>
+
               {/* Captions */}
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
                 {captions.map((cap, i) => (
@@ -457,6 +485,21 @@ export default function CaptionSheet({
                     <div style={{ flex: 1, fontSize: 14, lineHeight: 1.55, color: "#e8e8e8" }}>
                       {cap}
                     </div>
+                    <button
+                      onClick={() => handleUse(i)}
+                      disabled={usedIdx === i}
+                      aria-label={usedIdx === i ? "Caption in use" : "Use this caption"}
+                      style={{
+                        background: usedIdx === i ? "rgba(34,197,94,0.12)" : "#1a1a1a",
+                        border: usedIdx === i ? "1px solid rgba(34,197,94,0.35)" : "1px solid #2a2a2a",
+                        borderRadius: 8, padding: "4px 10px", flexShrink: 0,
+                        color: usedIdx === i ? "#22c55e" : "#ccc",
+                        fontSize: 11, fontWeight: 700, fontFamily: "inherit",
+                        cursor: usedIdx === i ? "default" : "pointer",
+                      }}
+                    >
+                      {usedIdx === i ? "In use" : "Use"}
+                    </button>
                     <button aria-label="Copy caption"
                       onClick={() => handleCopy(cap, i)}
                       style={{
@@ -495,7 +538,7 @@ export default function CaptionSheet({
                     fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                   }}
                 >
-                  <RefreshCcw size={14} /> Regenerate
+                  <RefreshCcw size={14} /> Regenerate · {CREDIT_COSTS.ai_caption}
                 </button>
               </div>
             </div>

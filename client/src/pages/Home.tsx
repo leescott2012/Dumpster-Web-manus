@@ -1115,6 +1115,7 @@ function HomeContent() {
           }
           return set;
         }, [dumps])}
+        onOutOfCredits={function() { setOutOfCreditsAction("ai_suggest"); }}
       />
       <DumpActionSheet
         open={actionSheetDumpId !== null}

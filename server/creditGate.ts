@@ -108,6 +108,11 @@ export async function checkCredits(
       }));
       return { userId: userId, proceed: false, refund: noopRefund };
     }
+    // Post-deduct balance rides on whatever response the handler writes, so
+    // the client badge updates without an extra profile read. setHeader merges
+    // into the handler's later writeHead. On failure the refund runs AFTER the
+    // response, so the client ignores this header on non-2xx and re-reads.
+    res.setHeader("X-Credits-Remaining", String(result.remaining || 0));
     if (!result.ok) {
       res.writeHead(402, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
