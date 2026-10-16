@@ -239,6 +239,29 @@ export function saveAIRules(text: string) {
   notifyAIProfileChanged();
 }
 
+// ── Dump styles — named, reusable recipes; the active one feeds buildTasteBlock ─
+
+export interface DumpStyle { id: string; name: string; profile: string; rules: string; updatedAt: string }
+
+export function loadDumpStyles(): DumpStyle[] {
+  try {
+    const raw = localStorage.getItem("dumpster_dump_styles");
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
+}
+export function saveDumpStyles(styles: DumpStyle[]) {
+  localStorage.setItem("dumpster_dump_styles", JSON.stringify(styles));
+  notifyAIProfileChanged();
+}
+export function loadActiveDumpStyleId(): string {
+  return localStorage.getItem("dumpster_active_dump_style") || "";
+}
+export function saveActiveDumpStyleId(id: string) {
+  localStorage.setItem("dumpster_active_dump_style", id);
+  notifyAIProfileChanged();
+}
+
 export function buildTasteBlock(): string {
   const profile = loadTasteProfile().trim();
   const rules = loadAIRules().trim();
@@ -250,6 +273,12 @@ export function buildTasteBlock(): string {
   const parts: string[] = [];
   if (profile) parts.push(`User's aesthetic / taste profile:\n${profile}`);
   if (rules)   parts.push(`STRICT RULES (must follow):\n${rules}`);
+  const activeId = loadActiveDumpStyleId();
+  const style = activeId ? loadDumpStyles().find(d => d.id === activeId) : undefined;
+  if (style) {
+    const body = [style.profile.trim(), style.rules.trim()].filter(Boolean).join("\n");
+    parts.push(`ACTIVE DUMP STYLE — "${style.name}" (follow this recipe for structure, sequencing, poses, and mix):` + (body ? "\n" + body : ""));
+  }
   if (favorites.length) parts.push(`User's favorite caption examples (match this voice):\n${favorites.map(c => "- " + c.text).join("\n")}`);
   if (banned.length)    parts.push(`NEVER USE these patterns or anything similar:\n${banned.map(c => "- " + c.text).join("\n")}`);
   return parts.join("\n\n");

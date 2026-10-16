@@ -6,7 +6,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { getAuthHeaders } from "@/lib/supabase";
 import { X, Send, Loader, ArrowUpDown, ArrowDownToLine, ArrowUpFromLine, Palette, Brain } from "lucide-react";
 import type { Dump, Photo } from "@/lib/photoData";
-import { loadTasteProfile, saveTasteProfile } from "@/lib/captionPool";
+import { loadTasteProfile, saveTasteProfile, buildTasteBlock } from "@/lib/captionPool";
 import { friendlyError } from "@/lib/friendlyError";
 
 interface ChatMessage {
@@ -153,7 +153,7 @@ export default function DumpChatSheet({
           }),
           history: historyForApi,
           message: userMsg.text,
-          tasteProfile: loadTasteProfile(),
+          tasteProfile: buildTasteBlock(), // profile + AI rules + caption voice, same block AI Suggest gets
           vibe: dump.vibe || "",
         }),
       });
