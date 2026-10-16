@@ -239,7 +239,8 @@ export function saveTasteProfile(text: string) {
   notifyAIProfileChanged();
 }
 
-export const TASTE_PROFILE_MAX = 750;
+export const TASTE_PROFILE_MAX = 2000;
+export const AI_RULES_MAX = 1500;
 /** One Valet-suggested preference line. Mirrored server-side in server/aiChat.ts. */
 export const TASTE_PREF_MAX = 160;
 

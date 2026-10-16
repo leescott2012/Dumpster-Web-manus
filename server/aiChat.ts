@@ -118,8 +118,9 @@ export async function handleAIChat(
     return "  [" + p.id + "] " + p.category + " — " + p.alt;
   }).join("\n");
 
-  var tasteSection = body.tasteProfile
-    ? "\n\nUSER TASTE PROFILE (accumulated preferences):\n" + body.tasteProfile
+  // Capped (6000 chars) so a huge profile can't inflate cost
+  var tasteSection = typeof body.tasteProfile === "string" && body.tasteProfile
+    ? "\n\nUSER TASTE PROFILE (accumulated preferences):\n" + body.tasteProfile.slice(0, 6000)
     : "";
 
   var vibeSection = body.vibe

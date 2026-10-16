@@ -104,7 +104,8 @@ export async function handleAISuggest(
     const parsed = JSON.parse(body) as { photos?: PhotoInput[]; variation?: number; targetCount?: number | null; tasteBlock?: string; userHint?: string };
     photos = parsed.photos || [];
     variation = parsed.variation || 0;
-    tasteBlock = parsed.tasteBlock || "";
+    // Cap the taste block (profile 2000 + rules 1500 + style + captions) so cost stays bounded
+    tasteBlock = typeof parsed.tasteBlock === "string" ? parsed.tasteBlock.slice(0, 6000) : "";
     // Cap freeform input so a malicious / runaway prompt can't blow up the request
     userHint = (parsed.userHint || "").slice(0, 500);
     if (typeof parsed.targetCount === "number" && parsed.targetCount >= 2 && parsed.targetCount <= 20) {
