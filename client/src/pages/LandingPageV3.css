@@ -1,0 +1,672 @@
+/* ── Draft 3 — Apple product-page grammar ─────────────────────────── */
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@600,700&display=swap');
+
+.v3-root {
+  background: #000;
+  color: #f5f5f7;
+  font-family: -apple-system, BlinkMacSystemFont, 'DM Sans', sans-serif;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Sticky product nav ──────────────────────────────────────────── */
+.v3-nav {
+  position: fixed;
+  top: 10px; left: 50%;
+  transform: translate(-50%, -80px);
+  width: min(1080px, calc(100% - 24px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(18, 18, 18, 0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 10px 18px;
+  z-index: 100;
+  transition: transform 0.45s cubic-bezier(0.3, 1, 0.4, 1);
+}
+.v3-nav--on { transform: translate(-50%, 0); }
+.v3-nav__name { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+.v3-nav__actions { display: flex; gap: 8px; }
+
+/* ── Pills ───────────────────────────────────────────────────────── */
+.v3-pill {
+  border: none;
+  border-radius: 100px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.v3-pill--gold { background: #C8A96E; color: #000; }
+.v3-pill--gold:hover { background: #d4b87a; }
+.v3-pill--ghost { background: transparent; color: #ccc; border: 1px solid #3a3a3c; }
+.v3-pill--ghost:hover { border-color: #666; color: #fff; }
+.v3-pill--dark { background: #1d1d1f; color: #fff; }
+.v3-pill--dark:hover { background: #333; }
+.v3-pill--lg { padding: 14px 28px; font-size: 15px; }
+
+.v3-switch {
+  position: fixed;
+  bottom: 16px; left: 16px;
+  z-index: 100;
+  background: rgba(18,18,18,0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid #2a2a2c;
+  color: #888;
+  font-size: 12px;
+  padding: 9px 14px;
+  border-radius: 100px;
+  cursor: pointer;
+}
+.v3-switch b { color: #C8A96E; }
+.v3-switch:hover { color: #fff; }
+
+/* ── Promo banner ────────────────────────────────────────────────── */
+.v3-promo {
+  background: #1d1d1f;
+  color: #d2d2d7;
+  text-align: center;
+  font-size: 13.5px;
+  padding: 15px 20px;
+}
+
+/* ── Hero ────────────────────────────────────────────────────────── */
+.v3-hero {
+  min-height: 165vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 9vh 20px 0;
+  position: relative;
+}
+.v3-hero__kicker { font-size: clamp(20px, 3vw, 30px); font-weight: 600; letter-spacing: 0.01em; }
+.v3-hero__mark {
+  font-family: 'Clash Display', sans-serif;
+  font-size: clamp(96px, 24vw, 330px);
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  /* Apple PRO-style: photo texture lives inside the letterforms */
+  background:
+    linear-gradient(160deg, rgba(200,169,110,0.55), rgba(90,70,32,0.75)),
+    url('https://images.pexels.com/photos/2613260/pexels-photo-2613260.jpeg?auto=compress&cs=tinysrgb&w=1200&h=560&fit=crop') center 30% / cover;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 20px 60px rgba(200, 169, 110, 0.22));
+  will-change: transform, opacity;
+}
+.v3-hero__mark span { -webkit-text-fill-color: #C8A96E; }
+.v3-hero__stage {
+  position: relative;
+  width: min(880px, 96vw);
+  margin-top: -3vw;
+  display: flex;
+  justify-content: center;
+}
+.v3-phone--hero {
+  width: clamp(250px, 34vw, 370px);
+  z-index: 3;
+  position: relative;
+  will-change: transform;
+}
+.v3-phone__notch {
+  position: absolute;
+  top: 16px; left: 50%;
+  transform: translateX(-50%);
+  width: 34%; height: 18px;
+  background: #0d0d0d;
+  border-radius: 100px;
+  z-index: 4;
+}
+.v3-hero__pile {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  min-height: 340px;
+}
+.v3-pp {
+  position: absolute;
+  width: clamp(120px, 17vw, 190px);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.65);
+  will-change: transform;
+}
+.v3-pp:nth-child(1) { left: 0; top: 30px; rotate: -9deg; }
+.v3-pp:nth-child(2) { left: 9%; top: 230px; rotate: 7deg; }
+.v3-pp:nth-child(3) { right: 0; top: 50px; rotate: 11deg; }
+.v3-pp:nth-child(4) { right: 8%; top: 250px; rotate: -8deg; }
+.v3-pp:nth-child(5) { left: 16%; top: 110px; rotate: -14deg; opacity: 0.7; }
+.v3-hero__cta { margin-top: 40px; }
+.v3-hero__price { color: #86868b; font-size: 14px; margin-top: 14px; }
+
+/* ── Sections ────────────────────────────────────────────────────── */
+.v3-sec { padding: 110px 24px; max-width: 1020px; margin: 0 auto; text-align: center; }
+.v3-sec--tight { padding-top: 0; }
+.v3-eyebrow { color: #C8A96E; font-weight: 700; font-size: 15px; margin-bottom: 12px; }
+.v3-h2 {
+  font-size: clamp(34px, 6vw, 64px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin-bottom: 48px;
+}
+
+/* ── Highlights reel ─────────────────────────────────────────────── */
+.v3-reel {
+  display: flex;
+  gap: 22px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.v3-phone {
+  width: 230px;
+  aspect-ratio: 9 / 18;
+  background: #0d0d0d;
+  border: 2px solid #2c2c2e;
+  border-radius: 34px;
+  padding: 8px;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.6);
+}
+.v3-phone__screen {
+  width: 100%; height: 100%;
+  border-radius: 26px;
+  background: #131313;
+  overflow: hidden;
+  position: relative;
+}
+.v3-loop__tag {
+  position: absolute;
+  bottom: 12px; left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+  padding: 6px 12px;
+  border-radius: 100px;
+  z-index: 5;
+}
+
+/* loop 1: photos shuffle from mess into a grid, forever */
+.v3-loop-sort img {
+  position: absolute;
+  width: 44%;
+  border-radius: 8px;
+  animation: v3sort 5s cubic-bezier(0.5, 1.2, 0.4, 1) infinite alternate;
+}
+.v3-ls0 { left: 5%;  top: 4%;  --tx: 3%;   --ty: 3%;   rotate: -14deg; }
+.v3-ls1 { left: 40%; top: 12%; --tx: 52%;  --ty: 3%;   rotate: 11deg; animation-delay: .12s !important; }
+.v3-ls2 { left: 15%; top: 38%; --tx: 3%;   --ty: 34%;  rotate: 8deg;  animation-delay: .24s !important; }
+.v3-ls3 { left: 48%; top: 42%; --tx: 52%;  --ty: 34%;  rotate: -9deg; animation-delay: .36s !important; }
+.v3-ls4 { left: 8%;  top: 66%; --tx: 3%;   --ty: 65%;  rotate: 13deg; animation-delay: .48s !important; }
+.v3-ls5 { left: 44%; top: 62%; --tx: 52%;  --ty: 65%;  rotate: -6deg; animation-delay: .6s !important; }
+@keyframes v3sort {
+  0%, 18% { transform: none; }
+  55%, 100% { left: var(--tx); top: var(--ty); transform: rotate(0); }
+}
+
+/* loop 2: caption types itself */
+.v3-loop-cap img { width: 100%; height: 58%; object-fit: cover; display: block; }
+.v3-loop-cap__text {
+  padding: 12px 12px 0;
+  font-size: 12.5px;
+  color: #ddd;
+  text-align: left;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  width: 0;
+  animation: v3type 4.6s steps(30) infinite;
+}
+.v3-loop-cap__text span {
+  display: inline-block; width: 2px; height: 1em;
+  background: #C8A96E; vertical-align: text-bottom; margin-left: 2px;
+  animation: v3blink 0.8s steps(1) infinite;
+}
+@keyframes v3type { 0%, 8% { width: 0; } 60%, 100% { width: 100%; } }
+@keyframes v3blink { 50% { opacity: 0; } }
+
+/* loop 3: carousel swipes card by card */
+.v3-loop-swipe__strip {
+  display: flex;
+  height: 100%;
+  animation: v3swipe 7s cubic-bezier(0.6, 0, 0.2, 1) infinite;
+}
+.v3-loop-swipe__strip img { width: 100%; height: 100%; object-fit: cover; flex: 0 0 100%; }
+@keyframes v3swipe {
+  0%, 14% { transform: translateX(0); }
+  20%, 34% { transform: translateX(-100%); }
+  40%, 54% { transform: translateX(-200%); }
+  60%, 74% { transform: translateX(-300%); }
+  80%, 94% { transform: translateX(-400%); }
+  100% { transform: translateX(-500%); }
+}
+
+/* ── Sequencing pinned scene ─────────────────────────────────────── */
+.v3-seq { position: relative; }
+.v3-seq__inner {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 24px;
+  overflow: hidden;
+}
+.v3-seq__stage {
+  display: flex;
+  gap: clamp(6px, 1.6vw, 14px);
+  justify-content: center;
+  margin: 34px 0 26px;
+}
+.v3-seq__card {
+  width: clamp(44px, 10vw, 120px);
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.55);
+  will-change: transform;
+}
+.v3-seq__labels {
+  display: flex;
+  gap: 14px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #C8A96E;
+}
+.v3-seq__labels span:nth-child(even) { color: #555; }
+.v3-seq__hint { position: absolute; bottom: 26px; font-size: 11px; letter-spacing: 2px; color: #555; text-transform: uppercase; }
+
+/* ── Genius Engine pixel grid ────────────────────────────────────── */
+.v3-pixel {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 14px;
+}
+.v3-pixel img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 18px;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.5);
+}
+@media (max-width: 768px) {
+  .v3-pixel { grid-template-columns: 1fr 1fr; }
+  .v3-pixel img:first-child { grid-column: 1 / -1; }
+}
+
+/* ── Hand-held phone composites (photo + overlaid screen) ────────── */
+.v3-hand {
+  position: relative;
+  width: min(400px, 82vw);
+  margin: 0 auto 46px;
+}
+.v3-hand__photo {
+  width: 100%;
+  border-radius: 22px;
+  display: block;
+}
+.v3-hand--up .v3-hand__photo {
+  /* tint the stock orange backdrop toward brand gold */
+  filter: hue-rotate(-10deg) saturate(0.85) brightness(0.94);
+}
+.v3-hand__screen {
+  position: absolute;
+  object-fit: cover;
+}
+.v3-hand--up .v3-hand__screen {
+  left: 30.5%; top: 12%;
+  width: 39%; height: 42.5%;
+  border-radius: 10px;
+  transform: rotate(-1.5deg);
+}
+.v3-hand--dark .v3-hand__screen {
+  left: 17%; top: 7%;
+  width: 66%; height: 84%;
+  border-radius: 22px;
+}
+
+/* ── Duo: app screenshot phone + photo side by side ──────────────── */
+.v3-duo {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: clamp(18px, 3vw, 44px);
+  align-items: center;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.v3-phone--shot {
+  width: clamp(220px, 27vw, 310px);
+  background: #0d0d0d;
+  border: 2px solid #2c2c2e;
+  border-radius: 34px;
+  padding: 8px;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.6);
+}
+.v3-phone--shot .v3-phone__screen {
+  aspect-ratio: 9 / 19.5;
+  border-radius: 26px;
+  overflow: hidden;
+  background: #131313;
+}
+.v3-duo__photo {
+  width: 100%;
+  max-width: 520px;
+  border-radius: 20px;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.5);
+}
+@media (max-width: 768px) {
+  .v3-duo { grid-template-columns: 1fr; justify-items: center; }
+}
+
+/* ── Off-grid swipe gallery ──────────────────────────────────────── */
+.v3-swipe {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 6px 4px 18px;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+}
+.v3-swipe::-webkit-scrollbar { display: none; }
+.v3-swipe__card {
+  flex: 0 0 min(340px, 78vw);
+  scroll-snap-align: center;
+  background: #121212;
+  border: 1px solid #242426;
+  border-radius: 20px;
+  overflow: hidden;
+  text-align: left;
+}
+.v3-swipe__card img { width: 100%; height: 200px; object-fit: cover; display: block; }
+.v3-swipe__card h3 { font-size: 16px; padding: 16px 18px 6px; }
+.v3-swipe__card p { font-size: 13.5px; color: #a1a1a6; line-height: 1.55; padding: 0 18px 20px; }
+.v3-swipe__hint {
+  color: #555;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 8px;
+}
+
+/* ── Design section: oversized angled device ─────────────────────── */
+.v3-design {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: clamp(20px, 5vw, 80px);
+  align-items: center;
+  text-align: left;
+  overflow: visible;
+}
+.v3-design .v3-h2 { margin-bottom: 20px; }
+.v3-design__copy { color: #a1a1a6; font-size: 16px; line-height: 1.65; max-width: 420px; }
+.v3-phone--design {
+  width: clamp(220px, 26vw, 310px);
+  margin-right: clamp(10px, 3vw, 40px);
+  will-change: transform;
+}
+.v3-screenfill { width: 100%; height: 100%; object-fit: cover; display: block; }
+@media (max-width: 768px) {
+  .v3-design { grid-template-columns: 1fr; text-align: center; }
+  .v3-design__copy { margin: 0 auto; }
+  .v3-phone--design { margin: 0 auto; }
+}
+
+/* ── Speed section: one huge phone ───────────────────────────────── */
+.v3-big { text-align: center; }
+.v3-phone--big {
+  width: clamp(300px, 42vw, 460px);
+  margin: 10px auto 46px;
+  will-change: transform;
+}
+.v3-phone--big .v3-phone__screen { position: relative; }
+
+/* ── Family triptych ─────────────────────────────────────────────── */
+.v3-reel--family { align-items: flex-start; }
+.v3-phone--family { width: clamp(210px, 26vw, 270px); }
+.v3-fam-label {
+  margin-top: 16px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #C8A96E;
+  text-align: center;
+}
+.v3-fam-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 34px 10px 10px;
+}
+.v3-fam-grid img { width: 100%; border-radius: 8px; display: block; }
+.v3-fam-seq { padding: 34px 12px 10px; display: flex; flex-direction: column; gap: 10px; }
+.v3-fam-seq__row { display: flex; align-items: center; gap: 10px; }
+.v3-fam-seq__row img { width: 58%; border-radius: 8px; display: block; }
+.v3-fam-seq__row span { font-size: 9px; font-weight: 800; letter-spacing: 1.5px; color: #C8A96E; }
+.v3-fam-ship { padding: 34px 12px 10px; text-align: left; }
+.v3-fam-ship img { width: 100%; border-radius: 10px; display: block; margin-bottom: 10px; }
+.v3-fam-ship p { font-size: 11.5px; color: #ccc; margin-bottom: 12px; }
+.v3-fam-ship__btn {
+  display: block;
+  background: #C8A96E;
+  color: #000;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  padding: 9px;
+  border-radius: 100px;
+}
+
+/* ── Keep exploring links ────────────────────────────────────────── */
+.v3-links { padding-bottom: 40px; }
+.v3-links__row {
+  display: flex;
+  gap: clamp(16px, 4vw, 44px);
+  justify-content: center;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.v3-links__row button {
+  background: none; border: none;
+  color: #C8A96E;
+  font-size: 15px; font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+.v3-links__row button:hover { text-decoration: underline; }
+.v3-links__row span { color: #6e6e73; font-size: 14px; }
+
+/* ── Full-bleed media band + side stats (Apple camera-section layout) ── */
+.v3-sec--wide { max-width: 1180px; }
+.v3-band {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: clamp(24px, 4vw, 64px);
+  align-items: center;
+  text-align: left;
+}
+.v3-band__media {
+  width: 100%;
+  border-radius: 24px;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.6);
+}
+.v3-band__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 38px;
+  min-width: 190px;
+}
+@media (max-width: 768px) {
+  .v3-band { grid-template-columns: 1fr; }
+  .v3-band__stats { flex-direction: row; gap: 40px; }
+}
+
+/* ── Compare pill (Apple "Compare iPhone cameras +") ─────────────── */
+.v3-cmp {
+  margin-top: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #1d1d1f;
+  color: #f5f5f7;
+  border: none;
+  border-radius: 100px;
+  padding: 13px 8px 13px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.v3-cmp:hover { background: #2c2c2e; }
+.v3-cmp span {
+  width: 30px; height: 30px;
+  background: #C8A96E;
+  color: #000;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+/* ── Mixed-color paragraph (Apple Intelligence blurb) ────────────── */
+.v3-para {
+  max-width: 700px;
+  margin: 0 auto;
+  font-size: clamp(19px, 2.6vw, 25px);
+  line-height: 1.5;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #86868b;
+  text-align: center;
+}
+.v3-para b { color: #f5f5f7; font-weight: 600; }
+
+/* ── Stats ───────────────────────────────────────────────────────── */
+.v3-stats {
+  display: flex;
+  gap: clamp(28px, 7vw, 90px);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.v3-stat { display: flex; flex-direction: column; gap: 4px; }
+.v3-stat em { font-style: normal; color: #86868b; font-size: 14px; }
+.v3-stat b { color: #C8A96E; font-size: clamp(34px, 5vw, 56px); font-weight: 700; letter-spacing: -0.02em; }
+
+/* ── 3-col grid (Apple spec grid) ────────────────────────────────── */
+.v3-grid3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 40px;
+  text-align: left;
+  margin-bottom: 56px;
+}
+.v3-cell h3 {
+  font-size: 17px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #333;
+  margin-bottom: 14px;
+}
+.v3-cell p { color: #a1a1a6; font-size: 14.5px; line-height: 1.6; }
+
+/* ── Plans (light section) ───────────────────────────────────────── */
+.v3-sec--light {
+  background: #f5f5f7;
+  color: #1d1d1f;
+  max-width: none;
+  padding-left: max(24px, calc(50vw - 510px));
+  padding-right: max(24px, calc(50vw - 510px));
+}
+/* Apple "best place to buy" card rail: eyebrow, headline, image, corner ⊕ */
+.v3-plans { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+.v3-plan {
+  background: #fff;
+  border-radius: 24px;
+  padding: 30px 28px 0;
+  width: min(400px, 100%);
+  text-align: left;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.08);
+  position: relative;
+  overflow: hidden;
+}
+.v3-plan--pro { outline: 2px solid #C8A96E; }
+.v3-plan h3 { font-size: 12px; font-weight: 700; color: #6e6e73; letter-spacing: 1px; margin-bottom: 10px; }
+.v3-plan h4 { font-size: 24px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.2; margin-bottom: 12px; color: #1d1d1f; }
+.v3-plan p { color: #515154; font-size: 14px; line-height: 1.6; margin-bottom: 20px; }
+.v3-plan img { width: 100%; border-radius: 14px 14px 0 0; display: block; }
+.v3-plan__plus {
+  position: absolute;
+  right: 18px; bottom: 18px;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: #1d1d1f;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 400;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.2s;
+}
+.v3-plan__plus:hover { transform: scale(1.1); }
+.v3-plan__plus--gold { background: #C8A96E; color: #000; }
+
+/* ── FAQ ─────────────────────────────────────────────────────────── */
+.v3-faqs { max-width: 640px; margin: 0 auto; text-align: left; }
+.v3-faq { border-bottom: 1px solid #2c2c2e; }
+.v3-faq__q {
+  width: 100%;
+  background: none; border: none;
+  color: #f5f5f7;
+  font-size: 16px; font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  padding: 20px 4px;
+  cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center; gap: 14px;
+}
+.v3-faq__plus { color: #C8A96E; font-size: 20px; }
+.v3-faq__a { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
+.v3-faq--open .v3-faq__a { max-height: 220px; }
+.v3-faq__a p { color: #a1a1a6; font-size: 14.5px; line-height: 1.65; padding: 0 4px 20px; }
+
+/* ── Footer ──────────────────────────────────────────────────────── */
+.v3-footer { text-align: center; padding: 30px 24px 90px; }
+.v3-footer p { color: #6e6e73; font-size: 12.5px; margin-top: 22px; }
+.v3-legal { max-width: 640px; margin: 26px auto 0 !important; font-size: 11px !important; color: #515154 !important; line-height: 1.6; text-align: center; }
+.v3-footer a { color: #86868b; }
+
+/* ── Mobile ──────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .v3-hero { min-height: 150vh; }
+  .v3-phone--hero { width: min(300px, 68vw); }
+  .v3-pp { opacity: 0.55; }
+  .v3-sec { padding: 72px 20px; }
+  .v3-reel .v3-phone { width: min(230px, 72vw); }
+  .v3-grid3 { gap: 26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v3-loop-sort img, .v3-loop-cap__text, .v3-loop-swipe__strip { animation: none; }
+  .v3-loop-cap__text { width: 100%; }
+  .v3-rise { opacity: 1 !important; }
+}

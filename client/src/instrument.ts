@@ -19,10 +19,7 @@ if (dsn && import.meta.env.PROD) {
     // Release: prefer build-time injection; Vercel populates VITE_VERCEL_GIT_COMMIT_SHA
     // when the VERCEL_GIT_COMMIT_SHA env var is exposed to the client at build time.
     release: import.meta.env.VITE_APP_VERSION || import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA || undefined,
-    integrations: [
-      Sentry.browserTracingIntegration(),
-      Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
-    ],
+    integrations: [Sentry.browserTracingIntegration()],
     // Performance traces: low % in prod to control cost
     tracesSampleRate: 0.1,
     // Session Replay: only when an error happens (saves quota)
@@ -31,4 +28,11 @@ if (dsn && import.meta.env.PROD) {
     // Don't capture PII by default — flip on if you ever need IP/headers
     sendDefaultPii: false,
   });
+
+  // Session Replay is ~126 kB — a fifth of the entry chunk — and only ever
+  // used when an error fires (replaysSessionSampleRate is 0). Load it in its
+  // own chunk right after init so it still buffers from ~first paint, without
+  // blocking the app's first render on it. If the chunk fails to load, Sentry
+  // keeps working; only replay is missing.
+  void import("./sentryReplay").then((m) => m.addReplay()).catch(() => {});
 }

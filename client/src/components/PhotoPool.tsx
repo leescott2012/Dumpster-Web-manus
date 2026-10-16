@@ -115,15 +115,17 @@ export default function PhotoPool({
   } else if (filter === "videos") {
     displayPhotos = photos.filter(function(p) { return p.category === "Video"; });
   } else {
-    // "all" — starred first, then rest
+    // "all" — starred first, then rest. Videos get their own section below the grid.
     var starred: Photo[] = [];
     var rest: Photo[] = [];
     for (var i = 0; i < photos.length; i++) {
+      if (photos[i].category === "Video") continue;
       if (photos[i].isFavorite) starred.push(photos[i]);
       else rest.push(photos[i]);
     }
     displayPhotos = starred.concat(rest);
   }
+  var sectionVideos: Photo[] = filter === "all" ? photos.filter(function(p) { return p.category === "Video"; }) : [];
 
   // Counts for chip badges
   var starredCount = photos.filter(function(p) { return p.isFavorite; }).length;
@@ -467,6 +469,38 @@ export default function PhotoPool({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Video section — "all" view only. Videos stay on this device (blob URLs, never uploaded). */}
+      {filter === "all" && sectionVideos.length > 0 && (
+        <div style={{ marginTop: "28px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", color: "#8a8a8a", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>
+            <Play size={11} />
+            Videos · {sectionVideos.length}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: size.cols, gap: "12px" }}>
+            {sectionVideos.map(function(photo, i) {
+              var selIdx = selectedIds.indexOf(photo.id);
+              var delIdx = selectedDeleteIds.indexOf(photo.id);
+              var anyMode = selectionMode || deleteMode;
+              return (
+                <PhotoCard key={photo.id} photo={photo} index={i}
+                  source={{ type: "pool" }}
+                  isSelected={selectionMode ? selIdx >= 0 : deleteMode ? delIdx >= 0 : selectedPhotoId === photo.id}
+                  onSelect={selectionMode ? onTogglePoolSelection : deleteMode ? onToggleDeleteSelection : onSelectPhoto}
+                  onDotsClick={anyMode ? undefined : onDotsClick}
+                  onDoubleTap={anyMode ? undefined : onDoubleTapPhoto}
+                  width={size.w} height={size.h} fill
+                  selectionMode={anyMode}
+                  selectionIndex={selectionMode && selIdx >= 0 ? selIdx : undefined}
+                  deleteMode={deleteMode}
+                  isDeleteSelected={delIdx >= 0}
+                  isDuplicate={false}
+                />
+              );
+            })}
+          </div>
         </div>
       )}
 

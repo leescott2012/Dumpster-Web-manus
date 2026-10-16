@@ -17,7 +17,6 @@
  *     processed), all fields stay undefined and the rest of the app behaves
  *     exactly like before this feature shipped.
  */
-import exifr from "exifr";
 import type { PhotoMeta } from "./photoData";
 
 /**
@@ -67,6 +66,9 @@ export async function extractPhotoMeta(file: File): Promise<PhotoMeta> {
   } catch { /* dimensions are best-effort */ }
 
   try {
+    // exifr is ~74 kB and only needed once a user actually imports a photo —
+    // load it on first parse instead of in the entry chunk.
+    var exifr = (await import("exifr")).default;
     var raw = await exifr.parse(file, {
       // Only ask for the tags we'll actually use — keeps the parse light.
       pick: [

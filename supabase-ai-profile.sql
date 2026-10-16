@@ -55,3 +55,6 @@ begin
       for update using (auth.uid() = user_id);
   end if;
 end $$;
+
+-- dump styles (saved, switchable ways to build dumps)
+alter table user_ai_profile add column if not exists dump_styles jsonb not null default '[]'::jsonb, add column if not exists active_dump_style text not null default '';

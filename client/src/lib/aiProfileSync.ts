@@ -23,7 +23,12 @@ import {
   saveTasteProfile,
   loadAIRules,
   saveAIRules,
+  loadDumpStyles,
+  saveDumpStyles,
+  loadActiveDumpStyleId,
+  saveActiveDumpStyleId,
   type PoolCaption,
+  type DumpStyle,
 } from "./captionPool";
 // loadCaptions is kept in scope for any future use; raw is what sync needs.
 void loadCaptions;
@@ -32,6 +37,8 @@ export interface CloudAIProfile {
   taste_profile: string;
   ai_rules: string;
   caption_pool: PoolCaption[];
+  dump_styles: DumpStyle[];
+  active_dump_style: string;
   updated_at: string;
 }
 
@@ -50,7 +57,7 @@ export interface CloudAIProfile {
 export async function loadCloudAIProfile(userId: string): Promise<CloudAIProfile | null> {
   var { data, error } = await supabase
     .from("user_ai_profile")
-    .select("taste_profile, ai_rules, caption_pool, updated_at")
+    .select("taste_profile, ai_rules, caption_pool, dump_styles, active_dump_style, updated_at")
     .eq("user_id", userId)
     .single();
 
@@ -66,6 +73,8 @@ export async function loadCloudAIProfile(userId: string): Promise<CloudAIProfile
     taste_profile: data.taste_profile || "",
     ai_rules: data.ai_rules || "",
     caption_pool: (data.caption_pool as PoolCaption[]) || [],
+    dump_styles: (data.dump_styles as DumpStyle[]) || [],
+    active_dump_style: data.active_dump_style || "",
     updated_at: data.updated_at,
   };
 }
@@ -83,6 +92,8 @@ export async function saveCloudAIProfile(userId: string): Promise<boolean> {
       ai_rules: loadAIRules(),
       // Use raw (includes tombstones) so deletions propagate across devices
       caption_pool: loadCaptionsRaw(),
+      dump_styles: loadDumpStyles(),
+      active_dump_style: loadActiveDumpStyleId(),
       updated_at: new Date().toISOString(),
     });
 
@@ -122,6 +133,17 @@ function mergeIntoLocal(cloud: CloudAIProfile) {
     saveAIRules(cloud.ai_rules);
   }
   // If both have rules, prefer local (user typed those explicitly, don't override).
+
+  // Dump styles: union by id; same id → newer updatedAt wins.
+  // ponytail: deleted styles can resurrect from another device (no tombstones); add if users notice.
+  var styleById = new Map<string, DumpStyle>();
+  loadDumpStyles().concat(cloud.dump_styles).forEach(function(st) {
+    var prev = styleById.get(st.id);
+    if (!prev || (st.updatedAt || "") > (prev.updatedAt || "")) styleById.set(st.id, st);
+  });
+  var mergedStyles = Array.from(styleById.values());
+  if (JSON.stringify(mergedStyles) !== JSON.stringify(loadDumpStyles())) saveDumpStyles(mergedStyles);
+  if (cloud.active_dump_style && !loadActiveDumpStyleId()) saveActiveDumpStyleId(cloud.active_dump_style);
 
   // Caption pool: union by id, with tombstone-aware merge.
   //
