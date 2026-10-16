@@ -51,8 +51,6 @@ interface AuthState {
   refreshProfile: () => Promise<void>;
   /** Check if user can afford an AI action */
   canAfford: (action: string) => boolean;
-  /** Deduct credits for an action (call after AI completes) */
-  useCredits: (action: string) => Promise<boolean>;
 }
 
 var AuthCtx = createContext<AuthState | null>(null);
@@ -86,11 +84,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       var resetAt = new Date(data.daily_credits_reset_at);
       var now = new Date();
       if (now.getTime() - resetAt.getTime() > 24 * 60 * 60 * 1000) {
+        // Display only — the server (deduct_credits) performs the real reset. The browser
+        // can no longer write credit columns (profiles UPDATE is limited to harmless fields).
         var dailyAmount = data.subscription_tier === "pro" ? 200 : 15;
-        await supabase
-          .from("profiles")
-          .update({ daily_credits_remaining: dailyAmount, daily_credits_reset_at: now.toISOString() })
-          .eq("id", userId);
         data.daily_credits_remaining = dailyAmount;
         data.daily_credits_reset_at = now.toISOString();
       }
@@ -190,45 +186,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return totalCredits >= cost;
   }, [totalCredits]);
 
-  var useCredits = useCallback(async function(action: string) {
-    if (!profile) return false;
-    var cost = COSTS[action] || 0;
-    if (totalCredits < cost) return false;
-
-    // Deduct: daily first, then purchased
-    var fromDaily = Math.min(cost, profile.daily_credits_remaining);
-    var fromPurchased = cost - fromDaily;
-
-    var { error } = await supabase
-      .from("profiles")
-      .update({
-        credits: profile.credits - fromPurchased,
-        daily_credits_remaining: profile.daily_credits_remaining - fromDaily,
-      })
-      .eq("id", profile.id);
-
-    if (error) return false;
-
-    // Log transaction
-    await supabase.from("credit_transactions").insert({
-      user_id: profile.id,
-      amount: -cost,
-      type: action,
-      description: "Used " + cost + " credits for " + action,
-    });
-
-    // Update local state
-    setProfile(function(prev) {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        credits: prev.credits - fromPurchased,
-        daily_credits_remaining: prev.daily_credits_remaining - fromDaily,
-      };
-    });
-
-    return true;
-  }, [profile, totalCredits]);
 
   var value: AuthState = {
     user: user,
@@ -244,7 +201,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut: signOut,
     refreshProfile: refreshProfile,
     canAfford: canAfford,
-    useCredits: useCredits,
   };
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
