@@ -1024,28 +1024,29 @@ function HomeContent() {
         <PoolPill
           active={poolTab}
           onChange={function(t) { setPoolTab(t); }}
-          photoCount={pool.length}
-          captionCount={captionCount}
         />
 
         {/* Sub-section header — left aligned below pill */}
         <div style={{ maxWidth: 1100, margin: "8px auto 18px", padding: "0 32px" }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "var(--accent)", marginBottom: 6 }}>
-            {poolTab === "photos" ? "PHOTO POOL" : "CAPTION POOL"}
+            {poolTab === "photos" ? "PHOTO POOL" : poolTab === "videos" ? "VIDEO POOL" : "CAPTION POOL"}
           </div>
           <h2 style={{ fontSize: "clamp(20px, 2.5vw, 28px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: 4 }}>
-            {poolTab === "photos" ? "Available Photos" : "Caption Library"}
+            {poolTab === "photos" ? "Available Photos" : poolTab === "videos" ? "Your Videos" : "Caption Library"}
           </h2>
           <div style={{ fontSize: 14, color: "#8a8a8a", fontStyle: "italic" as const }}>
             {poolTab === "photos"
               ? pool.length + " available · " + dumps.reduce(function(s, d) { return s + d.photos.length; }, 0) + " in dumps"
-              : captionCount + " captions in library"
+              : poolTab === "videos"
+                ? "Videos stay on this device"
+                : captionCount + " captions in library"
             }
           </div>
         </div>
 
-        {poolTab === "photos" ? (
+        {poolTab !== "captions" ? (
           <PhotoPool
+            videosOnly={poolTab === "videos"}
             photos={pool}
             dumps={dumps}
             duplicateIds={duplicatePhotoIds}

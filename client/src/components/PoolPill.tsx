@@ -1,148 +1,147 @@
 /**
- * PoolPill — Slidable pill switcher between Photos | Captions.
- * Ported from iOS MainAppView poolTabSwitcher / SlidableSegmentedControl.
+ * PoolPill — 3-way sliding pill: Photos | Captions | Videos.
+ * Icon + tiny label per segment; gold-outlined thumb springs to the active one.
+ * Tap = snap, drag = thumb follows the finger 1:1 then snaps to the nearest segment.
  */
-import { useState, useRef, useEffect, useCallback } from "react";
-import { Camera, Type } from "lucide-react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { animate, motion, useMotionValue, useReducedMotion } from "framer-motion";
+import { Image as ImageIcon, Type, Video } from "lucide-react";
 
-export type PoolTab = "photos" | "captions";
+export type PoolTab = "photos" | "captions" | "videos";
+
+const TABS: { id: PoolTab; label: string; Icon: typeof Type }[] = [
+  { id: "photos", label: "Photos", Icon: ImageIcon },
+  { id: "captions", label: "Captions", Icon: Type },
+  { id: "videos", label: "Videos", Icon: Video },
+];
+const PAD = 4;
+const DRAG_SLOP = 4;
 
 interface PoolPillProps {
   active: PoolTab;
   onChange: (tab: PoolTab) => void;
-  photoCount: number;
-  captionCount: number;
 }
 
-export default function PoolPill({ active, onChange, photoCount, captionCount }: PoolPillProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
-  const [dragOffset, setDragOffset] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartX = useRef<number | null>(null);
+export default function PoolPill({ active, onChange }: PoolPillProps) {
+  const reduce = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+  const [segW, setSegW] = useState(0);
+  const x = useMotionValue(0);
+  const [live, setLive] = useState<number | null>(null); // segment under the thumb while dragging
+  const drag = useRef<{ startX: number; startThumb: number; moved: boolean } | null>(null);
+  const activeIdx = TABS.findIndex((t) => t.id === active);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver(entries => {
-      if (entries[0]) setWidth(entries[0].contentRect.width);
-    });
-    ro.observe(containerRef.current);
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    const measure = () => setSegW((ref.current!.clientWidth - PAD * 2) / TABS.length);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(ref.current);
     return () => ro.disconnect();
   }, []);
 
-  const halfW = width / 2;
-  const baseOffset = active === "photos" ? 0 : halfW;
-  const pillOffset = baseOffset + dragOffset;
+  const snapTo = (i: number) => {
+    if (reduce) x.set(i * segW);
+    else animate(x, i * segW, { type: "spring", stiffness: 420, damping: 24, mass: 0.9 }); // slight overshoot, ~300ms
+  };
 
-  // ── drag handlers ───────────────────────────────────────────────────────
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    dragStartX.current = e.clientX;
-    setIsDragging(true);
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }, []);
+  // follow the active tab (initial mount, keyboard, external changes)
+  useEffect(() => {
+    if (segW && !drag.current) snapTo(activeIdx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIdx, segW, reduce]);
 
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (dragStartX.current == null) return;
-    const dx = e.clientX - dragStartX.current;
-    // Constrain so pill stays within container
-    const maxOffset = active === "photos" ? halfW : 0;
-    const minOffset = active === "photos" ? 0 : -halfW;
-    setDragOffset(Math.max(minOffset, Math.min(maxOffset, dx)));
-  }, [active, halfW]);
+  const idxAt = (clientX: number) => {
+    const r = ref.current!.getBoundingClientRect();
+    return Math.max(0, Math.min(TABS.length - 1, Math.floor((clientX - r.left - PAD) / segW)));
+  };
+  const nearest = (thumbX: number) => Math.max(0, Math.min(TABS.length - 1, Math.round(thumbX / segW)));
 
-  const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    if (dragStartX.current == null) return;
-    const finalOffset = baseOffset + dragOffset;
-    const targetTab: PoolTab = finalOffset > halfW / 2 ? "captions" : "photos";
-    if (targetTab !== active) onChange(targetTab);
-    setDragOffset(0);
-    setIsDragging(false);
-    dragStartX.current = null;
-    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
-  }, [active, baseOffset, dragOffset, halfW, onChange]);
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button > 0 || !segW) return;
+    x.stop();
+    drag.current = { startX: e.clientX, startThumb: x.get(), moved: false };
+    ref.current!.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX;
+    if (!d.moved && Math.abs(dx) < DRAG_SLOP) return;
+    d.moved = true;
+    const nx = Math.max(0, Math.min((TABS.length - 1) * segW, d.startThumb + dx));
+    x.set(nx);
+    setLive(nearest(nx));
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    const d = drag.current;
+    drag.current = null;
+    setLive(null);
+    if (!d) return;
+    try { ref.current!.releasePointerCapture(e.pointerId); } catch { /* noop */ }
+    const i = d.moved ? nearest(x.get()) : idxAt(e.clientX);
+    snapTo(i);
+    if (TABS[i].id !== active) onChange(TABS[i].id);
+  };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const i = (activeIdx + step + TABS.length) % TABS.length;
+    onChange(TABS[i].id);
+    (ref.current!.querySelectorAll("[role=tab]")[i] as HTMLElement).focus();
+  };
+
+  const shown = live ?? activeIdx;
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto 24px", padding: "0 32px" }}>
       <div
-        ref={containerRef}
+        ref={ref}
+        role="tablist"
+        aria-label="Pool"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onKeyDown={onKeyDown}
         style={{
-          position: "relative",
-          background: "#141414",
-          border: "1px solid #1e1e1e",
-          borderRadius: 14,
-          padding: 4,
-          height: 48,
-          display: "flex",
-          touchAction: "pan-y",
-          userSelect: "none" as const,
-          WebkitUserSelect: "none" as const,
+          position: "relative", display: "flex", height: 56, padding: PAD,
+          background: "#141414", border: "1px solid #1e1e1e", borderRadius: 16,
+          touchAction: "pan-y", userSelect: "none", WebkitUserSelect: "none", cursor: "grab",
         }}
       >
-        {/* The sliding pill */}
-        {width > 0 && (
-          <div
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
+        {segW > 0 && (
+          <motion.div
+            aria-hidden
             style={{
-              position: "absolute",
-              top: 4, left: 4,
-              width: halfW - 4,
-              height: 40,
-              background: "var(--accent)",
-              borderRadius: 10,
-              transform: "translateX(" + pillOffset + "px)",
-              transition: isDragging ? "none" : "transform 0.32s cubic-bezier(0.32, 0.72, 0, 1)",
-              boxShadow: "0 2px 8px rgba(var(--accent-rgb),0.25)",
-              cursor: isDragging ? "grabbing" : "grab",
+              x, position: "absolute", top: PAD, left: PAD, width: segW, height: 56 - PAD * 2 - 2,
+              borderRadius: 12, pointerEvents: "none",
+              background: "rgba(var(--accent-rgb),0.12)",
+              border: "1px solid var(--accent)",
+              boxShadow: "0 2px 10px rgba(var(--accent-rgb),0.18)",
             }}
           />
         )}
-
-        {/* Photos tab label */}
-        <button
-          onClick={() => onChange("photos")}
-          style={{
-            flex: 1, position: "relative", zIndex: 1,
-            background: "transparent", border: "none", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            color: active === "photos" ? "#000" : "rgba(255,255,255,0.4)",
-            fontSize: 12, fontWeight: 800, letterSpacing: "0.1em",
-            fontFamily: "inherit", transition: "color 0.2s",
-            textTransform: "uppercase" as const,
-          }}
-        >
-          <Camera size={13} strokeWidth={2.2} />
-          Photos
-          <span style={{
-            fontSize: 10, fontWeight: 700,
-            color: active === "photos" ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.25)",
-            letterSpacing: 0,
-          }}>{photoCount}</span>
-        </button>
-
-        {/* Captions tab label */}
-        <button
-          onClick={() => onChange("captions")}
-          style={{
-            flex: 1, position: "relative", zIndex: 1,
-            background: "transparent", border: "none", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            color: active === "captions" ? "#000" : "rgba(255,255,255,0.4)",
-            fontSize: 12, fontWeight: 800, letterSpacing: "0.1em",
-            fontFamily: "inherit", transition: "color 0.2s",
-            textTransform: "uppercase" as const,
-          }}
-        >
-          <Type size={13} strokeWidth={2.2} />
-          Captions
-          <span style={{
-            fontSize: 10, fontWeight: 700,
-            color: active === "captions" ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.25)",
-            letterSpacing: 0,
-          }}>{captionCount}</span>
-        </button>
+        {TABS.map(({ id, label, Icon }, i) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={active === id}
+            tabIndex={active === id ? 0 : -1}
+            onClick={(e) => { if (e.detail === 0 && id !== active) onChange(id); }} // keyboard Enter/Space; pointer handled above
+            style={{
+              flex: 1, position: "relative", zIndex: 1, minHeight: 44,
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+              background: "transparent", border: "none", cursor: "inherit", fontFamily: "inherit",
+              color: shown === i ? "var(--accent)" : "rgba(255,255,255,0.45)",
+              transition: reduce ? "none" : "color 0.15s",
+            }}
+          >
+            <Icon size={18} strokeWidth={2} />
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
