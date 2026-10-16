@@ -100,6 +100,7 @@ interface PhotoPoolProps {
   onOpenVideo?: (photo: Photo) => void;   // open the play/trim sheet
   onDeleteVideo?: (id: string) => void;
   onSetVideoTags?: (id: string, tags: string[]) => void;
+  videosOnly?: boolean;                   // Videos tab: lock filter to videos, hide chips
 }
 
 export default function PhotoPool({
@@ -108,14 +109,15 @@ export default function PhotoPool({
   targetDumpId, selectedPhotoId,
   deleteMode, selectedDeleteIds, onEnterDeleteMode, onToggleDeleteSelection, onConfirmDelete, onCancelDeleteMode,
   onScan, scanning = false,
-  videos = {}, onOpenVideo, onDeleteVideo, onSetVideoTags,
+  videos = {}, onOpenVideo, onDeleteVideo, onSetVideoTags, videosOnly = false,
 }: PhotoPoolProps) {
   var poolRef = useRef<HTMLDivElement>(null);
   var fileInputRef = useRef<HTMLInputElement>(null);
   var { dragState } = useDrag();
   var [isOver, setIsOver] = useState(false);
   var isOverRef = useRef(false);
-  var [filter, setFilter] = useState<FilterMode>("all");
+  var [filterState, setFilter] = useState<FilterMode>("all");
+  var filter: FilterMode = videosOnly ? "videos" : filterState;
   var [poolSize, setPoolSize] = useState<PoolSize>(function() {
     var saved = localStorage.getItem(POOL_SIZE_KEY);
     return saved === "S" || saved === "M" || saved === "L" ? saved : "M";
@@ -256,7 +258,7 @@ export default function PhotoPool({
       {!selectionMode && !deleteMode && (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
           {/* Row 1 — filter chips, flush left */}
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "center" }}>
+          {!videosOnly && <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "center" }}>
             <button onClick={function() { setFilter("all"); }} style={filterBtnStyle(filter === "all")}>All</button>
             <button onClick={function() { setFilter("starred"); }} style={filterBtnStyle(filter === "starred")}>
               <span style={{ marginRight: "4px" }}>{"★"}</span>Starred
@@ -282,9 +284,9 @@ export default function PhotoPool({
                 </span>
               </button>
             )}
-          </div>
+          </div>}
 
-          {/* Row 2 — size toggle (left) + delete (right), both flush to edges */}
+          {/* Row 2— size toggle (left) + delete (right), both flush to edges */}
           {photos.length > 0 && (
             <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{
