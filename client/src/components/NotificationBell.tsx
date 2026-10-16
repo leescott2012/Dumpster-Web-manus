@@ -110,7 +110,7 @@ export default function NotificationBell() {
               Notifications
             </div>
             {items.length === 0 ? (
-              <div style={{ padding: "28px 16px", textAlign: "center" as const, fontSize: 12, color: "#555" }}>
+              <div style={{ padding: "28px 16px", textAlign: "center" as const, fontSize: 12, color: "#8a8a8a" }}>
                 <Info size={18} color="#444" style={{ marginBottom: 8 }} />
                 <div>Nothing yet</div>
               </div>
@@ -130,7 +130,7 @@ export default function NotificationBell() {
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e8e8e8" }}>{n.title}</div>
                       {n.body && <div style={{ fontSize: 11.5, color: "#888", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{n.body}</div>}
-                      <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>{timeAgo(n.created_at)}</div>
+                      <div style={{ fontSize: 10, color: "#8a8a8a", marginTop: 3 }}>{timeAgo(n.created_at)}</div>
                     </div>
                   </a>
                 );

@@ -9,10 +9,13 @@
  * this file. Body flag `auto: true` selects the free/system-initiated path
  * (checkAutoCredits — same auth/rate-limit/budget gates, no credit charge);
  * omitted or false is the normal paid user-initiated Scan (checkCredits).
+ * The flag is client-controlled, so the free path is capped server-side
+ * (images per request + images per user per day) — see checkAutoCredits.
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import { handleAILabel, readBody, type AILabelBody } from "../server/aiLabel.js";
-import { checkCredits, checkAutoCredits } from "../server/creditGate.js";
+import { checkCredits, checkAutoCredits, runCharged } from "../server/creditGate.js";
+import { aiLabelCost } from "../shared/aiLabelCost.js";
 
 export const config = {
   runtime: "nodejs",
@@ -30,14 +33,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   var auto = body.auto === true;
+  var imageCount = body && Array.isArray(body.photos) ? body.photos.length : 0;
+  // Paid path: 1 credit per photo actually scanned (min 1, max 12 — the
+  // handler ignores photos past 12). Refunds return exactly this amount.
+  var cost = aiLabelCost(imageCount);
   var gate = auto
-    ? await checkAutoCredits(req, res, "ai_label_auto")
-    : await checkCredits(req, res, "ai_label");
+    ? await checkAutoCredits(req, res, "ai_label_auto", imageCount) // free but quota-bounded, see creditGate.ts
+    : await checkCredits(req, res, "ai_label", { cost: cost, note: cost + (cost === 1 ? " photo" : " photos") });
   if (!gate.proceed) return;
 
-  try {
-    await handleAILabel(req, res, body);
-  } finally {
-    if (res.statusCode >= 400) await gate.refund();
-  }
+  await runCharged(res, gate, "ai-label", function() { return handleAILabel(req, res, body); });
 }

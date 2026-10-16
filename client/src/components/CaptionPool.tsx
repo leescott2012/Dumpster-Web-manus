@@ -4,9 +4,10 @@
  * Features: style chips, auto-generate from style banks, custom add, filter tabs, favorite/ban/remove.
  */
 import { useState, useCallback, useMemo, useEffect } from "react";
+import { toast } from "sonner";
 import { Heart, Trash2, Ban, Copy, Check, Sparkles, Plus, RotateCcw } from "lucide-react";
 import {
-  loadCaptions, toggleFavorite, toggleBanned, removeCaption,
+  loadCaptions, toggleFavorite, toggleBanned, removeCaption, restoreCaption,
   addCaption, importCaptions, markCaptionUsed,
   type PoolCaption, type CaptionStyle,
 } from "@/lib/captionPool";
@@ -100,7 +101,15 @@ export default function CaptionPool() {
 
   const handleFavorite = useCallback((id: string) => setList(toggleFavorite(id)), []);
   const handleBan = useCallback((id: string) => setList(toggleBanned(id)), []);
-  const handleRemove = useCallback((id: string) => setList(removeCaption(id)), []);
+  const handleRemove = useCallback((id: string) => {
+    const before = loadCaptions().find(c => c.id === id);
+    setList(removeCaption(id));
+    if (!before) return;
+    toast("Caption deleted", {
+      duration: 6000,
+      action: { label: "Undo", onClick: () => setList(restoreCaption(before)) },
+    });
+  }, []);
 
   const handleCopy = useCallback(async (text: string, id: string) => {
     try {
@@ -171,7 +180,7 @@ export default function CaptionPool() {
               color: "#fff", fontSize: 13, fontFamily: "inherit",
             }}
           />
-          <button
+          <button aria-label="Add caption"
             onClick={handleAddCustom}
             disabled={!customText.trim()}
             style={{
@@ -201,12 +210,12 @@ export default function CaptionPool() {
             <button key={tab} onClick={() => setFilterTab(tab)} style={{
               background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit",
               padding: "6px 4px", fontSize: 11, fontWeight: 700,
-              color: active ? "#fff" : "#555",
+              color: active ? "#fff" : "#8a8a8a",
               letterSpacing: "0.1em", textTransform: "uppercase",
               borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
               transition: "all 0.15s", marginRight: 12,
             }}>
-              {tab} <span style={{ color: active ? "var(--accent)" : "#444", fontWeight: 500 }}>{count}</span>
+              {tab} <span style={{ color: active ? "var(--accent)" : "#8a8a8a", fontWeight: 500 }}>{count}</span>
             </button>
           );
         })}
@@ -243,7 +252,7 @@ export default function CaptionPool() {
                 </div>
                 <div style={{ marginTop: 4, display: "flex", gap: 8, alignItems: "center" }}>
                   <span style={{
-                    fontSize: 9, fontWeight: 700, color: "#555",
+                    fontSize: 9, fontWeight: 700, color: "#8a8a8a",
                     letterSpacing: "0.1em", textTransform: "uppercase",
                   }}>
                     {c.style}
@@ -258,20 +267,20 @@ export default function CaptionPool() {
 
               <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                 {c.archived && (
-                  <button onClick={() => handleRestore(c.id)} title="Restore to active list" style={iconBtnStyle("var(--accent)")}>
+                  <button onClick={() => handleRestore(c.id)} title="Restore to active list" aria-label="Restore to active list" style={iconBtnStyle("var(--accent)")}>
                     <RotateCcw size={14} />
                   </button>
                 )}
-                <button onClick={() => handleCopy(c.text, c.id)} title={c.archived ? "Copy" : "Copy & mark used"} style={iconBtnStyle(copiedId === c.id ? "#22c55e" : "#8a8a8a")}>
+                <button onClick={() => handleCopy(c.text, c.id)} title={c.archived ? "Copy" : "Copy & mark used"} aria-label={c.archived ? "Copy" : "Copy & mark used"} style={iconBtnStyle(copiedId === c.id ? "#22c55e" : "#8a8a8a")}>
                   {copiedId === c.id ? <Check size={14} /> : <Copy size={14} />}
                 </button>
-                <button onClick={() => handleFavorite(c.id)} title={c.favorited ? "Unfavorite" : "Favorite"} style={iconBtnStyle(c.favorited ? "var(--accent)" : "#8a8a8a")}>
+                <button onClick={() => handleFavorite(c.id)} title={c.favorited ? "Unfavorite" : "Favorite"} aria-label={c.favorited ? "Unfavorite" : "Favorite"} style={iconBtnStyle(c.favorited ? "var(--accent)" : "#8a8a8a")}>
                   <Heart size={14} fill={c.favorited ? "var(--accent)" : "none"} />
                 </button>
-                <button onClick={() => handleBan(c.id)} title={c.banned ? "Unban" : "Ban"} style={iconBtnStyle(c.banned ? "#ef4444" : "#8a8a8a")}>
+                <button onClick={() => handleBan(c.id)} title={c.banned ? "Unban" : "Ban"} aria-label={c.banned ? "Unban" : "Ban"} style={iconBtnStyle(c.banned ? "#ef4444" : "#8a8a8a")}>
                   <Ban size={14} />
                 </button>
-                <button onClick={() => handleRemove(c.id)} title="Delete" style={iconBtnStyle("#8a8a8a")}>
+                <button onClick={() => handleRemove(c.id)} title="Delete" aria-label="Delete" style={iconBtnStyle("#8a8a8a")}>
                   <Trash2 size={14} />
                 </button>
               </div>

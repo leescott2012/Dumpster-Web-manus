@@ -506,7 +506,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="lp-footer__bottom">
-              <span>© 2026 Dumpster. All rights reserved.</span>
+              <span>© 2026 Chamillion Collective. All rights reserved.</span>
             </div>
           </div>
         </footer>

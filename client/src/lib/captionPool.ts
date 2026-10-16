@@ -172,6 +172,13 @@ export function removeCaption(id: string): PoolCaption[] {
   return list.filter(c => !c.deleted);
 }
 
+/** Undo removeCaption: put back the row exactly as it was before the delete. */
+export function restoreCaption(prev: PoolCaption): PoolCaption[] {
+  const list = loadCaptionsRaw().map(c => c.id === prev.id ? prev : c);
+  saveCaptions(list);
+  return list.filter(c => !c.deleted);
+}
+
 /**
  * Mark a caption as used → archive it so it drops off the active list.
  * Reversible via the same toggle (un-archive). Returns the active list.
@@ -231,6 +238,30 @@ export function saveTasteProfile(text: string) {
   localStorage.setItem("dumpster_taste_profile", text);
   notifyAIProfileChanged();
 }
+
+export const TASTE_PROFILE_MAX = 2000;
+export const AI_RULES_MAX = 1500;
+/** One Valet-suggested preference line. Mirrored server-side in server/aiChat.ts. */
+export const TASTE_PREF_MAX = 160;
+
+/** Single line, no control chars, capped — model output is untrusted. */
+export function cleanTastePreference(raw: string): string {
+  // eslint-disable-next-line no-control-regex
+  return String(raw || "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, TASTE_PREF_MAX);
+}
+
+/** Append a user-confirmed preference to the Taste Profile (deduped, never past the max). */
+export function appendTastePreference(raw: string): "saved" | "duplicate" | "full" | "empty" {
+  const pref = cleanTastePreference(raw);
+  if (!pref) return "empty";
+  const current = loadTasteProfile().replace(/\s+$/, "");
+  const lines = current.split("\n").map(l => l.trim().toLowerCase());
+  if (lines.indexOf(pref.toLowerCase()) !== -1) return "duplicate";
+  const next = current ? current + "\n" + pref : pref;
+  if (next.length > TASTE_PROFILE_MAX) return "full";
+  saveTasteProfile(next);
+  return "saved";
+}
 export function loadAIRules(): string {
   return localStorage.getItem("dumpster_ai_rules") || "";
 }
@@ -257,6 +288,9 @@ export function saveDumpStyles(styles: DumpStyle[]) {
 export function loadActiveDumpStyleId(): string {
   return localStorage.getItem("dumpster_active_dump_style") || "";
 }
+/** Shown after switching dump style — every buildTasteBlock() caller. */
+export const DUMP_STYLE_USED_BY = "Used by Auto-arrange, Captions and the Valet";
+
 export function saveActiveDumpStyleId(id: string) {
   localStorage.setItem("dumpster_active_dump_style", id);
   notifyAIProfileChanged();

@@ -20,6 +20,7 @@
  */
 import { supabase } from "./supabase";
 import { type Dump, type Photo } from "./photoData";
+import { notVideo } from "./videoStore";
 
 // Sync runs for ANY signed-in user. RLS scopes every query to the user's own
 // rows, so a user only ever loads their own workspace. Users without a cloud
@@ -137,6 +138,8 @@ export async function loadWorkspace(
 import { getAuthHeaders } from "./supabase";
 
 function isCloudUrl(url: string) { return url.startsWith("http"); }
+// videos are device-only by owner decision — never in the workspace payload.
+function syncable(p: Photo) { return notVideo(p) && isCloudUrl(p.url); }
 
 // Duplicate-signature fields only — never send GPS/camera/lens/etc to the
 // server (see photoData.ts PhotoMeta; those stay client-local by design).
@@ -153,13 +156,15 @@ function serialize(dumps: Dump[], pool: Photo[]) {
       return {
         id: d.id, title: d.title, subtitle: d.subtitle,
         photos: d.photos
-          .filter(function (p) { return isCloudUrl(p.url); })
+          .filter(syncable)
           .map(function (p) { return { id: p.id, url: p.url, category: p.category, alt: p.alt, meta: dupMeta(p) }; }),
       };
     }),
     pool: pool
-      .filter(function (p) { return isCloudUrl(p.url); })
-      .map(function (p) { return { id: p.id, url: p.url, category: p.category, meta: dupMeta(p) }; }),
+      .filter(syncable)
+      // alt (the AI label) must be sent for pool photos too — the server writes label: alt || null,
+      // so omitting it blanked every pool photo's saved label on each save.
+      .map(function (p) { return { id: p.id, url: p.url, category: p.category, alt: p.alt, meta: dupMeta(p) }; }),
   };
 }
 
@@ -216,6 +221,7 @@ export async function setDumpPublic(dumpId: string, isPublic: boolean): Promise<
 
 export async function uploadPhotoToCloud(id: string, dataUrl: string): Promise<string | null> {
   if (!dataUrl || dataUrl.indexOf("data:") !== 0) return null;
+  if (dataUrl.indexOf("data:video/") === 0) return null; // videos are device-only by owner decision
   try {
     var headers = await getAuthHeaders();
     if (!headers.Authorization) return null; // guest → stays local
@@ -286,12 +292,11 @@ export async function normDumpId(id: string): Promise<string> {
 export async function loadArchivedDumpIds(userId: string | null): Promise<string[] | null> {
   if (!syncEnabled(userId)) return null;
   try {
-    var res = await supabase.from("user_workspaces").select("dumps_json").eq("id", userId).maybeSingle();
+    // Own column: dumps_json has a CHECK (dumps_is_array), so the ids can't live in it.
+    var res = await supabase.from("user_workspaces").select("archived_dump_ids").eq("id", userId).maybeSingle();
     if (res.error || !res.data) return null;
-    var j = res.data.dumps_json as { archivedDumpIds?: unknown } | unknown[] | null;
-    if (j && !Array.isArray(j) && Array.isArray((j as { archivedDumpIds?: unknown }).archivedDumpIds)) {
-      return ((j as { archivedDumpIds: unknown[] }).archivedDumpIds).filter(function (x) { return typeof x === "string"; }) as string[];
-    }
+    var j = res.data.archived_dump_ids as unknown;
+    if (Array.isArray(j)) return j.filter(function (x) { return typeof x === "string"; }) as string[];
     return null;
   } catch {
     return null;
@@ -324,17 +329,11 @@ export function flushArchivedDumpIdsSave(): void {
 export async function saveArchivedDumpIds(userId: string | null, ids: string[]): Promise<void> {
   if (!syncEnabled(userId)) return;
   try {
-    // Preserve whatever legacy blob sits in dumps_json (old JSON-sync arrays).
-    var cur = await supabase.from("user_workspaces").select("dumps_json").eq("id", userId).maybeSingle();
-    var existing = cur.data ? cur.data.dumps_json : null;
-    var next: Record<string, unknown> =
-      existing && typeof existing === "object" && !Array.isArray(existing)
-        ? Object.assign({}, existing as Record<string, unknown>)
-        : existing != null ? { legacyDumps: existing } : {};
-    next.archivedDumpIds = ids;
-    var up = await supabase.from("user_workspaces").upsert({
-      id: userId, dumps_json: next, updated_at: new Date().toISOString(),
-    });
+    // Update-only: the workspace row is created by the normal workspace save, and
+    // dumps_json must stay an array (CHECK dumps_is_array), so never touch it here.
+    var up = await supabase.from("user_workspaces")
+      .update({ archived_dump_ids: ids, updated_at: new Date().toISOString() })
+      .eq("id", userId);
     if (up.error) console.warn("[workspaceSync] archived-ids save failed:", up.error.message);
   } catch (e) {
     console.warn("[workspaceSync] archived-ids save failed:", e);

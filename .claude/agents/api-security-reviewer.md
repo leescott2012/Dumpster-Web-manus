@@ -29,7 +29,7 @@ Pre-merge on a branch touching api/ — proactive trigger to catch regressions b
 </commentary>
 </example>
 
-model: sonnet
+model: inherit
 color: red
 tools: ["Read", "Grep", "Glob"]
 ---

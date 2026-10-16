@@ -33,3 +33,6 @@ begin
       for update using (auth.uid() = id);
   end if;
 end $$;
+
+-- archived dump ids get their own column (dumps_json must stay an array)
+alter table public.user_workspaces add column if not exists archived_dump_ids jsonb not null default '[]'::jsonb;

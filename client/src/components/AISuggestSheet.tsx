@@ -9,6 +9,7 @@
  * if any AI failure happens (5MB, 429, 503, 504, network down).
  */
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { aiFetch } from "@/lib/creditSync";
 import { toast } from "sonner";
 import { getAuthHeaders } from "@/lib/supabase";
 import { Sparkles, X, RefreshCcw, Plus, Loader2, Minus } from "lucide-react";
@@ -18,6 +19,11 @@ import { compressDataUrlForVision } from "@/lib/imageDownscale";
 import { friendlyError } from "@/lib/friendlyError";
 import { offlineAutoGen } from "@/lib/offlineAutoGen";
 import AutoGenAdvanced, { EMPTY_FILTERS, applyAutoGenFilters, type AutoGenFilters } from "./AutoGenAdvanced";
+import { notVideo } from "@/lib/videoStore";
+import { useAuth } from "@/contexts/AuthContext";
+import { CREDIT_COSTS } from "@/lib/credits";
+import { pickPhotoWindow } from "@/lib/photoWindow";
+import { DUMP_STYLE_USED_BY } from "@/lib/captionPool";
 
 export interface SuggestedCluster {
   name: string;
@@ -32,6 +38,8 @@ interface AISuggestSheetProps {
   onCreateDumps: (clusters: SuggestedCluster[]) => void;
   /** Photo IDs already used in existing dumps — enables Discovery mode. */
   usedPhotoIds?: Set<string>;
+  /** Opens the buy-credits overlay (same as Recycle's "Get credits"). */
+  onOutOfCredits?: () => void;
 }
 
 type Phase = "idle" | "loading" | "result" | "error";
@@ -44,13 +52,20 @@ export default function AISuggestSheet({
   poolPhotos,
   onCreateDumps,
   usedPhotoIds,
+  onOutOfCredits,
 }: AISuggestSheetProps) {
+  const { user, totalCredits } = useAuth();
+  const COST = CREDIT_COSTS.ai_suggest;
+  // Signed-out users get the server's 401 message; only gate on a known balance.
+  const tooFewCredits = Boolean(user) && totalCredits < COST;
+  const [styleSwitched, setStyleSwitched] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [filters, setFilters] = useState<AutoGenFilters>(EMPTY_FILTERS);
   const [phase, setPhase] = useState<Phase>("idle");
   const [cluster, setCluster] = useState<SuggestedCluster | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [errorHint, setErrorHint] = useState("");
+  const [slow, setSlow] = useState(false); // >15s in flight → "still working…"
   // Re-evaluate taste block each time the sheet opens so edits in MainMenu are picked up
   const [tasteActive, setTasteActive] = useState(false);
   const [dumpStyles, setDumpStyles] = useState<DumpStyle[]>([]);
@@ -60,16 +75,32 @@ export default function AISuggestSheet({
     setTasteActive(Boolean(buildTasteBlock()));
     setDumpStyles(loadDumpStyles());
     setActiveStyleId(loadActiveDumpStyleId());
+    setStyleSwitched(false);
   }, [open]);
   const variationRef = useRef(0);
 
   // Apply advanced filters BEFORE truncating to MAX_PHOTOS so the cap is
   // applied to the filtered subset (not the full pool).
   const filteredPool = useMemo(
-    () => applyAutoGenFilters(poolPhotos, filters, usedPhotoIds),
+    () => applyAutoGenFilters(poolPhotos.filter(notVideo), filters, usedPhotoIds), // videos are device-only by owner decision
     [poolPhotos, filters, usedPhotoIds]
   );
-  const photosToAnalyze = filteredPool.slice(0, MAX_PHOTOS);
+  // Newest first (pool appends uploads), unless the user asked for a shuffle.
+  // Photos already in a dump are stripped by applyAutoGenFilters.
+  const shuffled = filters.mix.on && filters.mix.shuffle;
+  const orderedPool = useMemo(
+    () => (shuffled ? filteredPool : filteredPool.slice().reverse()),
+    [filteredPool, shuffled]
+  );
+  // The server caps at MAX_PHOTOS; rotate which window is sent so repeated
+  // "New Suggestion" runs see the whole pool instead of the same first 20.
+  const [windowIndex, setWindowIndex] = useState(0);
+  useEffect(() => { setWindowIndex(0); }, [orderedPool]);
+  const photosToAnalyze = useMemo(
+    () => pickPhotoWindow(orderedPool, MAX_PHOTOS, windowIndex),
+    [orderedPool, windowIndex]
+  );
+  const isCapped = orderedPool.length > MAX_PHOTOS;
   const filteredOutCount = poolPhotos.length - filteredPool.length;
 
   // Stepper for how many photos go in the dump (null = Auto)
@@ -89,20 +120,22 @@ export default function AISuggestSheet({
    * a valid cluster (so the AI error can be hidden), false otherwise.
    * Called whenever an AI failure happens — silent graceful degradation.
    */
-  const tryOfflineFallback = useCallback(async (aiFailureReason: string) => {
-    const offline = await offlineAutoGen(photosToAnalyze, targetCount);
+  const tryOfflineFallback = useCallback(async (aiFailureReason: string, photos: Photo[]) => {
+    const offline = await offlineAutoGen(photos, targetCount);
     if (!offline) return false;
     setCluster(offline);
     setPhase("result");
     // Subtle toast so the user knows it wasn't the full-AI path
     toast(`Used quick gen (${aiFailureReason})`);
     return true;
-  }, [photosToAnalyze, targetCount]);
+  }, [targetCount]);
 
-  const analyze = useCallback(async (variation: number) => {
+  const analyze = useCallback(async (variation: number, photos: Photo[]) => {
     setPhase("loading");
     setErrorMsg("");
     setErrorHint("");
+    setSlow(false);
+    const slowTimer = setTimeout(() => setSlow(true), 15000);
 
     try {
       var authH = await getAuthHeaders();
@@ -110,7 +143,7 @@ export default function AISuggestSheet({
       // request body fits under Vercel's 4.5 MB limit. Cloud-hosted URLs pass
       // through untouched.
       const compressedPhotos = await Promise.all(
-        photosToAnalyze.map(async (p) => ({
+        photos.map(async (p) => ({
           id: p.id,
           url: await compressDataUrlForVision(p.url),
           alt: p.alt,
@@ -118,13 +151,13 @@ export default function AISuggestSheet({
           meta: p.meta,
         }))
       );
-      const res = await fetch("/api/ai-suggest", {
+      const res = await aiFetch("/api/ai-suggest", {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, authH),
-        // Server function effectively times out around 15s; give it a little
-        // headroom to return its own error, then abort so the offline fallback
-        // (in the catch below) kicks in instead of spinning forever.
-        signal: AbortSignal.timeout(20000),
+        // api/ai-suggest maxDuration is 60s (vercel.json) and the server
+        // refunds on its own failures. Wait past that so we never abandon a
+        // call the user is being charged for; abort only if the platform hangs.
+        signal: AbortSignal.timeout(65000),
         body: JSON.stringify({
           photos: compressedPhotos,
           variation,
@@ -145,7 +178,7 @@ export default function AISuggestSheet({
       } catch {
         // Non-JSON response (infra error from Vercel) — fall back to offline
         const fe = friendlyError(rawText || `HTTP ${res.status}`, "ai_suggest");
-        if (await tryOfflineFallback(fe.message.toLowerCase().replace(/\.$/, ""))) return;
+        if (await tryOfflineFallback(fe.message.toLowerCase().replace(/\.$/, ""), photos)) return;
         setErrorMsg(fe.message);
         setErrorHint(fe.hint || "");
         setPhase("error");
@@ -153,7 +186,7 @@ export default function AISuggestSheet({
       }
       if (!res.ok) {
         const fe = friendlyError(data.error || `HTTP ${res.status}`, "ai_suggest");
-        if (await tryOfflineFallback(fe.message.toLowerCase().replace(/\.$/, ""))) return;
+        if (await tryOfflineFallback(fe.message.toLowerCase().replace(/\.$/, ""), photos)) return;
         setErrorMsg(fe.message);
         setErrorHint(fe.hint || "");
         setPhase("error");
@@ -163,7 +196,7 @@ export default function AISuggestSheet({
       const first: SuggestedCluster | undefined = (data.clusters || [])[0];
       if (!first || first.photoIds.length < 2) {
         // AI succeeded but didn't return a useful cluster — try offline silently
-        if (await tryOfflineFallback("AI couldn't find a sequence")) return;
+        if (await tryOfflineFallback("AI couldn't find a sequence", photos)) return;
         setErrorMsg("Couldn't build a sequence from these photos.");
         setErrorHint("Try a different selection or add more variety.");
         setPhase("error");
@@ -174,22 +207,30 @@ export default function AISuggestSheet({
       setPhase("result");
     } catch (e) {
       const fe = friendlyError(e, "ai_suggest");
-      if (await tryOfflineFallback(fe.message.toLowerCase().replace(/\.$/, ""))) return;
+      if (await tryOfflineFallback(fe.message.toLowerCase().replace(/\.$/, ""), photos)) return;
       setErrorMsg(fe.message);
       setErrorHint(fe.hint || "");
       setPhase("error");
+    } finally {
+      clearTimeout(slowTimer);
+      setSlow(false);
     }
-  }, [photosToAnalyze, targetCount, tryOfflineFallback, filters.vibeNote]);
+  }, [targetCount, tryOfflineFallback, filters.vibeNote]);
 
   const handleAnalyze = useCallback(() => {
+    if (tooFewCredits) return;
     variationRef.current = 0;
-    analyze(0);
-  }, [analyze]);
+    setWindowIndex(0);
+    analyze(0, pickPhotoWindow(orderedPool, MAX_PHOTOS, 0));
+  }, [analyze, orderedPool, tooFewCredits]);
 
   const handleNewSuggestion = useCallback(() => {
+    if (tooFewCredits) return;
     variationRef.current += 1;
-    analyze(variationRef.current);
-  }, [analyze]);
+    const next = isCapped ? windowIndex + 1 : 0;
+    setWindowIndex(next);
+    analyze(variationRef.current, pickPhotoWindow(orderedPool, MAX_PHOTOS, next));
+  }, [analyze, orderedPool, isCapped, windowIndex, tooFewCredits]);
 
   const handleCreate = useCallback(() => {
     if (!cluster) return;
@@ -198,6 +239,7 @@ export default function AISuggestSheet({
     setPhase("idle");
     setCluster(null);
     variationRef.current = 0;
+    setWindowIndex(0);
   }, [cluster, onCreateDumps, onClose]);
 
   const handleClose = useCallback(() => {
@@ -208,8 +250,32 @@ export default function AISuggestSheet({
       setErrorMsg("");
       setErrorHint("");
       variationRef.current = 0;
+      setWindowIndex(0);
     }, 300);
   }, [onClose]);
+
+  const activeStyle = dumpStyles.find((d) => d.id === activeStyleId);
+
+  const creditsHint = user ? (
+    <div style={{ marginTop: 12, fontSize: 12, textAlign: "center", color: tooFewCredits ? "#f87171" : "#8a8a8a" }}>
+      {tooFewCredits
+        ? "Auto Gen needs " + COST + " credits — you have " + totalCredits + "."
+        : "You have " + totalCredits + " credits."}
+      {tooFewCredits && onOutOfCredits && (
+        <button
+          onClick={() => { handleClose(); onOutOfCredits(); }}
+          style={{
+            display: "block", margin: "10px auto 0",
+            background: "var(--accent)", color: "#000", border: "none",
+            borderRadius: 10, padding: "10px 18px", fontSize: 13, fontWeight: 700,
+            cursor: "pointer", fontFamily: "inherit",
+          }}
+        >
+          Get credits
+        </button>
+      )}
+    </div>
+  ) : null;
 
   const photoMap: Record<string, Photo> = {};
   for (const p of poolPhotos) photoMap[p.id] = p;
@@ -263,11 +329,13 @@ export default function AISuggestSheet({
                 Auto Gen
               </div>
               <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 1 }}>
-                Claude Vision · {photosToAnalyze.length} photos
+                Claude Vision · {isCapped
+                  ? "AI sees " + photosToAnalyze.length + " of " + orderedPool.length + " photos"
+                  : photosToAnalyze.length + " photos"}
               </div>
             </div>
           </div>
-          <button onClick={handleClose} style={{
+          <button aria-label="Close" onClick={handleClose} style={{
             width: 32, height: 32, borderRadius: "50%",
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -297,6 +365,11 @@ export default function AISuggestSheet({
               <div style={{ fontSize: 13, color: "#8a8a8a", lineHeight: 1.6, maxWidth: 300, margin: "0 auto 24px" }}>
                 Claude picks the best 2–20 photos from your pool and sequences them into a single dump.
               </div>
+              {isCapped && (
+                <div style={{ fontSize: 11, color: "#8a8a8a", lineHeight: 1.5, maxWidth: 320, margin: "-14px auto 18px" }}>
+                  AI sees {MAX_PHOTOS} of {orderedPool.length} photos per run (newest unused first). Each New Suggestion looks at the next {MAX_PHOTOS}.
+                </div>
+              )}
 
               {/* Mini photo preview */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4, marginBottom: 28 }}>
@@ -355,7 +428,7 @@ export default function AISuggestSheet({
                         background: "#0a0a0a", border: "1px solid #2a2a2a",
                         borderRadius: 18, padding: 3,
                       }}>
-                        <button
+                        <button aria-label="Fewer photos"
                           onClick={() => {
                             const cur = targetCount ?? 5;
                             const next = Math.max(stepperMin, cur - 1);
@@ -380,7 +453,7 @@ export default function AISuggestSheet({
                         }}>
                           {targetCount ?? 5}
                         </div>
-                        <button
+                        <button aria-label="More photos"
                           onClick={() => {
                             const cur = targetCount ?? 5;
                             const next = Math.min(stepperMax, cur + 1);
@@ -409,9 +482,13 @@ export default function AISuggestSheet({
                       <select
                         value={activeStyleId}
                         onChange={function(e) {
-                          setActiveStyleId(e.target.value);
-                          saveActiveDumpStyleId(e.target.value);
+                          const id = e.target.value;
+                          const st = dumpStyles.find(function(d) { return d.id === id; });
+                          setActiveStyleId(id);
+                          saveActiveDumpStyleId(id);
                           setTasteActive(Boolean(buildTasteBlock()));
+                          setStyleSwitched(true);
+                          toast(st ? (st.name || "Untitled") + " style on" : "Dump style off");
                         }}
                         style={{
                           flex: 1, background: "#0a0a0a", color: "#e8e8e8",
@@ -424,6 +501,11 @@ export default function AISuggestSheet({
                           return <option key={st.id} value={st.id}>{st.name || "Untitled"}</option>;
                         })}
                       </select>
+                    </div>
+                  )}
+                  {styleSwitched && (
+                    <div role="status" style={{ fontSize: 11, color: "#C8A06E", marginTop: -8, marginBottom: 14, textAlign: "left" }}>
+                      {DUMP_STYLE_USED_BY}
                     </div>
                   )}
 
@@ -456,27 +538,31 @@ export default function AISuggestSheet({
                     }}>
                       <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
                       <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.1em" }}>
-                        TASTE PROFILE ACTIVE
+                        {activeStyle ? "STYLE: " + (activeStyle.name || "Untitled").toUpperCase() + " · " : ""}TASTE PROFILE ACTIVE
                       </span>
                     </div>
                   )}
 
+                  <div style={{ fontSize: 11, color: "#8a8a8a", marginBottom: 10 }}>
+                    {"Style: " + (activeStyle ? (activeStyle.name || "Untitled") : "None")}
+                  </div>
                   <button
                     onClick={handleAnalyze}
-                    disabled={filteredPool.length < 2}
+                    disabled={filteredPool.length < 2 || tooFewCredits}
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 8,
-                      background: filteredPool.length < 2 ? "#2a2a2a" : "var(--accent)",
+                      background: filteredPool.length < 2 || tooFewCredits ? "#2a2a2a" : "var(--accent)",
                       border: "none", borderRadius: 10,
                       padding: "13px 28px",
-                      color: filteredPool.length < 2 ? "#8a8a8a" : "#000",
+                      color: filteredPool.length < 2 || tooFewCredits ? "#8a8a8a" : "#000",
                       fontSize: 14, fontWeight: 700,
-                      cursor: filteredPool.length < 2 ? "default" : "pointer",
+                      cursor: filteredPool.length < 2 || tooFewCredits ? "default" : "pointer",
                       letterSpacing: "0.02em", fontFamily: "inherit",
                     }}
                   >
-                    <Sparkles size={15} /> Generate Suggestion
+                    <Sparkles size={15} /> Generate Suggestion · {COST} credits
                   </button>
+                  {creditsHint}
                 </>
               )}
             </div>
@@ -490,10 +576,10 @@ export default function AISuggestSheet({
                 style={{ animation: "spin 1s linear infinite", margin: "0 auto 16px", display: "block" }}
               />
               <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 6 }}>
-                {variationRef.current > 0 ? "Finding a different angle..." : "Analyzing your photos..."}
+                {slow ? "Still working…" : variationRef.current > 0 ? "Finding a different angle..." : "Analyzing your photos..."}
               </div>
               <div style={{ fontSize: 12, color: "#555" }}>
-                Claude is picking the best sequence
+                {slow ? "Big pools can take up to a minute. Hang tight." : "Claude is picking the best sequence"}
               </div>
               <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             </div>
@@ -518,8 +604,9 @@ export default function AISuggestSheet({
                 padding: "12px 20px", color: "var(--accent)",
                 fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
               }}>
-                <RefreshCcw size={14} /> Try Again
+                <RefreshCcw size={14} /> Try Again · {COST} credits
               </button>
+              {creditsHint}
             </div>
           )}
 
@@ -571,17 +658,17 @@ export default function AISuggestSheet({
 
               {/* Action buttons */}
               <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={handleNewSuggestion} style={{
+                <button onClick={handleNewSuggestion} disabled={tooFewCredits} style={{
                   display: "flex", alignItems: "center", gap: 6,
                   background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10,
-                  padding: "12px 16px", color: "#999",
-                  fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                  padding: "12px 16px", color: tooFewCredits ? "#555" : "#999",
+                  fontSize: 13, fontWeight: 500, cursor: tooFewCredits ? "default" : "pointer", fontFamily: "inherit",
                   transition: "all 0.15s",
                 }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = "#444"; e.currentTarget.style.color = "#ccc"; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#999"; }}
                 >
-                  <RefreshCcw size={14} /> New Suggestion
+                  <RefreshCcw size={14} /> New Suggestion · {COST} credits
                 </button>
                 <button onClick={handleCreate} style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -593,6 +680,13 @@ export default function AISuggestSheet({
                   <Plus size={16} /> Create Dump
                 </button>
               </div>
+
+              {creditsHint}
+              {isCapped && !tooFewCredits && (
+                <div style={{ marginTop: 10, fontSize: 11, color: "#555", textAlign: "center" }}>
+                  New Suggestion looks at a different {MAX_PHOTOS} of your {orderedPool.length} photos.
+                </div>
+              )}
 
               {/* Pool remainder note */}
               {poolPhotos.length > clusterPhotos.length && (

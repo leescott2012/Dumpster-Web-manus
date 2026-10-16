@@ -27,10 +27,13 @@ function getRedis(): Redis | null {
 }
 
 /** Per-action rate limit windows. */
-var LIMITS: Record<string, { count: number; window: "10 m" | "1 m" | "1 h" }> = {
+var LIMITS: Record<string, { count: number; window: "10 m" | "1 m" | "1 h" | "24 h" }> = {
   ai_suggest:  { count: 5,  window: "10 m" }, // heavy: Claude vision with up to 20 images
   ai_label:    { count: 8,  window: "10 m" }, // heavy: Claude Sonnet vision, up to 12 images/batch
   ai_label_auto: { count: 3, window: "10 m" }, // system auto-heal of stale/legacy categories — tighter, no user action behind it
+  // Free auto-heal is counted per IMAGE, not per request (see checkAutoCredits):
+  // 60 images/user/24h ≈ 60 × ~2¢ Sonnet vision ≈ $1.20/user/day worst case.
+  ai_label_auto_daily: { count: 60, window: "24 h" },
   ai_caption:  { count: 20, window: "10 m" },
   ai_chat:     { count: 30, window: "10 m" },
   ai_recycle:  { count: 10, window: "10 m" },
@@ -71,18 +74,21 @@ function getClientIp(req: IncomingMessage): string {
 /**
  * Enforce rate limit for an action. Identifier preference: userId → IP.
  * Returns true if request may proceed. Writes 429 + sets headers if blocked.
+ * `opts.rate` consumes that many units at once (e.g. one per image);
+ * `opts.code` overrides the 429 error code so clients can tell limits apart.
  */
 export async function enforceRateLimit(
   req: IncomingMessage,
   res: ServerResponse,
   action: string,
-  userId: string | null
+  userId: string | null,
+  opts?: { rate?: number; code?: string }
 ): Promise<boolean> {
   var limiter = getLimiter(action);
   if (!limiter) return true; // env missing → fail-open in dev
 
   var identifier = userId ? "u:" + userId : "ip:" + getClientIp(req);
-  var result = await limiter.limit(identifier);
+  var result = await limiter.limit(identifier, opts && opts.rate ? { rate: opts.rate } : undefined);
 
   res.setHeader("X-RateLimit-Limit", String(result.limit));
   res.setHeader("X-RateLimit-Remaining", String(result.remaining));
@@ -94,7 +100,7 @@ export async function enforceRateLimit(
     res.writeHead(429, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
       error: "Too many requests. Try again in " + retryAfterSec + "s.",
-      code: "rate_limit_exceeded",
+      code: (opts && opts.code) || "rate_limit_exceeded",
       retryAfter: retryAfterSec,
     }));
     return false;

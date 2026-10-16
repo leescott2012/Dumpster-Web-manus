@@ -9,11 +9,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
 import { captureServerError } from "./sentry.js";
+import { AI_LABEL_MAX_PER_REQUEST } from "../shared/aiLabelCost.js";
 
 export interface LabelPhotoInput { id: string; url: string }
-export interface LabelResult { id: string; category: string; label: string }
+export interface LabelResult { id: string; category: string; label: string; confidence?: number }
 
-const MAX_PHOTOS = 12; // per request — client chunks larger sets
+const MAX_PHOTOS = AI_LABEL_MAX_PER_REQUEST; // per request — client chunks larger sets; paid cost is clamped to this too
 
 // Taxonomy mirrors the native iOS PhotoAnalyzer (Apple Vision) categories EXACTLY
 // so a photo lands in the same bucket whether it's scanned on web or on device.
@@ -54,7 +55,8 @@ export function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-export interface AILabelBody { photos?: LabelPhotoInput[]; auto?: boolean }
+// audit: Label Health's independent second opinion — differently-worded prompt, same gates.
+export interface AILabelBody { photos?: LabelPhotoInput[]; auto?: boolean; audit?: boolean }
 
 /**
  * `preParsedBody` lets the route wrapper read+parse the body itself first (to
@@ -65,34 +67,36 @@ export async function handleAILabel(
   req: IncomingMessage,
   res: ServerResponse,
   preParsedBody?: AILabelBody
-): Promise<void> {
+): Promise<boolean> {
   if (req.method !== "POST") {
     res.writeHead(405, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Method not allowed" }));
-    return;
+    return false;
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey === "your_anthropic_api_key_here") {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "ANTHROPIC_API_KEY is not configured." }));
-    return;
+    return false;
   }
 
   let photos: LabelPhotoInput[];
+  let audit = false;
   try {
     const parsed = preParsedBody ?? JSON.parse(await readBody(req));
     photos = Array.isArray(parsed.photos) ? parsed.photos.slice(0, MAX_PHOTOS) : [];
+    audit = parsed.audit === true;
   } catch {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Invalid JSON body" }));
-    return;
+    return false;
   }
 
   if (photos.length === 0) {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "No photos to scan" }));
-    return;
+    return false;
   }
 
   const system = `You are an expert photo classifier. Look carefully at EACH photo, decide what it is PRIMARILY about, then pick the single best category and write a precise 2–5 word label that names the specific subject.
@@ -115,8 +119,22 @@ Label rules — SPECIFICITY IS THE WHOLE JOB:
 - If you genuinely can't identify the specific subject, describe the most concrete visible details instead ("Neon-lit ramen bar", not "restaurant").
 - Match each result to the photo's id given before its image.
 
+Confidence: for each photo give "confidence", a number 0–1 for how sure you are the CATEGORY is right (0.9+ obvious, 0.6–0.9 likely, below 0.6 genuinely ambiguous). Be honest — low numbers are useful.
+
 Respond ONLY with valid JSON, no markdown, no code fences:
-{"labels":[{"id":"<id>","category":"<CATEGORY>","label":"<short label>"}]}`;
+{"labels":[{"id":"<id>","category":"<CATEGORY>","label":"<short label>","confidence":0.0}]}`;
+
+  // Independent second pass for Label Health audits — deliberately worded
+  // differently from the main prompt so agreement between the two means something.
+  const auditSystem = `You are reviewing a photo library. For each photo, imagine the owner browsing their collection by section: which ONE section would they expect to find this photo in? Decide from the main subject only, ignoring background details.
+
+Sections (answer with the UPPERCASE name):
+${CATEGORY_HINTS}
+
+Then name the subject in 2–5 concrete words (brand, color, dish, place — never "photo", "scene" or a lone generic noun), and rate 0–1 how sure you are of the section.
+
+Return ONLY JSON, nothing else:
+{"labels":[{"id":"<id>","category":"<SECTION>","label":"<subject>","confidence":0.0}]}`;
 
   type ContentBlock =
     | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string } }
@@ -137,17 +155,19 @@ Respond ONLY with valid JSON, no markdown, no code fences:
   if (usableIds.length === 0) {
     res.writeHead(502, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Could not load any images", code: "no_images" }));
-    return;
+    return false;
   }
 
   content.push({ type: "text", text: `Label all ${usableIds.length} photos now. Return JSON only.` });
 
   try {
-    const anthropic = new Anthropic({ apiKey });
+    // 40s, no retries: image fetch (≤8s) + this must finish inside the 60s
+    // maxDuration, or Vercel kills the function before the refund runs.
+    const anthropic = new Anthropic({ apiKey, timeout: 40000, maxRetries: 0 });
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 80 * usableIds.length + 250,
-      system,
+      system: audit ? auditSystem : system,
       messages: [{ role: "user", content }],
     });
 
@@ -159,18 +179,27 @@ Respond ONLY with valid JSON, no markdown, no code fences:
     // Validate + clamp categories to the taxonomy; drop anything unrecognized.
     const labels: LabelResult[] = [];
     for (const l of rawLabels) {
-      if (!l || typeof l.id !== "string") continue;
+      if (!l || typeof l.id !== "string" || usableIds.indexOf(l.id) === -1) continue; // only ids we sent
       const raw = typeof l.category === "string" ? l.category.toUpperCase() : "";
       const cat = CATEGORIES.indexOf(raw) >= 0 ? raw : FALLBACK_CATEGORY;
       const label = typeof l.label === "string" ? l.label.slice(0, 60) : "";
-      labels.push({ id: l.id, category: cat, label });
+      labels.push({ id: l.id, category: cat, label, confidence: typeof l.confidence === "number" ? Math.max(0, Math.min(1, l.confidence)) : undefined });
+    }
+
+    if (labels.length === 0) {
+      console.error("[AI Label] no usable labels in model output:", rawText.slice(0, 500));
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Scan failed — try again", code: "ai_empty_result" }));
+      return false;
     }
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ labels }));
+    return true;
   } catch (e) {
     captureServerError(e, "aiLabel.handler", { count: usableIds.length });
     res.writeHead(502, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Scan failed — try again", code: "ai_error" }));
+    return false;
   }
 }

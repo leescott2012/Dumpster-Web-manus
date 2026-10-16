@@ -29,9 +29,8 @@ function getRedis(): Redis | null {
 /** Estimated $ cost per action, in CENTS. Conservative upper bounds. */
 var COST_CENTS: Record<string, number> = {
   ai_suggest: 25, // Claude vision, up to 20 images
-  ai_label: 12,   // Claude Sonnet vision, up to 12 images per batch -- keep in sync with
-                  // creditGate.ts COSTS.ai_label (was missing here, silently undercounted at
-                  // the `|| 2` default, ~6x under its real cost in the daily-budget total)
+  ai_label: 12,   // Claude Sonnet vision, worst case 12 images/request. Users pay 1 credit/photo
+                  // (shared/aiLabelCost.ts); the budget books the max per call — conservative on purpose
   ai_caption: 3,
   ai_chat: 1,
   ai_recycle: 3,
@@ -81,7 +80,7 @@ export async function checkBudget(res: ServerResponse): Promise<boolean> {
  * Call this AFTER a successful AI call (or in finally).
  * Crosses an alert threshold? Log loudly so monitoring can pick it up.
  */
-export async function recordCost(action: string): Promise<void> {
+export async function recordCost(action: string, images?: number): Promise<void> {
   var r = getRedis();
   if (!r) return;
   var cost = COST_CENTS[action] || 2;
@@ -89,6 +88,12 @@ export async function recordCost(action: string): Promise<void> {
   var newTotal = await r.incrby(key, cost);
   // Keep the key alive for 36h so today's tally never blows away mid-day
   await r.expire(key, 60 * 60 * 36);
+  // Per-feature call counts for the admin dashboard (the only record of free
+  // auto-label calls, which never hit the credit ledger).
+  var callsKey = key + ":calls";
+  await r.hincrby(callsKey, action, 1);
+  if (images) await r.hincrby(callsKey, action + "_images", images);
+  await r.expire(callsKey, 60 * 60 * 36);
 
   var limit = budgetCents();
   var pct = (newTotal / limit) * 100;
@@ -106,10 +111,15 @@ export async function recordCost(action: string): Promise<void> {
   }
 }
 
-/** Read today's spend without mutating. For health endpoints. */
-export async function getTodaySpend(): Promise<{ cents: number; limitCents: number }> {
+/** Read today's (UTC day) spend + per-feature call counts without mutating. */
+export async function getTodaySpend(): Promise<{
+  cents: number; limitCents: number; calls: Record<string, number>; source: "redis" | "unavailable";
+}> {
   var r = getRedis();
-  if (!r) return { cents: 0, limitCents: budgetCents() };
-  var cents = (await r.get<number>(todayKey())) || 0;
-  return { cents: cents, limitCents: budgetCents() };
+  if (!r) return { cents: 0, limitCents: budgetCents(), calls: {}, source: "unavailable" };
+  var cents = Number(await r.get<number>(todayKey())) || 0;
+  var raw = (await r.hgetall<Record<string, number>>(todayKey() + ":calls")) || {};
+  var calls: Record<string, number> = {};
+  for (var k in raw) calls[k] = Number(raw[k]) || 0;
+  return { cents: cents, limitCents: budgetCents(), calls: calls, source: "redis" };
 }

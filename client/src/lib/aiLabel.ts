@@ -5,9 +5,10 @@
  * bodies stay small; HTTPS-URL photos are sent by reference (tiny).
  */
 import { getAuthHeaders } from "./supabase";
+import { aiFetch } from "@/lib/creditSync";
 import { compressDataUrlForVision } from "./imageDownscale";
 
-export interface PhotoLabel { id: string; category: string; label: string }
+export interface PhotoLabel { id: string; category: string; label: string; confidence?: number }
 interface ScanInput { id: string; url: string }
 
 // Fewer images per request so each high-res frame fits the 4.5 MB body limit and
@@ -24,6 +25,10 @@ async function prepareUrl(url: string): Promise<string> {
 }
 
 async function scanBatch(batch: ScanInput[], auto: boolean): Promise<PhotoLabel[]> {
+  // videos are device-only by owner decision — callers filter by category; this
+  // catches any device-local video URL (blob:/data:video) that slips through.
+  batch = batch.filter((p) => !p.url.startsWith("blob:") && !p.url.startsWith("data:video/"));
+  if (batch.length === 0) return [];
   const photos = await Promise.all(
     batch.map(async (p) => ({ id: p.id, url: await prepareUrl(p.url) }))
   );
@@ -31,7 +36,7 @@ async function scanBatch(batch: ScanInput[], auto: boolean): Promise<PhotoLabel[
   // One endpoint, two credit-gate modes (auto flag) — see api/ai-label.ts;
   // Vercel's Hobby plan caps a deployment at 12 serverless functions, so this
   // isn't split into a second route.
-  const res = await fetch("/api/ai-label", {
+  const res = await aiFetch("/api/ai-label", {
     method: "POST",
     headers: Object.assign({ "Content-Type": "application/json" }, headers),
     body: JSON.stringify({ photos, auto }),
@@ -39,7 +44,7 @@ async function scanBatch(batch: ScanInput[], auto: boolean): Promise<PhotoLabel[
   if (!res.ok) {
     let msg = "Scan failed";
     try { const j = await res.json(); if (j && j.error) msg = j.error; } catch { /* ignore */ }
-    throw new Error(msg);
+    throw Object.assign(new Error(msg), { status: res.status });
   }
   const data = await res.json();
   return Array.isArray(data.labels) ? data.labels : [];
@@ -53,7 +58,15 @@ async function scanAll(
   const all: PhotoLabel[] = [];
   for (let i = 0; i < input.length; i += BATCH_SIZE) {
     const batch = input.slice(i, i + BATCH_SIZE);
-    const labels = await scanBatch(batch, auto);
+    let labels: PhotoLabel[];
+    try {
+      labels = await scanBatch(batch, auto);
+    } catch (e) {
+      // Free auto-heal hit its server quota (429) — stop quietly with what we
+      // have; the rest heals in a later session once the quota frees up.
+      if (auto && (e as { status?: number }).status === 429) break;
+      throw e;
+    }
     all.push(...labels);
     if (onBatch && labels.length > 0) onBatch(labels);
   }

@@ -153,7 +153,7 @@ export default function DumpActionSheet({
               {dump.photos.length + " photos" + (hasCaptions ? " · captions ready" : "")}
             </div>
           </div>
-          <button
+          <button aria-label="Close"
             onClick={onClose}
             style={{
               width: 32, height: 32, borderRadius: "50%", flexShrink: 0, marginLeft: 12,
@@ -174,7 +174,7 @@ export default function DumpActionSheet({
           <div style={{ fontSize: 12, fontWeight: 600, color: "#8a8a8a", letterSpacing: "0.06em", marginRight: "auto" }}>
             RATE THIS DUMP
           </div>
-          <button
+          <button aria-label="Thumbs up" aria-pressed={currentRating === "up"}
             onClick={function() {
               var newRating: "up" | null = currentRating === "up" ? null : "up";
               onRate(dump.id, newRating);
@@ -190,7 +190,7 @@ export default function DumpActionSheet({
           >
             <ThumbsUp size={16} fill={currentRating === "up" ? "#4ade80" : "none"} />
           </button>
-          <button
+          <button aria-label="Thumbs down" aria-pressed={currentRating === "down"}
             onClick={function() {
               if (currentRating === "down") {
                 // Toggle off

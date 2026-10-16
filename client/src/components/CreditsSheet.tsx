@@ -126,7 +126,7 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
               }
             </div>
           </div>
-          <button onClick={onClose} style={{
+          <button aria-label="Close" onClick={onClose} style={{
             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -249,7 +249,7 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
                       borderBottom: "1px solid #1a1a1a", fontSize: 12,
                     }}>
                       <span style={{ color: "#888" }}>{CREDIT_LABELS[key] || key}</span>
-                      <span style={{ color: "var(--accent)", fontWeight: 700 }}>{CREDIT_COSTS[key] + " credits"}</span>
+                      <span style={{ color: "var(--accent)", fontWeight: 700 }}>{CREDIT_COSTS[key] + (key.endsWith("_per_photo") ? " credit/photo" : " credits")}</span>
                     </div>
                   );
                 })}

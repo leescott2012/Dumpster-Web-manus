@@ -80,14 +80,17 @@ export default function LegalLayout({ title, lastUpdated, children }: LegalLayou
         <div style={{
           marginTop: 48, paddingTop: 24,
           borderTop: "1px solid #1a1a1a",
-          display: "flex", gap: 18,
+          display: "flex", flexDirection: "column", gap: 12,
           fontSize: 13, color: "#8a8a8a",
         }}>
-          <Link href="/privacy" style={{ color: "#888", textDecoration: "none" }}>Privacy</Link>
-          <Link href="/terms" style={{ color: "#888", textDecoration: "none" }}>Terms</Link>
-          <a href="mailto:axiomonellc@outlook.com" style={{ color: "#888", textDecoration: "none", marginLeft: "auto" }}>
-            Contact
-          </a>
+          <div style={{ display: "flex", gap: 18 }}>
+            <Link href="/privacy" style={{ color: "#888", textDecoration: "none" }}>Privacy</Link>
+            <Link href="/terms" style={{ color: "#888", textDecoration: "none" }}>Terms</Link>
+            <a href="mailto:ariyaonellc@outlook.com" style={{ color: "#888", textDecoration: "none", marginLeft: "auto" }}>
+              Contact
+            </a>
+          </div>
+          <span style={{ fontSize: 12, color: "#6a6a6a" }}>© 2026 Chamillion Collective</span>
         </div>
       </main>
     </div>

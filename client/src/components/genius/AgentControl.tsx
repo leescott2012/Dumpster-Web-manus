@@ -85,23 +85,24 @@ export default function AgentControl({
         <div className="flex items-center gap-2">
           <Cpu className={`w-5 h-5 ${choice.text}`} />
           <div>
-            <h2 className="text-sm font-mono font-bold text-slate-200">Genius AUTONOMOUS AGENT CORE</h2>
-            <p className="text-[10px] font-mono text-slate-500">Deploy background nodes to process real workloads</p>
+            <h2 className="text-sm font-mono font-bold text-slate-200">Genius AGENT CORE</h2>
+            <p className="text-[10px] font-mono text-slate-400">Demo only — not connected to any agent. Nothing runs, nothing is charged.</p>
           </div>
         </div>
         <div className="flex gap-1.5 text-[9px] font-mono px-2 py-1 bg-slate-950 border border-slate-850 rounded">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mt-0.5"></span>
-          <span className="text-slate-400">AGENTS_READY</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-500 mt-0.5"></span>
+          <span className="text-slate-400">DEMO · OFFLINE</span>
         </div>
       </div>
 
       {/* Task Creation Form */}
       <form onSubmit={handleFormSubmit} className="space-y-3">
         <div>
-          <label className="block text-[10px] font-mono font-bold text-slate-400 tracking-wider uppercase mb-1">
+          <label htmlFor="agent-task" className="block text-[10px] font-mono font-bold text-slate-400 tracking-wider uppercase mb-1">
             Task Description
           </label>
           <input
+            id="agent-task"
             type="text"
             value={taskName}
             onChange={(e) => setTaskName(e.target.value)}
@@ -113,9 +114,9 @@ export default function AgentControl({
 
         {/* Agent Selectors */}
         <div>
-          <label className="block text-[10px] font-mono font-bold text-slate-400 tracking-wider uppercase mb-1">
-            Select specialized agent model subclass
-          </label>
+          <div className="block text-[10px] font-mono font-bold text-slate-400 tracking-wider uppercase mb-1">
+            Agent type
+          </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
             {agentTemplates.map((tpl) => {
               const isSelected = selectedAgent === tpl.type;
@@ -123,6 +124,7 @@ export default function AgentControl({
                 <button
                   key={tpl.type}
                   type="button"
+                  aria-pressed={isSelected}
                   disabled={activeDeploying}
                   onClick={() => {
                     sfx.playBeep(440 + tpl.type.length * 40, 0.05);
@@ -156,7 +158,7 @@ export default function AgentControl({
           ) : (
             <>
               <Play className="w-3.5 h-3.5" />
-              <span>DEPLOY AUTOMATED WORKSPACE AGENT</span>
+              <span>RUN DEMO (NO REAL AGENT)</span>
             </>
           )}
         </button>
@@ -228,7 +230,7 @@ export default function AgentControl({
                   <div className="p-3 bg-slate-900/40 rounded-lg border border-slate-800 space-y-2">
                     <div className="flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-400">
                       <Sparkles className="w-3 h-3 text-yellow-400 animate-pulse" />
-                      <span>AGENT SYNOPSIS:</span>
+                      <span>DEMO RESULT:</span>
                     </div>
                     <p className="text-[11px] text-slate-300 leading-normal font-sans tracking-wide">
                       {task.summary}

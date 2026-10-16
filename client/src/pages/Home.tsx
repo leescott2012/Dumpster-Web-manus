@@ -42,21 +42,29 @@ import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions, archiveCaptionsByText } from "@/lib/captionPool";
 import { findDuplicatePhotoIds, hashMissingPhotos } from "@/lib/photoDupes";
-import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
+import { downscaleImageFile, HEIC_UNSUPPORTED } from "@/lib/imageDownscale";
+import { createLimiter, yieldToUI, isLowMemoryDevice } from "@/lib/uploadQueue";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
 import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, scheduleArchivedDumpIdsSave, flushArchivedDumpIdsSave, setDumpPublic } from "@/lib/workspaceSync";
-import { scanPhotos, autoScanPhotos } from "@/lib/aiLabel";
+import { scanPhotos } from "@/lib/aiLabel";
+import { CREDIT_COSTS } from "@/lib/credits";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { track } from "@/lib/analytics";
 import { logBug } from "@/lib/bugLogger";
+import { saveVideo, listVideos, deleteVideo, setVideoTags, setVideoTrim, notVideo, type VideoMeta } from "@/lib/videoStore";
+import VideoSheet from "@/components/VideoSheet";
+import LabelHealthSheet, { LabelHealthChip } from "@/components/LabelHealthSheet";
+import { useLabelHealth } from "@/hooks/useLabelHealth";
 
-// Mirror of CATEGORIES in server/aiLabel.ts — used to decide whether a pool
-// photo's existing category is a real AI label or a stale/legacy value that
-// should be re-scanned. Keep in sync with the server list.
-var VALID_CATEGORIES = [
-  "AUTOMOTIVE", "SELFIE", "NIGHTLIFE", "DINING", "FITNESS", "TRAVEL",
-  "ARCHITECTURE", "ART", "FASHION", "STUDIO", "CULTURE", "LIFESTYLE",
-];
+// Category taxonomy mirror (of server/aiLabel.ts CATEGORIES) lives in lib/labelHealth.ts.
+
+// Shared across uploads so two quick selections can't double the memory load.
+var LOW_MEM = isLowMemoryDevice();
+var photoLimit = createLimiter(LOW_MEM ? 2 : 4);
+var uploadLimit = createLimiter(LOW_MEM ? 2 : 4);
+var PHOTO_MAX_DIM = LOW_MEM ? 1600 : 2048;
+var MAX_PHOTO_BYTES = 40 * 1024 * 1024;
 
 function HomeContent() {
   var {
@@ -68,8 +76,54 @@ function HomeContent() {
     createDumpsFromSuggestions, setDumpCaptions,
     reorderDumpPhotos, setDumpVibe, rateDump, swapPhoto, setDumpChatHistory,
     archivedDumpIds, archiveDump, unarchiveDump, mergeArchivedDumpIds,
-    dupeDismissedIds, dismissDuplicate,
+    dupeDismissedIds, dismissDuplicate, attachVideos,
   } = useCarouselState();
+
+  // ── Device-only Video Pool ─────────────────────────────────────────────────
+  // videos are device-only by owner decision: bytes live in videoStore
+  // (IndexedDB) and get a fresh blob: URL each load. Meta (thumb, duration,
+  // tags, trim) is kept here, keyed by photo id; blobs are never sent anywhere.
+  var [videos, setVideos] = useState<Record<string, VideoMeta>>({});
+  var videoUrls = useRef<Record<string, string>>({});
+  var [videoSheetId, setVideoSheetId] = useState<string | null>(null);
+  useEffect(function() {
+    listVideos().then(function(recs) {
+      // Runs even with zero records so dead blob: videos from older sessions get dropped.
+      var meta: Record<string, VideoMeta> = {};
+      var list = recs.map(function(r) {
+        var url = URL.createObjectURL(r.blob);
+        videoUrls.current[r.id] = url;
+        meta[r.id] = r;
+        return { id: r.id, url: url, name: r.name };
+      });
+      setVideos(function(prev) { return Object.assign({}, meta, prev); });
+      attachVideos(list);
+    });
+  }, [attachVideos]);
+  var forgetVideos = useCallback(function(ids: string[]) {
+    var hit = ids.filter(function(id) { return videoUrls.current[id] || videos[id]; });
+    if (hit.length === 0) return;
+    for (var i = 0; i < hit.length; i++) {
+      void deleteVideo(hit[i]);
+      if (videoUrls.current[hit[i]]) URL.revokeObjectURL(videoUrls.current[hit[i]]);
+      delete videoUrls.current[hit[i]];
+    }
+    setVideos(function(prev) {
+      var next = Object.assign({}, prev);
+      for (var j = 0; j < hit.length; j++) delete next[hit[j]];
+      return next;
+    });
+  }, [videos]);
+  var patchVideo = useCallback(function(id: string, patch: Partial<VideoMeta>) {
+    setVideos(function(prev) {
+      if (!prev[id]) return prev;
+      var next = Object.assign({}, prev);
+      next[id] = Object.assign({}, prev[id], patch);
+      return next;
+    });
+    if ("tags" in patch) void setVideoTags(id, patch.tags || []);
+    if ("trimStart" in patch || "trimEnd" in patch) void setVideoTrim(id, patch.trimStart, patch.trimEnd);
+  }, []);
 
   // Split dumps into the active list (shown up top) and the archived list
   // (collapsed below). Archived dumps stay in `dumps` so nothing is lost.
@@ -187,7 +241,9 @@ function HomeContent() {
   var [creditsSheetOpen, setCreditsSheetOpen] = useState(false);
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
   var [demoBannerVisible, setDemoBannerVisible] = useState(false);
-  var { user, profile, canAfford, refreshProfile } = useAuth();
+  var { user, profile, canAfford, refreshProfile, totalCredits } = useAuth();
+  var labelHealth = useLabelHealth({ photos: allWorkspacePhotos, signedIn: !!user, applyPhotoLabels: applyPhotoLabels });
+  var [labelHealthOpen, setLabelHealthOpen] = useState(false);
 
   // ── AI profile sync — merge captions/taste/rules from cloud on sign-in.
   // Photos and workspace (dumps + pool) are device-local for beta.
@@ -202,8 +258,10 @@ function HomeContent() {
     var handleUnload = function() { flushAIProfileSave(); };
     window.addEventListener("beforeunload", handleUnload);
     return function() { window.removeEventListener("beforeunload", handleUnload); };
+  // Keyed on the id, not the object: Supabase hands back a new `user` object on
+  // every token refresh, which re-fired session_start (and the sync) hourly.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user?.id]);
 
   // ── Cloud photo sync (beta) ────────────────────────────────────────────────
   // On sign-in, pull THIS user's workspace from the DB (RLS scopes to their own
@@ -329,10 +387,11 @@ function HomeContent() {
     var count = selectedDeleteIds.length;
     if (count === 0) return;
     removeMultiplePhotosFromPool(selectedDeleteIds);
+    forgetVideos(selectedDeleteIds);
     setDeleteMode(false);
     setSelectedDeleteIds([]);
     toast("Deleted " + count + " photo" + (count !== 1 ? "s" : ""));
-  }, [selectedDeleteIds, removeMultiplePhotosFromPool]);
+  }, [selectedDeleteIds, removeMultiplePhotosFromPool, forgetVideos]);
 
   var handleCancelDeleteMode = useCallback(function() {
     setDeleteMode(false);
@@ -390,7 +449,8 @@ function HomeContent() {
 
   // Double tap -> lightbox
   var handleDoubleTapPhoto = useCallback(function(photo: Photo) {
-    setLightboxPhoto(photo);
+    if (photo.category === "Video") setVideoSheetId(photo.id);
+    else setLightboxPhoto(photo);
     setSelectedPhotoId(null);
     setContextMenu(null);
   }, []);
@@ -508,10 +568,35 @@ function HomeContent() {
     } else {
       // Photo is in pool — remove entirely
       removePhotoFromPool(photoId);
+      forgetVideos([photoId]);
       toast("Photo removed");
     }
     setSelectedPhotoId(null);
-  }, [contextMenu, dumps, movePhotoFromDumpToPool, removePhotoFromPool]);
+  }, [contextMenu, dumps, movePhotoFromDumpToPool, removePhotoFromPool, forgetVideos]);
+
+  // Inline delete from the Videos view / video sheet — pool only.
+  var handleDeleteVideo = useCallback(function(id: string) {
+    removePhotoFromPool(id);
+    forgetVideos([id]);
+    setVideoSheetId(null);
+    toast("Video deleted from this device");
+  }, [removePhotoFromPool, forgetVideos]);
+
+  // Trimmed copy recorded on-device by VideoSheet → store it as a NEW pool
+  // video (original untouched). Device-only, same as any other video.
+  var handleTrimmedCopy = useCallback(function(sourceId: string, blob: Blob, duration: number): Promise<string> {
+    var src = videos[sourceId];
+    var ext = blob.type.indexOf("mp4") >= 0 ? ".mp4" : ".webm";
+    var name = (src ? src.name.replace(/\.[^.]+$/, "") : "video") + "-trim" + ext;
+    return saveVideo(blob, { id: "upload-" + nanoid(8), name: name, duration: duration, fallbackThumb: src ? src.thumbDataUrl : "" })
+      .then(function(rec) {
+        var url = URL.createObjectURL(blob);
+        videoUrls.current[rec.id] = url;
+        setVideos(function(prev) { var n = Object.assign({}, prev); n[rec.id] = rec; return n; });
+        addUploadedPhotos([{ id: rec.id, url: url, alt: name, isFavorite: false, category: "Video" }]);
+        return name;
+      });
+  }, [videos, addUploadedPhotos]);
 
   // Upload photos/videos from device.
   //   Signed-in user: downscale → upload to Supabase Storage → store HTTPS URL.
@@ -519,87 +604,89 @@ function HomeContent() {
   //   Guest:          data URL only — works offline but doesn't persist past the tab.
   // Photos are downscaled to ~2048px / JPEG 0.85 first so Claude Vision's
   // 5 MB per-image limit isn't exceeded and Storage egress stays low.
+  //
+  // Phones freeze/kill the tab if dozens of 12MP photos decode at once, so:
+  // photos go through a shared limiter (2 at a time on phones, 4 on desktop),
+  // each one decodes → EXIF → yields to the UI, and finished photos stream into
+  // the pool every few items while a "Processing 12/40…" toast counts up.
+  // Cloud uploads start per streamed batch on their own limiter.
   var handleUploadPhotos = useCallback(function(files: FileList) {
-    var total = files.length;
+    var list = Array.from(files); // copy — the <input> may be reset after onChange
+    var total = list.length;
     if (total === 0) return;
 
-    var hadAnyHeavy = Array.from(files).some(function(f) { return f.size > 1_500_000; });
-    if (hadAnyHeavy) {
-      toast("Processing " + total + (total === 1 ? " photo" : " photos") + "...");
+    var toastId = "upload-" + nanoid(6);
+    var done = 0, added = 0, failed = 0, heic = 0, tooBig = 0;
+    var buffer: Photo[] = [];
+    var lastFlush = Date.now();
+    var showProgress = total > 1 || list[0].size > 1_500_000;
+    if (showProgress) toast.loading("Processing 0/" + total + "…", { id: toastId });
+
+    // Signed-in: push bytes to Storage and swap in the durable HTTPS URL.
+    // Retries once; a failure keeps the data URL. Videos never upload.
+    function uploadOne(p: Photo) {
+      return uploadPhotoToCloud(p.id, p.url)
+        .then(function(u) { return u || uploadPhotoToCloud(p.id, p.url); })
+        .then(function(u) { if (u) replacePhotoUrl(p.id, u); });
     }
 
-    var tasks: Promise<Photo>[] = [];
-    for (var i = 0; i < total; i++) {
-      (function(file: File) {
-        var isVideo = file.type.startsWith("video/");
-        var photoId = "upload-" + nanoid(8);
-
-        if (isVideo) {
-          tasks.push(Promise.resolve({
-            id: photoId,
-            url: URL.createObjectURL(file),
-            alt: file.name,
-            isFavorite: false,
-            category: "Video",
-          }));
-        } else {
-          // Extract EXIF from the ORIGINAL file in parallel with the downscale
-          // (downscale strips EXIF, so we have to read it before reencoding).
-          tasks.push(
-            Promise.all([
-              extractPhotoMeta(file),
-              downscaleImageToDataUrl(file),
-            ]).then(function(results) {
-              var meta = results[0];
-              var dataUrl = results[1];
-              return {
-                id: photoId, url: dataUrl, alt: file.name,
-                isFavorite: false, category: "Uploaded",
-                meta: meta,
-              } as Photo;
-            })
-          );
-        }
-      })(files[i]);
+    function flush() {
+      if (!buffer.length) return;
+      var batch = buffer; buffer = []; lastFlush = Date.now();
+      addUploadedPhotos(batch);
+      added += batch.length;
+      if (!user) return; // guest → stays device-local
+      batch.forEach(function(p) {
+        if (notVideo(p) && p.url.indexOf("data:") === 0) uploadLimit(function() { return uploadOne(p); });
+      });
     }
 
-    Promise.allSettled(tasks).then(function(results) {
-      var photos = results
-        .filter(function(r): r is PromiseFulfilledResult<Photo> { return r.status === "fulfilled"; })
-        .map(function(r) { return r.value; });
-      var failCount = results.length - photos.length;
-      if (photos.length === 0) {
-        toast("Couldn't process " + (failCount === 1 ? "that file" : "those files") + " — try again");
+    function settle(p: Photo | null) {
+      done++;
+      if (p) buffer.push(p);
+      if (buffer.length >= 4 || Date.now() - lastFlush > 700 || done === total) flush();
+      if (done < total) {
+        if (showProgress) toast.loading("Processing " + done + "/" + total + "…", { id: toastId });
         return;
       }
+      if (added) track("photo_uploaded", { count: added });
+      var notes: string[] = [];
+      if (heic) notes.push(heic + " HEIC photo" + (heic === 1 ? "" : "s") + " this browser can't open — use Safari or export as JPEG");
+      if (tooBig) notes.push(tooBig + " over 40 MB skipped");
+      if (failed) notes.push(failed + " couldn't be processed");
+      var msg = added
+        ? "Added " + added + (added === 1 ? " item" : " items") + " to pool"
+        : "Couldn't add " + (total === 1 ? "that file" : "those files");
+      if (notes.length) msg += " (" + notes.join("; ") + ")";
+      (added ? toast.success : toast.error)(msg, { id: toastId, duration: notes.length ? 8000 : 4000 });
+    }
 
-      // Show them in the pool right away (data URLs render instantly), then for
-      // signed-in users push each photo's bytes to Supabase Storage and swap in
-      // the durable HTTPS URL. This is what makes photos survive a refresh and
-      // appear on every device — the cloud holds the bytes, not just IndexedDB.
-      addUploadedPhotos(photos);
-      track("photo_uploaded", { count: photos.length });
-      var msg = "Added " + photos.length + (photos.length === 1 ? " item" : " items") + " to pool";
-      if (failCount > 0) msg += " (" + failCount + " couldn't be processed)";
-      toast(msg);
-
-      if (!user) return; // guest → stays device-local, nothing to upload
-
-      // Upload data-URL photos with limited concurrency, swapping each pool
-      // entry's url to the cloud URL as it lands. Failures keep the data URL.
-      var uploadable = photos.filter(function(p) { return p.url.indexOf("data:") === 0; });
-      var idx = 0;
-      function next(): Promise<void> {
-        if (idx >= uploadable.length) return Promise.resolve();
-        var p = uploadable[idx++];
-        return uploadPhotoToCloud(p.id, p.url).then(function(cloudUrl) {
-          if (cloudUrl) replacePhotoUrl(p.id, cloudUrl);
-        }).catch(function() { /* keep data URL */ }).then(next);
+    list.forEach(function(file) {
+      var photoId = "upload-" + nanoid(8);
+      if (file.type.startsWith("video/")) {
+        // videos are device-only by owner decision — saved to IndexedDB
+        // (videoStore), never uploaded. saveVideo never rejects. Not limited:
+        // no decode happens here.
+        saveVideo(file, { id: photoId }).then(function(rec) {
+          var url = URL.createObjectURL(file);
+          videoUrls.current[photoId] = url;
+          setVideos(function(prev) { var n = Object.assign({}, prev); n[photoId] = rec; return n; });
+          settle({ id: photoId, url: url, alt: file.name, isFavorite: false, category: "Video" } as Photo);
+        }, function() { failed++; settle(null); });
+        return;
       }
-      var LANES = 4;
-      var lanes: Promise<void>[] = [];
-      for (var L = 0; L < LANES; L++) lanes.push(next());
-      Promise.all(lanes); // fire-and-forget; state updates as each completes
+      if (file.size > MAX_PHOTO_BYTES) { tooBig++; settle(null); return; }
+      // ponytail: the limiter IS the queue — huge selections just wait their turn as cheap closures.
+      photoLimit(async function() {
+        var r = await downscaleImageFile(file, PHOTO_MAX_DIM);
+        // EXIF from the ORIGINAL file (downscale strips it), reusing decoded dims.
+        var meta = await extractPhotoMeta(file, r.width && r.height ? { w: r.width, h: r.height } : undefined);
+        await yieldToUI();
+        return { id: photoId, url: r.dataUrl, alt: file.name, isFavorite: false, category: "Uploaded", meta: meta } as Photo;
+      }).then(settle, function(e) {
+        if (e && e.message === HEIC_UNSUPPORTED) heic++; else failed++;
+        settle(null);
+      });
     });
   }, [addUploadedPhotos, replacePhotoUrl, user]);
 
@@ -609,73 +696,43 @@ function HomeContent() {
   // "City" — stale values written by the native app's old filename-guessing
   // labeler before it switched to server-side Claude Vision on 2026-07-10);
   // skips videos, and applies labels incrementally as each batch returns.
+  // Photos the paid Scan would label — same "needs a label" rule as the Label
+  // Health chip (videos already excluded there). Drives the price estimate.
+  var scanTargets = useMemo(function() {
+    var unlabeledIds = new Set(labelHealth.health.unlabeled.map(function(p) { return p.id; }));
+    return pool.filter(function(p) { return notVideo(p) && unlabeledIds.has(p.id); });
+  }, [pool, labelHealth.health]);
+  var [scanConfirmOpen, setScanConfirmOpen] = useState(false);
+
+  // Scan button → price confirm (paid: 1 credit/photo, see shared/aiLabelCost.ts).
   var handleScanPhotos = useCallback(function() {
     if (scanning) return;
     if (!user) { setAuthSheetOpen(true); toast("Sign in to scan photos"); return; }
-    var toScan = pool.filter(function(p) {
-      if (p.category === "Video") return false;
-      if (p.category === "" || p.category === "Uploaded") return true;
-      return VALID_CATEGORIES.indexOf(p.category.toUpperCase()) === -1;
-    });
-    if (toScan.length === 0) { toast("All photos are already labeled"); return; }
+    if (scanTargets.length === 0) { toast("All photos are already labeled"); return; }
+    setScanConfirmOpen(true);
+  }, [scanning, user, scanTargets.length]);
 
+  var runScan = useCallback(function() {
+    var toScan = scanTargets;
+    if (scanning || toScan.length === 0) return;
     setScanning(true);
     toast("Scanning " + toScan.length + (toScan.length === 1 ? " photo…" : " photos…"));
     var input = toScan.map(function(p) { return { id: p.id, url: p.url }; });
-    scanPhotos(input, function(labels) { applyPhotoLabels(labels); })
+    // scanPhotos → aiFetch (creditSync) updates the credits badge per batch.
+    scanPhotos(input, function(labels) { labelHealth.applyAi(labels); })
       .then(function(all) {
         track("photos_scanned", { count: all.length });
         toast("Labeled " + all.length + (all.length === 1 ? " photo" : " photos"));
-        // Credits were deducted server-side (creditGate) — refetch so the
-        // header pill doesn't show a stale balance until next reload.
         refreshProfile();
       })
       .catch(function(e) {
         toast(e && e.message ? e.message : "Scan failed — try again");
       })
       .then(function() { setScanning(false); });
-  }, [scanning, user, pool, applyPhotoLabels, refreshProfile]);
+  }, [scanning, scanTargets, labelHealth.applyAi, refreshProfile]);
 
-  // Auto-heal loop: photos stuck with a stale/legacy category (e.g. "Object",
-  // written by the native app's old filename-guessing labeler before it moved
-  // to server-side Claude Vision) get silently re-scanned at NO charge to the
-  // user's credits, wherever they live (pool or already in a dump — see
-  // applyPhotoLabels). The fix is logged to the bug bin in the same call that
-  // makes it, closing the loop without a separate admin step. Runs once per
-  // session — autoHealTriggeredRef guards against re-firing as state settles.
-  var autoHealTriggeredRef = useRef(false);
-  useEffect(function() {
-    if (!user || autoHealTriggeredRef.current) return;
-    var stale = allWorkspacePhotos.filter(function(p) {
-      if (p.category === "Video") return false;
-      if (p.category === "" || p.category === "Uploaded") return true;
-      return VALID_CATEGORIES.indexOf(p.category.toUpperCase()) === -1;
-    });
-    if (stale.length === 0) return;
-    autoHealTriggeredRef.current = true;
-
-    var before = stale.map(function(p) { return { id: p.id, category: p.category }; });
-    var input = stale.map(function(p) { return { id: p.id, url: p.url }; });
-    autoScanPhotos(input, function(labels) { applyPhotoLabels(labels); })
-      .then(function(all) {
-        track("photos_auto_relabeled", { count: all.length });
-        logBug({
-          source: "auto-relabel",
-          message: "Auto re-scanned " + all.length + " photo(s) stuck with a stale/legacy category — no charge to the user.",
-          context: { before: before, after: all },
-          status: "fixed",
-          silent: true,
-        });
-      })
-      .catch(function(e) {
-        logBug({
-          source: "auto-relabel",
-          message: "Auto re-scan failed: " + (e && e.message ? e.message : "unknown error"),
-          context: { attempted: before },
-          silent: true,
-        });
-      });
-  }, [user, allWorkspacePhotos, applyPhotoLabels]);
+  // Auto-heal of unlabeled/stale photos (free, quota-bounded) now lives in the
+  // Label Health loop — see hooks/useLabelHealth.ts.
 
   var handleAICreateDumps = useCallback(function(clusters: SuggestedCluster[]) {
     createDumpsFromSuggestions(clusters);
@@ -752,7 +809,7 @@ function HomeContent() {
             </button>
           )}
           {user && <NotificationBell />}
-          <button
+          <button aria-label="Open menu"
             onClick={function(e) { e.stopPropagation(); setMenuOpen(true); }}
             style={{
               width: 36, height: 36, borderRadius: 9,
@@ -947,28 +1004,29 @@ function HomeContent() {
         <PoolPill
           active={poolTab}
           onChange={function(t) { setPoolTab(t); }}
-          photoCount={pool.length}
-          captionCount={captionCount}
         />
 
         {/* Sub-section header — left aligned below pill */}
         <div style={{ maxWidth: 1100, margin: "8px auto 18px", padding: "0 32px" }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "var(--accent)", marginBottom: 6 }}>
-            {poolTab === "photos" ? "PHOTO POOL" : "CAPTION POOL"}
+            {poolTab === "photos" ? "PHOTO POOL" : poolTab === "videos" ? "VIDEO POOL" : "CAPTION POOL"}
           </div>
           <h2 style={{ fontSize: "clamp(20px, 2.5vw, 28px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginBottom: 4 }}>
-            {poolTab === "photos" ? "Available Photos" : "Caption Library"}
+            {poolTab === "photos" ? "Available Photos" : poolTab === "videos" ? "Your Videos" : "Caption Library"}
           </h2>
           <div style={{ fontSize: 14, color: "#8a8a8a", fontStyle: "italic" as const }}>
             {poolTab === "photos"
               ? pool.length + " available · " + dumps.reduce(function(s, d) { return s + d.photos.length; }, 0) + " in dumps"
-              : captionCount + " captions in library"
+              : poolTab === "videos"
+                ? "Videos stay on this device"
+                : captionCount + " captions in library"
             }
           </div>
         </div>
 
-        {poolTab === "photos" ? (
+        {poolTab !== "captions" ? (
           <PhotoPool
+            videosOnly={poolTab === "videos"}
             photos={pool}
             dumps={dumps}
             duplicateIds={duplicatePhotoIds}
@@ -992,6 +1050,11 @@ function HomeContent() {
             onCancelDeleteMode={handleCancelDeleteMode}
             onScan={handleScanPhotos}
             scanning={scanning}
+            labelHealthChip={<LabelHealthChip health={labelHealth.health} fix={labelHealth.fix} onOpen={function() { setLabelHealthOpen(true); }} />}
+            videos={videos}
+            onOpenVideo={function(p) { setVideoSheetId(p.id); }}
+            onDeleteVideo={handleDeleteVideo}
+            onSetVideoTags={function(id, tags) { patchVideo(id, { tags: tags }); }}
           />
         ) : (
           <CaptionPool />
@@ -1012,7 +1075,7 @@ function HomeContent() {
         <div style={{ color: "#888", letterSpacing: "0.02em" }}>
           Dumpster &middot; Carousel Dump Builder
         </div>
-        <nav style={{ display: "flex", gap: 16, color: "#555" }}>
+        <nav style={{ display: "flex", gap: 16, color: "#8a8a8a" }}>
           <a href="/privacy" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
             Privacy
           </a>
@@ -1023,7 +1086,7 @@ function HomeContent() {
             Contact
           </a>
         </nav>
-        <div style={{ color: "#444", fontSize: "11px" }}>
+        <div style={{ color: "#8a8a8a", fontSize: "11px" }}>
           &copy; {new Date().getFullYear()} Dumpster. All rights reserved.
         </div>
       </footer>
@@ -1064,6 +1127,7 @@ function HomeContent() {
           }
           return set;
         }, [dumps])}
+        onOutOfCredits={function() { setOutOfCreditsAction("ai_suggest"); }}
       />
       <DumpActionSheet
         open={actionSheetDumpId !== null}
@@ -1109,6 +1173,35 @@ function HomeContent() {
       />
       <DragGhost />
       <PhotoLightbox photo={lightboxPhoto} onClose={function() { setLightboxPhoto(null); }} />
+      {labelHealthOpen && (
+        <LabelHealthSheet
+          health={labelHealth.health}
+          store={labelHealth.store}
+          fix={labelHealth.fix}
+          photos={allWorkspacePhotos}
+          onClose={function() { setLabelHealthOpen(false); }}
+          onRunFix={function() {
+            if (!user) { setAuthSheetOpen(true); toast("Sign in to fix labels"); return; }
+            void labelHealth.runFix(true);
+          }}
+          onFixOne={function(p) {
+            if (!user) { setAuthSheetOpen(true); return Promise.resolve("Sign in to fix labels"); }
+            return labelHealth.fixOne(p);
+          }}
+          onVerify={labelHealth.verify}
+          onEdit={labelHealth.editLabel}
+          onToggleAutoFix={labelHealth.setAutoFix}
+        />
+      )}
+      {videoSheetId && videos[videoSheetId] && videoUrls.current[videoSheetId] && (
+        <VideoSheet
+          video={videos[videoSheetId]}
+          url={videoUrls.current[videoSheetId]}
+          onClose={function() { setVideoSheetId(null); }}
+          onTrim={function(start, end) { patchVideo(videoSheetId!, { trimStart: start, trimEnd: end }); }}
+          onTrimmedCopy={function(blob, duration) { return handleTrimmedCopy(videoSheetId!, blob, duration); }}
+        />
+      )}
       <PhotoContextMenu
         photo={contextMenu ? contextMenu.photo : null}
         position={contextMenu ? contextMenu.position : null}
@@ -1130,6 +1223,7 @@ function HomeContent() {
         pool={pool}
         onClose={function() { setRecyclePhotoId(null); setRecycleDumpId(null); }}
         onSwap={function(dumpId, oldPhotoId, newPhotoId) { swapPhoto(dumpId, oldPhotoId, newPhotoId); toast("Photo swapped"); }}
+        onOutOfCredits={function() { setOutOfCreditsAction("ai_recycle"); }}
       />
       <WelcomeOverlay onUploadClick={scrollToPoolUpload} onTourClick={startTour} />
       <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} onVisibilityChange={setDemoBannerVisible} />
@@ -1157,9 +1251,34 @@ function HomeContent() {
         onClose={function() { setCreditsSheetOpen(false); }}
         onNeedAuth={function() { setCreditsSheetOpen(false); setAuthSheetOpen(true); }}
       />
+      {(function() {
+        var n = scanTargets.length;
+        var cost = n * CREDIT_COSTS.ai_label_per_photo;
+        var short = !!user && totalCredits < cost && import.meta.env.VITE_DISABLE_CREDIT_LIMIT !== "1";
+        var fx = labelHealth.fix;
+        var autoFixFree = labelHealth.store.autoFix && !(fx.kind === "paused" && Date.now() < fx.until);
+        return (
+          <AlertDialog open={scanConfirmOpen} onOpenChange={setScanConfirmOpen}>
+            <AlertDialogContent style={{ background: "#141414", border: "1px solid #2a2a2a", color: "#eee" }}>
+              <AlertDialogTitle>{"Scan " + n + " unlabeled " + (n === 1 ? "photo" : "photos") + "?"}</AlertDialogTitle>
+              <AlertDialogDescription style={{ color: "#aaa" }}>
+                {"This uses " + cost + (cost === 1 ? " credit" : " credits") + " (you have " + totalCredits + ")."}
+                {short && <><br /><span style={{ color: "#f87171" }}>{"You need " + (cost - totalCredits) + " more."}</span></>}
+                {autoFixFree && <><br />Auto-fix labels photos for free (daily limit applies).</>}
+              </AlertDialogDescription>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                {short && <AlertDialogAction onClick={function() { setOutOfCreditsAction("ai_label_per_photo"); }}>Get credits</AlertDialogAction>}
+                <AlertDialogAction disabled={short} onClick={runScan}>{"Confirm · " + cost + (cost === 1 ? " credit" : " credits")}</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        );
+      })()}
       <OutOfCreditsOverlay
         open={outOfCreditsAction !== null}
         action={outOfCreditsAction || ""}
+        cost={outOfCreditsAction === "ai_label_per_photo" ? scanTargets.length * CREDIT_COSTS.ai_label_per_photo : undefined}
         onClose={function() { setOutOfCreditsAction(null); }}
         onAuthClick={function() { setOutOfCreditsAction(null); setAuthSheetOpen(true); }}
         onProClick={function() { setOutOfCreditsAction(null); setCreditsSheetOpen(true); }}

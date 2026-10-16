@@ -3,6 +3,7 @@
  * preview what was found, then add selected items to the pool.
  */
 import { useState, useCallback, useEffect } from "react";
+import { aiFetch } from "@/lib/creditSync";
 import { X, Instagram, Search, Plus, Check, AlertCircle, Loader } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
@@ -46,7 +47,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
     setLoading(true);
     setError(null);
     try {
-      var res = await fetch("/api/ig-scrub", {
+      var res = await aiFetch("/api/ig-scrub", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ urls: lines }),
@@ -156,7 +157,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
               </div>
             </div>
           </div>
-          <button onClick={onClose} style={{
+          <button aria-label="Close" onClick={onClose} style={{
             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
             background: "#1a1a1a", border: "1px solid #2a2a2a",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -287,6 +288,8 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
                     <div
                       key={i}
                       onClick={function() { handleToggle(i); }}
+                      role="checkbox" aria-checked={isSelected} aria-label={"Image " + (i + 1)} tabIndex={0}
+                      onKeyDown={function(e) { if (e.key === " " || e.key === "Enter") { e.preventDefault(); handleToggle(i); } }}
                       style={{
                         position: "relative", cursor: "pointer", borderRadius: 10, overflow: "hidden",
                         border: "2px solid " + (isSelected ? "var(--accent)" : "#2a2a2a"),

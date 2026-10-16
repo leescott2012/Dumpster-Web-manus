@@ -16,15 +16,6 @@ export interface Task {
   timestamp: string;
 }
 
-export interface SystemMetrics {
-  coreTemp: number;
-  arcReactorPercent: number;
-  cpuUsage: number;
-  memoryUsage: number;
-  synapseLatency: number;
-  satelliteStatus: 'secured' | 'syncing' | 'offline';
-}
-
 export interface JarvisSettings {
   userName: string;
   accent: string;

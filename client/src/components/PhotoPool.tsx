@@ -10,6 +10,58 @@ import PhotoCard from "./PhotoCard";
 import { useDrag } from "@/contexts/DragContext";
 import type { Dump, Photo } from "@/lib/photoData";
 import { Plus, Play, Trash2, Sparkles, Loader2 } from "lucide-react";
+import { fmtTime, trimRange, type VideoMeta } from "@/lib/videoStore";
+import { CREDIT_COSTS } from "@/lib/credits";
+
+var VIDEO_TAGS = ["Outfit", "Travel", "Car", "Other"];
+
+// Duration (trimmed if set) + "trimmed" badges over a video card.
+function VideoBadges({ v }: { v: VideoMeta }) {
+  var r = trimRange(v);
+  var trimmed = v.trimStart != null || v.trimEnd != null;
+  var badge: React.CSSProperties = {
+    position: "absolute", background: "rgba(0,0,0,0.7)", borderRadius: "4px",
+    padding: "2px 6px", fontSize: "9px", fontWeight: 700, letterSpacing: "0.06em",
+    color: "#fff", pointerEvents: "none", fontVariantNumeric: "tabular-nums",
+  };
+  return (
+    <>
+      {v.duration > 0 && <div style={Object.assign({}, badge, { bottom: "6px", right: "6px" })}>{fmtTime(r[1] - r[0])}</div>}
+      {trimmed && <div style={Object.assign({}, badge, { top: "6px", left: "6px", background: "rgba(var(--accent-rgb),0.9)", color: "#0a0a0a" })}>TRIMMED</div>}
+    </>
+  );
+}
+
+// Small tag chips (presets + free text) under a video in the Videos view.
+function VideoTagChips({ v, onChange }: { v: VideoMeta; onChange: (tags: string[]) => void }) {
+  var [text, setText] = useState("");
+  var all = VIDEO_TAGS.concat(v.tags.filter(function(t) { return VIDEO_TAGS.indexOf(t) < 0; }));
+  var toggle = function(t: string) {
+    onChange(v.tags.indexOf(t) >= 0 ? v.tags.filter(function(x) { return x !== t; }) : v.tags.concat([t]));
+  };
+  var chip = function(on: boolean): React.CSSProperties {
+    return {
+      border: on ? "1px solid var(--accent)" : "1px solid #2a2a2a", borderRadius: "100px",
+      background: on ? "rgba(var(--accent-rgb),0.15)" : "transparent", color: on ? "var(--accent)" : "#8a8a8a",
+      padding: "2px 8px", fontSize: "10px", cursor: "pointer", fontFamily: "inherit",
+    };
+  };
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "4px", marginTop: "6px" }}>
+      {all.map(function(t) {
+        return <button key={t} aria-pressed={v.tags.indexOf(t) >= 0} onClick={function() { toggle(t); }} style={chip(v.tags.indexOf(t) >= 0)}>{t}</button>;
+      })}
+      <input value={text} placeholder="+ tag" maxLength={24}
+        onChange={function(e) { setText(e.target.value); }}
+        onKeyDown={function(e) {
+          var t = text.trim();
+          if (e.key === "Enter" && t) { if (v.tags.indexOf(t) < 0) onChange(v.tags.concat([t])); setText(""); }
+        }}
+        style={{ width: "60px", background: "transparent", border: "1px solid #2a2a2a", borderRadius: "100px", padding: "2px 8px", fontSize: "10px", color: "#ddd", fontFamily: "inherit", outline: "none" }}
+      />
+    </div>
+  );
+}
 
 type FilterMode = "all" | "starred" | "used" | "videos";
 type PoolSize = "S" | "M" | "L";
@@ -45,6 +97,12 @@ interface PhotoPoolProps {
   onCancelDeleteMode: () => void;
   onScan?: () => void;        // AI scan + label unlabeled photos
   scanning?: boolean;         // true while a scan is in flight
+  labelHealthChip?: React.ReactNode; // Label Health chip, shown next to Scan
+  videos?: Record<string, VideoMeta>;     // device-only Video Pool meta, by photo id
+  onOpenVideo?: (photo: Photo) => void;   // open the play/trim sheet
+  onDeleteVideo?: (id: string) => void;
+  onSetVideoTags?: (id: string, tags: string[]) => void;
+  videosOnly?: boolean;                   // Videos tab: lock filter to videos, hide chips
 }
 
 export default function PhotoPool({
@@ -52,14 +110,16 @@ export default function PhotoPool({
   selectionMode, selectedIds, onTogglePoolSelection, onConfirmSelection, onCancelSelection,
   targetDumpId, selectedPhotoId,
   deleteMode, selectedDeleteIds, onEnterDeleteMode, onToggleDeleteSelection, onConfirmDelete, onCancelDeleteMode,
-  onScan, scanning = false,
+  onScan, scanning = false, labelHealthChip,
+  videos = {}, onOpenVideo, onDeleteVideo, onSetVideoTags, videosOnly = false,
 }: PhotoPoolProps) {
   var poolRef = useRef<HTMLDivElement>(null);
   var fileInputRef = useRef<HTMLInputElement>(null);
   var { dragState } = useDrag();
   var [isOver, setIsOver] = useState(false);
   var isOverRef = useRef(false);
-  var [filter, setFilter] = useState<FilterMode>("all");
+  var [filterState, setFilter] = useState<FilterMode>("all");
+  var filter: FilterMode = videosOnly ? "videos" : filterState;
   var [poolSize, setPoolSize] = useState<PoolSize>(function() {
     var saved = localStorage.getItem(POOL_SIZE_KEY);
     return saved === "S" || saved === "M" || saved === "L" ? saved : "M";
@@ -136,6 +196,13 @@ export default function PhotoPool({
     if (fileInputRef.current) fileInputRef.current.click();
   };
 
+  // Enter/Space on a role="button" div.
+  var keyActivate = function(fn: () => void) {
+    return function(e: React.KeyboardEvent) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); }
+    };
+  };
+
   var handleFileChange = function(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files && e.target.files.length > 0) {
       onUploadPhotos(e.target.files);
@@ -202,9 +269,9 @@ export default function PhotoPool({
       {!selectionMode && !deleteMode && (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
           {/* Row 1 — filter chips, flush left */}
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "center" }}>
-            <button onClick={function() { setFilter("all"); }} style={filterBtnStyle(filter === "all")}>All</button>
-            <button onClick={function() { setFilter("starred"); }} style={filterBtnStyle(filter === "starred")}>
+          {!videosOnly && <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const, alignItems: "center" }}>
+            <button aria-pressed={filter === "all"} onClick={function() { setFilter("all"); }} style={filterBtnStyle(filter === "all")}>All</button>
+            <button aria-pressed={filter === "starred"} onClick={function() { setFilter("starred"); }} style={filterBtnStyle(filter === "starred")}>
               <span style={{ marginRight: "4px" }}>{"★"}</span>Starred
               {starredCount > 0 && (
                 <span style={{ marginLeft: "5px", background: "rgba(var(--accent-rgb),0.2)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
@@ -212,7 +279,7 @@ export default function PhotoPool({
                 </span>
               )}
             </button>
-            <button onClick={function() { setFilter("used"); }} style={filterBtnStyle(filter === "used")}>
+            <button aria-pressed={filter === "used"} onClick={function() { setFilter("used"); }} style={filterBtnStyle(filter === "used")}>
               <span style={{ marginRight: "4px" }}>{"✓"}</span>Used
               {usedCount > 0 && (
                 <span style={{ marginLeft: "5px", background: filter === "used" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
@@ -221,18 +288,18 @@ export default function PhotoPool({
               )}
             </button>
             {videoCount > 0 && (
-              <button onClick={function() { setFilter("videos"); }} style={filterBtnStyle(filter === "videos")}>
+              <button aria-pressed={filter === "videos"} onClick={function() { setFilter("videos"); }} style={filterBtnStyle(filter === "videos")}>
                 <Play size={10} style={{ marginRight: "4px" }} />Videos
                 <span style={{ marginLeft: "5px", background: filter === "videos" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
                   {videoCount}
                 </span>
               </button>
             )}
-          </div>
+          </div>}
 
-          {/* Row 2 — size toggle (left) + delete (right), both flush to edges */}
+          {/* Row 2— size toggle (left) + delete (right), both flush to edges */}
           {photos.length > 0 && (
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" as const }}>
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: "2px",
                 background: "rgba(255,255,255,0.04)", border: "1px solid #2a2a2a",
@@ -241,7 +308,7 @@ export default function PhotoPool({
                 {(["S", "M", "L"] as PoolSize[]).map(function(s) {
                   var active = poolSize === s;
                   return (
-                    <button key={s} onClick={function() { changeSize(s); }}
+                    <button key={s} aria-pressed={active} onClick={function() { changeSize(s); }}
                       aria-label={"Photo size " + s} title={"Photo size " + s}
                       style={{
                         width: "30px", height: "24px", borderRadius: "100px", border: "none",
@@ -255,7 +322,8 @@ export default function PhotoPool({
                   );
                 })}
               </div>
-              <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
+              <div style={{ display: "inline-flex", gap: "8px", alignItems: "center", flexWrap: "wrap" as const, justifyContent: "flex-end", marginLeft: "auto" }}>
+                {!videosOnly && labelHealthChip}
                 {onScan && (
                   <button
                     onClick={scanning ? undefined : onScan}
@@ -269,15 +337,16 @@ export default function PhotoPool({
                       display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
                       opacity: scanning ? 0.85 : 1,
                     }}
-                    title="Scan photos with AI and auto-label them"
+                    title="Scan photos with AI and auto-label them (1 credit per photo)"
                   >
                     {scanning
                       ? <Loader2 size={11} className="animate-spin" />
                       : <Sparkles size={11} />}
-                    {scanning ? "Scanning…" : "Scan"}
+                    {scanning ? "Scanning…" : "Scan · " + CREDIT_COSTS.ai_label_per_photo + " credit/photo"}
                   </button>
                 )}
                 <button
+                  className="pool-delete-btn"
                   onClick={onEnterDeleteMode}
                   style={{
                     background: "transparent", border: "1px solid #2a2a2a",
@@ -285,8 +354,6 @@ export default function PhotoPool({
                     cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
                     display: "inline-flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
                   }}
-                  onMouseEnter={function(e) { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
-                  onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#8a8a8a"; }}
                 >
                   <Trash2 size={11} />Select to Delete
                 </button>
@@ -339,11 +406,14 @@ export default function PhotoPool({
             var selIdx = selectedIds.indexOf(photo.id);
             var delIdx = selectedDeleteIds.indexOf(photo.id);
             var anyMode = selectionMode || deleteMode;
-            return (
+            var vm = photo.category === "Video" ? videos[photo.id] : undefined;
+            // Videos view: a tap opens the play/trim sheet instead of selecting.
+            var openOnTap = !!vm && filter === "videos" && !anyMode && onOpenVideo;
+            var card = (
               <PhotoCard key={photo.id} photo={photo} index={i}
                 source={{ type: "pool" }}
                 isSelected={selectionMode ? selIdx >= 0 : deleteMode ? delIdx >= 0 : selectedPhotoId === photo.id}
-                onSelect={selectionMode ? onTogglePoolSelection : deleteMode ? onToggleDeleteSelection : onSelectPhoto}
+                onSelect={openOnTap ? onOpenVideo! : selectionMode ? onTogglePoolSelection : deleteMode ? onToggleDeleteSelection : onSelectPhoto}
                 onDotsClick={anyMode ? undefined : onDotsClick}
                 onDoubleTap={anyMode ? undefined : onDoubleTapPhoto}
                 width={size.w} height={size.h} fill
@@ -354,11 +424,37 @@ export default function PhotoPool({
                 isDuplicate={duplicateIds ? duplicateIds.has(photo.id) : false}
               />
             );
+            if (!vm) return card;
+            return (
+              <div key={photo.id} style={{ minWidth: 0 }}>
+                <div style={{ position: "relative" }}>
+                  {card}
+                  <VideoBadges v={vm} />
+                </div>
+                {filter === "videos" && !anyMode && (
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "4px" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <VideoTagChips v={vm} onChange={function(tags) { if (onSetVideoTags) onSetVideoTags(photo.id, tags); }} />
+                    </div>
+                    {onDeleteVideo && (
+                      <button aria-label="Delete video" title="Delete video from this device"
+                        onClick={function() { if (window.confirm("Delete this video from this device?")) onDeleteVideo(photo.id); }}
+                        style={{ marginTop: "6px", background: "transparent", border: "1px solid #2a2a2a", borderRadius: "100px", padding: "3px 6px", color: "#8a8a8a", cursor: "pointer", display: "inline-flex" }}
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
           })}
 
           {/* Upload "+" card at end of pool */}
           {!selectionMode && !deleteMode && (
             <div data-tour="upload-card" onClick={handleUploadClick}
+              className="pool-add-card" role="button" tabIndex={0} aria-label="Add photos"
+              onKeyDown={keyActivate(handleUploadClick)}
               style={{
                 width: "100%", aspectRatio: size.w + " / " + size.h,
                 borderRadius: "10px", border: "2px dashed #2a2a2a",
@@ -367,8 +463,6 @@ export default function PhotoPool({
                 transition: "all 0.2s", background: "rgba(255,255,255,0.02)",
                 boxSizing: "border-box" as const,
               }}
-              onMouseEnter={function(e) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-              onMouseLeave={function(e) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#8a8a8a"; }}
             >
               <Plus size={28} strokeWidth={1.5} />
               <span style={{ marginTop: "6px", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>Add Photos</span>
@@ -384,7 +478,7 @@ export default function PhotoPool({
           {/* Prominent empty-pool onboarding state — only when filter is 'all' and pool is empty */}
           {displayPhotos.length === 0 && !selectionMode && filter === "all" && (
             <div
-              onClick={handleUploadClick}
+              onClick={handleUploadClick} className="pool-empty-card" role="button" tabIndex={0} onKeyDown={keyActivate(handleUploadClick)}
               style={{
                 gridColumn: "1 / -1",
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
@@ -395,8 +489,6 @@ export default function PhotoPool({
                 cursor: "pointer", transition: "all 0.2s",
                 textAlign: "center",
               }}
-              onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.08)"; e.currentTarget.style.borderColor = "var(--accent)"; }}
-              onMouseLeave={function(e) { e.currentTarget.style.background = "rgba(var(--accent-rgb),0.04)"; e.currentTarget.style.borderColor = "rgba(var(--accent-rgb),0.35)"; }}
             >
               <div style={{
                 width: 56, height: 56, borderRadius: 14,
@@ -433,7 +525,7 @@ export default function PhotoPool({
               but Cancel. Give an upload affordance instead. */}
           {displayPhotos.length === 0 && selectionMode && (
             <div
-              onClick={handleUploadClick}
+              onClick={handleUploadClick} className="pool-empty-card" role="button" tabIndex={0} onKeyDown={keyActivate(handleUploadClick)}
               style={{
                 gridColumn: "1 / -1",
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",

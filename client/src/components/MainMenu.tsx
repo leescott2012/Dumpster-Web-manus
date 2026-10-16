@@ -3,12 +3,13 @@
  * Full-screen dark overlay with staggered tab folders.
  * Tap a folder → sub-panel slides in from right.
  */
+import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 import {
   X, Sparkles, Archive, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Instagram,
   LogOut, User, Share2, Check, Cloud, CloudOff,
 } from "lucide-react";
-import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpStyles, saveDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, type DumpStyle } from "@/lib/captionPool";
+import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpStyles, saveDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, TASTE_PROFILE_MAX, AI_RULES_MAX, DUMP_STYLE_USED_BY, type DumpStyle } from "@/lib/captionPool";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -228,7 +229,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
               {activeTab ? null : "Tap a folder to open"}
             </div>
           </div>
-          <button
+          <button aria-label="Close menu"
             onClick={onClose}
             style={{
               width: 36, height: 36, borderRadius: "50%",
@@ -284,7 +285,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
                     {(profile?.subscription_tier === "pro" ? "PRO" : "FREE") + " · " + (profile ? (profile.credits + profile.daily_credits_remaining) : 0) + " credits"}
                   </div>
                 </div>
-                <button
+                <button aria-label="Sign out"
                   onClick={function() { signOut(); onClose(); }}
                   style={{
                     background: "none", border: "none", color: "#555",
@@ -654,7 +655,7 @@ function TasteProfileSection() {
             </div>
             <SaveStatusPill status={profileStatus} />
           </div>
-          <span style={{ fontSize: 10, color: "#555" }}>{profile.length}/750</span>
+          <span style={{ fontSize: 10, color: "#8a8a8a" }}>{profile.length + "/" + TASTE_PROFILE_MAX}</span>
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
           {isSignedIn
@@ -663,7 +664,7 @@ function TasteProfileSection() {
         </div>
         <textarea
           value={profile}
-          maxLength={750}
+          maxLength={TASTE_PROFILE_MAX}
           onChange={e => setProfile(e.target.value)}
           placeholder="dark editorial, gold accents, automotive, late-night, no clichés..."
           style={{
@@ -686,7 +687,7 @@ function TasteProfileSection() {
             </div>
             <SaveStatusPill status={rulesStatus} />
           </div>
-          <span style={{ fontSize: 10, color: "#555" }}>{rules.length}/500</span>
+          <span style={{ fontSize: 10, color: "#8a8a8a" }}>{rules.length + "/" + AI_RULES_MAX}</span>
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
           {isSignedIn
@@ -695,7 +696,7 @@ function TasteProfileSection() {
         </div>
         <textarea
           value={rules}
-          maxLength={500}
+          maxLength={AI_RULES_MAX}
           onChange={e => setRules(e.target.value)}
           placeholder={"no emojis\nno hashtags\nlowercase only"}
           style={{
@@ -735,6 +736,7 @@ function DumpStylesSection({ signedIn }: { signedIn: boolean }) {
   const [activeId, setActiveId] = useState<string>(() => loadActiveDumpStyleId());
   const [editId, setEditId] = useState<string>(() => loadActiveDumpStyleId() || (loadDumpStyles()[0] || { id: "" }).id);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [switched, setSwitched] = useState(false);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -772,6 +774,11 @@ function DumpStylesSection({ signedIn }: { signedIn: boolean }) {
     setStyles(next);
   }
   function activate(id: string) {
+    if (id !== activeId) {
+      const st = styles.find(s => s.id === id);
+      toast(st ? (st.name || "Untitled") + " style on" : "Dump style off");
+      setSwitched(true);
+    }
     setActiveId(id);
     saveActiveDumpStyleId(id);
     if (id) setEditId(id);
@@ -809,24 +816,33 @@ function DumpStylesSection({ signedIn }: { signedIn: boolean }) {
         Saved recipes for how the AI builds your dumps. The active one is used on every AI suggestion.
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-        <button type="button" onClick={() => activate("")} style={styleChip(!activeId)}>None</button>
+        <button type="button" aria-pressed={!activeId} onClick={() => activate("")} style={styleChip(!activeId)}>None</button>
         {styles.map(s => (
           <button
             key={s.id}
             type="button"
+            aria-pressed={s.id === activeId}
             onClick={() => activate(s.id)}
-            style={{ ...styleChip(s.id === activeId), outline: s.id === editId && s.id !== activeId ? "1px dashed #555" : "none" }}
+            style={{ ...styleChip(s.id === activeId), display: "inline-flex", alignItems: "center", gap: 6, outline: s.id === editId && s.id !== activeId ? "1px dashed #555" : "none" }}
           >
-            {s.name || "Untitled"}{s.id === activeId ? " · Active" : ""}
+            {s.name || "Untitled"}
+            {s.id === activeId && (
+              <span style={{ border: "1px solid #C8A06E", color: "#C8A06E", borderRadius: 999, padding: "0 6px", fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", lineHeight: "14px" }}>
+                ACTIVE
+              </span>
+            )}
           </button>
         ))}
         <button type="button" onClick={addStyle} style={{ ...styleChip(false), borderStyle: "dashed" }}>+ New style</button>
       </div>
+      {switched && (
+        <div role="status" style={{ fontSize: 11, color: "#C8A06E", marginBottom: 10 }}>{DUMP_STYLE_USED_BY}</div>
+      )}
       {editing && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <input value={editing.name} maxLength={40} onChange={e => edit("name", e.target.value)} placeholder="Style name (e.g. Fit check)" style={fieldStyle} />
-          <textarea value={editing.profile} maxLength={750} onChange={e => edit("profile", e.target.value)} placeholder="Recipe: structure, sequencing, poses, mix (e.g. open on a mirror fit, 2 detail shots, end on a candid)" style={{ ...fieldStyle, minHeight: 80, resize: "vertical" }} />
-          <textarea value={editing.rules} maxLength={500} onChange={e => edit("rules", e.target.value)} placeholder={"Rules for this style, one per line\nmax 8 photos\nno food shots"} style={{ ...fieldStyle, minHeight: 60, resize: "vertical" }} />
+          <textarea value={editing.profile} maxLength={TASTE_PROFILE_MAX} onChange={e => edit("profile", e.target.value)} placeholder="Recipe: structure, sequencing, poses, mix (e.g. open on a mirror fit, 2 detail shots, end on a candid)" style={{ ...fieldStyle, minHeight: 80, resize: "vertical" }} />
+          <textarea value={editing.rules} maxLength={AI_RULES_MAX} onChange={e => edit("rules", e.target.value)} placeholder={"Rules for this style, one per line\nmax 8 photos\nno food shots"} style={{ ...fieldStyle, minHeight: 60, resize: "vertical" }} />
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             {confirmDelete && (
               <button type="button" onClick={() => setConfirmDelete(false)} style={styleChip(false)}>Cancel</button>
@@ -1020,7 +1036,7 @@ function SocialMediaPanel() {
             </div>
             <div style={{
               fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
-              color: "#555", textTransform: "uppercase",
+              color: "#8a8a8a", textTransform: "uppercase",
               background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
               borderRadius: 6, padding: "4px 8px",
             }}>

@@ -2,7 +2,9 @@
  * Lightweight client-side event tracking.
  *
  * Events go directly to Supabase activity_log — fire-and-forget, never blocks
- * the UI. IS_OWNER accounts are excluded so demo usage stays out of the data.
+ * the UI. The owner's own account IS tracked (it used to be excluded, which is
+ * why the admin dashboard read 0 active users while the owner was using the
+ * app — fixed 2026-10-16). The dashboard tags the owner's row instead.
  *
  * Events tracked:
  *   session_start    — fired once per sign-in
@@ -12,7 +14,6 @@
  * Admin reads via /api/admin-stats (service_role — bypasses RLS).
  */
 import { supabase } from "./supabase";
-import { isOwnerId } from "./photoData";
 import { getCurrentUserId } from "./currentUser";
 
 export type AnalyticsEvent =
@@ -25,7 +26,7 @@ export type AnalyticsEvent =
 /**
  * Track a user event.
  * - Never await — always fire-and-forget.
- * - Silently no-ops when signed out or IS_OWNER.
+ * - Silently no-ops when signed out.
  */
 export function track(
   event: AnalyticsEvent,
@@ -33,7 +34,6 @@ export function track(
 ): void {
   var userId = getCurrentUserId();
   if (!userId) return;
-  if (isOwnerId(userId)) return; // keep the owner's own usage out of analytics
 
   supabase
     .from("activity_log")
