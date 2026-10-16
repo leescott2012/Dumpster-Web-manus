@@ -8,8 +8,10 @@ import { useState, useCallback, useEffect } from "react";
 import { X, Hand, Sparkles, Loader, Check } from "lucide-react";
 import { getAuthHeaders } from "@/lib/supabase";
 import type { Photo, Dump } from "@/lib/photoData";
-import { loadTasteProfile } from "@/lib/captionPool";
+import { buildTasteBlock } from "@/lib/captionPool";
 import { notVideo } from "@/lib/videoStore";
+import { friendlyError } from "@/lib/friendlyError";
+import { CREDIT_COSTS } from "@/lib/credits";
 
 interface RecycleSheetProps {
   open: boolean;
@@ -19,16 +21,19 @@ interface RecycleSheetProps {
   pool: Photo[];
   onClose: () => void;
   onSwap: (dumpId: string, oldPhotoId: string, newPhotoId: string) => void;
+  /** Opens the existing buy-credits flow (OutOfCreditsOverlay). */
+  onOutOfCredits?: () => void;
 }
 
 type Phase = "choose" | "manual" | "ai-loading" | "ai-done";
 
 export default function RecycleSheet({
-  open, photoId, dumpId, dumps, pool, onClose, onSwap,
+  open, photoId, dumpId, dumps, pool, onClose, onSwap, onOutOfCredits,
 }: RecycleSheetProps) {
   var [phase, setPhase] = useState<Phase>("choose");
   var [aiPickId, setAiPickId] = useState<string | null>(null);
   var [aiReason, setAiReason] = useState<string>("");
+  var [outOfCredits, setOutOfCredits] = useState(false);
 
   // Reset on open
   useEffect(function() {
@@ -36,6 +41,7 @@ export default function RecycleSheet({
       setPhase("choose");
       setAiPickId(null);
       setAiReason("");
+      setOutOfCredits(false);
     }
   }, [open]);
 
@@ -85,34 +91,45 @@ export default function RecycleSheet({
           }),
           history: [],
           message: "I want to recycle (swap out) the photo [" + photo.id + "] (" + photo.category + " — " + photo.alt + ") from this dump. Pick the BEST replacement from the pool that fits the dump's overall vibe and flow. Respond with a swap_out action for the photo's index and a swap_in action for your pick. Explain briefly why this replacement works better.",
-          tasteProfile: loadTasteProfile(),
+          tasteProfile: buildTasteBlock(), // profile + AI rules + active dump style, same as Valet
           vibe: dump.vibe || "",
         }),
       });
 
-      if (!res.ok) throw new Error("Server error");
-      var data = await res.json() as { reply: string; actions: Array<{ type: string; photoId?: string; index?: number }> };
+      // Read as text first — Vercel infra errors (413/504) are plain text.
+      var rawText = await res.text();
+      var data: { reply?: string; error?: string; code?: string; actions?: Array<{ type: string; photoId?: string; index?: number }> } = {};
+      try { data = JSON.parse(rawText); } catch { /* non-JSON infra error */ }
+      if (!res.ok) {
+        if (res.status === 402 || data.code === "insufficient_credits") {
+          setOutOfCredits(true);
+          setAiReason("You're out of credits for an AI pick. Top up, or pick one yourself.");
+        } else {
+          var fe = friendlyError(data.error || data.code || rawText || "HTTP " + res.status, "ai_recycle");
+          setAiReason(fe.hint ? fe.message + " " + fe.hint : fe.message);
+        }
+        setPhase("ai-done");
+        return;
+      }
 
-      // Find the swap_in action to get the AI's pick
-      var swapInAction = null;
-      for (var ai = 0; ai < (data.actions || []).length; ai++) {
-        if (data.actions[ai].type === "swap_in" && data.actions[ai].photoId) {
-          swapInAction = data.actions[ai];
+      // Find the swap_in action — only accept a photo that's really in the pool.
+      var pickId: string | null = null;
+      var actions = Array.isArray(data.actions) ? data.actions : [];
+      for (var ai = 0; ai < actions.length; ai++) {
+        var a = actions[ai];
+        if (a && a.type === "swap_in" && a.photoId && pool.some(function(p) { return p.id === a.photoId && notVideo(p); })) {
+          pickId = a.photoId;
           break;
         }
       }
 
-      if (swapInAction && swapInAction.photoId) {
-        setAiPickId(swapInAction.photoId);
-        setAiReason(data.reply);
-        setPhase("ai-done");
-      } else {
-        // AI didn't give a clear swap — fall through to show its reasoning
-        setAiReason(data.reply || "I couldn't find a good replacement. Try picking manually.");
-        setPhase("ai-done");
-      }
-    } catch {
-      setAiReason("Something went wrong. Try picking manually.");
+      setAiPickId(pickId);
+      // No valid swap — show the AI's reasoning (or a fallback) instead
+      setAiReason(data.reply || (pickId ? "" : "I couldn't find a good replacement. Try picking manually."));
+      setPhase("ai-done");
+    } catch (e) {
+      var fe2 = friendlyError(e, "ai_recycle");
+      setAiReason(fe2.hint ? fe2.message + " " + fe2.hint : fe2.message);
       setPhase("ai-done");
     }
   }, [dump, photo, pool]);
@@ -245,7 +262,7 @@ export default function RecycleSheet({
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: "#e8e8e8" }}>Let AI Choose</div>
                   <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 2 }}>
-                    {pool.length === 0 ? "Pool is empty" : "Best fit based on the dump's vibe"}
+                    {pool.length === 0 ? "Pool is empty" : "Best fit based on the dump's vibe · " + CREDIT_COSTS.ai_recycle + (CREDIT_COSTS.ai_recycle === 1 ? " credit" : " credits")}
                   </div>
                 </div>
               </button>
@@ -368,6 +385,18 @@ export default function RecycleSheet({
                     }}
                   >
                     <Check size={16} strokeWidth={3} /> Swap It
+                  </button>
+                )}
+                {outOfCredits && onOutOfCredits && (
+                  <button
+                    onClick={function() { onClose(); onOutOfCredits(); }}
+                    style={{
+                      flex: 1, background: "var(--accent)", color: "#000", border: "none",
+                      borderRadius: 12, padding: "14px", fontSize: 14, fontWeight: 700,
+                      cursor: "pointer", fontFamily: "inherit",
+                    }}
+                  >
+                    Get credits
                   </button>
                 )}
                 <button

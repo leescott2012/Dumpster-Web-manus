@@ -11,6 +11,10 @@
 // here so future UI work has the cost ready.
 // 1 credit = ~1¢ of real AI cost. Costs mirror server/dailyBudget.ts COST_CENTS
 // so we never charge a user fewer credits than the call costs us.
+// Valet chat cost. Recycle AI Pick calls the same /api/ai-chat endpoint, so
+// the server charges it ai_chat — both entries below MUST use this value.
+var VALET_COST = 1;
+
 export var CREDIT_COSTS: Record<string, number> = {
   // Captions
   ai_caption: 3,             // Claude Haiku vision — generates 3 captions (~3¢)
@@ -19,11 +23,11 @@ export var CREDIT_COSTS: Record<string, number> = {
   ai_suggest: 25,            // Claude Haiku vision — clusters pool into a dump (~25¢)
 
   // Chat
-  ai_chat: 1,                // Valet — chat to reorder / swap / set vibe (~1¢)
+  ai_chat: VALET_COST,       // Valet — chat to reorder / swap / set vibe (~1¢)
+  ai_recycle: VALET_COST,    // Recycle AI Pick — rides /api/ai-chat, charged as ai_chat
 
   // Planned — costs reserved for future endpoints (also ~1¢/credit)
   ai_caption_pro: 6,         // (planned) Sonnet caption upgrade
-  ai_recycle: 3,             // (planned) AI pick replacement photo (~3¢)
   ai_vibe: 5,                // (planned) Vibe analysis
   ai_rescan_batch: 20,       // (planned) Batch rescan 10 photos
 };

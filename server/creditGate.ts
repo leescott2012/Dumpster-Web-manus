@@ -47,7 +47,7 @@ var COSTS: Record<string, number> = {
   ai_caption: 3,  // Claude Haiku vision (~3¢)
   ai_label: 12,   // Claude Sonnet vision, up to 12 images per batch (~12¢)
   ai_chat: 1,     // Valet (~1¢)
-  ai_recycle: 3,  // (~3¢)
+  ai_recycle: 1,  // unused: Recycle AI Pick calls /api/ai-chat and is charged ai_chat
   ig_scrub: 5,    // Apify scraping costs us ~5¢/call — charge accordingly
 };
 

@@ -1221,6 +1221,7 @@ function HomeContent() {
         pool={pool}
         onClose={function() { setRecyclePhotoId(null); setRecycleDumpId(null); }}
         onSwap={function(dumpId, oldPhotoId, newPhotoId) { swapPhoto(dumpId, oldPhotoId, newPhotoId); toast("Photo swapped"); }}
+        onOutOfCredits={function() { setOutOfCreditsAction("ai_recycle"); }}
       />
       <WelcomeOverlay onUploadClick={scrollToPoolUpload} onTourClick={startTour} />
       <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} onVisibilityChange={setDemoBannerVisible} />
