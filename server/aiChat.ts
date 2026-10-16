@@ -5,6 +5,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { userAnthropicKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { publicAIError } from "./sentry.js";
 
@@ -80,7 +81,7 @@ export async function handleAIChat(
     return false;
   }
 
-  var apiKey = process.env.ANTHROPIC_API_KEY;
+  var apiKey = userAnthropicKey(req) || process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey === "your_anthropic_api_key_here") {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "ANTHROPIC_API_KEY is not configured." }));

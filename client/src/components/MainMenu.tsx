@@ -7,14 +7,15 @@ import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 import {
   X, Sparkles, Archive, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Instagram,
-  LogOut, User, Share2, Check, Cloud, CloudOff,
+  KeyRound, LogOut, User, Share2, Check, Cloud, CloudOff,
 } from "lucide-react";
 import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpStyles, saveDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, TASTE_PROFILE_MAX, AI_RULES_MAX, DUMP_STYLE_USED_BY, type DumpStyle } from "@/lib/captionPool";
+import ApiKeysCard from "./ApiKeysCard";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-type Tab = "ai" | "dumps" | "pool" | "appearance" | "about" | "social";
+type Tab = "ai" | "dumps" | "pool" | "appearance" | "about" | "social" | "keys";
 
 interface Folder {
   id: Tab;
@@ -146,6 +147,11 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
       id: "appearance", title: "APPEARANCE", tabColor: "var(--accent)",
       subtitle: "Accent color",
       icon: <Paintbrush size={18} strokeWidth={1.5} />,
+    },
+    {
+      id: "keys", title: "YOUR AI KEYS", tabColor: "var(--accent)",
+      subtitle: "Add & verify your own keys",
+      icon: <KeyRound size={18} strokeWidth={1.5} />,
     },
     {
       id: "social", title: "SOCIAL MEDIA", tabColor: "var(--accent)",
@@ -364,6 +370,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
               )}
               {activeTab === "about" && <AboutPanel onTour={onTour ? function() { onClose(); setTimeout(function() { if (onTour) onTour(); }, 400); } : undefined} />}
               {activeTab === "social" && <SocialMediaPanel />}
+              {activeTab === "keys" && <ApiKeysCard />}
             </div>
           )}
         </div>
