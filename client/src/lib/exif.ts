@@ -45,7 +45,7 @@ function decodeDimensions(file: File): Promise<{ w: number; h: number } | null> 
  * Returns an empty object if the file has no EXIF or parsing fails — never
  * throws, so callers can drop the result into the photo unconditionally.
  */
-export async function extractPhotoMeta(file: File): Promise<PhotoMeta> {
+export async function extractPhotoMeta(file: File, knownDims?: { w: number; h: number }): Promise<PhotoMeta> {
   // Bail fast for non-images — videos and screenshots have no useful EXIF.
   if (!file.type.startsWith("image/")) return {};
 
@@ -62,7 +62,8 @@ export async function extractPhotoMeta(file: File): Promise<PhotoMeta> {
   // are missing on PNGs, screenshots, and many re-saved JPEGs, and the duplicate
   // detector needs fileSize+w+h to recognize a re-uploaded file. Cheap + safe.
   try {
-    var dims = await decodeDimensions(file);
+    // Upload path passes dims from its own decode — avoids a 2nd full-res decode.
+    var dims = knownDims || await decodeDimensions(file);
     if (dims) { fallback.width = dims.w; fallback.height = dims.h; }
   } catch { /* dimensions are best-effort */ }
 

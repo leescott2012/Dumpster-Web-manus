@@ -42,7 +42,8 @@ import OutOfCreditsOverlay from "@/components/OutOfCreditsOverlay";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { loadCaptions, archiveCaptionsByText } from "@/lib/captionPool";
 import { findDuplicatePhotoIds, hashMissingPhotos } from "@/lib/photoDupes";
-import { downscaleImageToDataUrl } from "@/lib/imageDownscale";
+import { downscaleImageFile, HEIC_UNSUPPORTED } from "@/lib/imageDownscale";
+import { createLimiter, yieldToUI, isLowMemoryDevice } from "@/lib/uploadQueue";
 import { extractPhotoMeta } from "@/lib/exif";
 import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
 import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, scheduleArchivedDumpIdsSave, flushArchivedDumpIdsSave, setDumpPublic } from "@/lib/workspaceSync";
@@ -55,6 +56,13 @@ import LabelHealthSheet, { LabelHealthChip } from "@/components/LabelHealthSheet
 import { useLabelHealth } from "@/hooks/useLabelHealth";
 
 // Category taxonomy mirror (of server/aiLabel.ts CATEGORIES) lives in lib/labelHealth.ts.
+
+// Shared across uploads so two quick selections can't double the memory load.
+var LOW_MEM = isLowMemoryDevice();
+var photoLimit = createLimiter(LOW_MEM ? 2 : 4);
+var uploadLimit = createLimiter(LOW_MEM ? 2 : 4);
+var PHOTO_MAX_DIM = LOW_MEM ? 1600 : 2048;
+var MAX_PHOTO_BYTES = 40 * 1024 * 1024;
 
 function HomeContent() {
   var {
@@ -594,89 +602,89 @@ function HomeContent() {
   //   Guest:          data URL only — works offline but doesn't persist past the tab.
   // Photos are downscaled to ~2048px / JPEG 0.85 first so Claude Vision's
   // 5 MB per-image limit isn't exceeded and Storage egress stays low.
+  //
+  // Phones freeze/kill the tab if dozens of 12MP photos decode at once, so:
+  // photos go through a shared limiter (2 at a time on phones, 4 on desktop),
+  // each one decodes → EXIF → yields to the UI, and finished photos stream into
+  // the pool every few items while a "Processing 12/40…" toast counts up.
+  // Cloud uploads start per streamed batch on their own limiter.
   var handleUploadPhotos = useCallback(function(files: FileList) {
-    var total = files.length;
+    var list = Array.from(files); // copy — the <input> may be reset after onChange
+    var total = list.length;
     if (total === 0) return;
 
-    var hadAnyHeavy = Array.from(files).some(function(f) { return f.size > 1_500_000; });
-    if (hadAnyHeavy) {
-      toast("Processing " + total + (total === 1 ? " photo" : " photos") + "...");
+    var toastId = "upload-" + nanoid(6);
+    var done = 0, added = 0, failed = 0, heic = 0, tooBig = 0;
+    var buffer: Photo[] = [];
+    var lastFlush = Date.now();
+    var showProgress = total > 1 || list[0].size > 1_500_000;
+    if (showProgress) toast.loading("Processing 0/" + total + "…", { id: toastId });
+
+    // Signed-in: push bytes to Storage and swap in the durable HTTPS URL.
+    // Retries once; a failure keeps the data URL. Videos never upload.
+    function uploadOne(p: Photo) {
+      return uploadPhotoToCloud(p.id, p.url)
+        .then(function(u) { return u || uploadPhotoToCloud(p.id, p.url); })
+        .then(function(u) { if (u) replacePhotoUrl(p.id, u); });
     }
 
-    var tasks: Promise<Photo>[] = [];
-    for (var i = 0; i < total; i++) {
-      (function(file: File) {
-        var isVideo = file.type.startsWith("video/");
-        var photoId = "upload-" + nanoid(8);
-
-        if (isVideo) {
-          // videos are device-only by owner decision — saved to IndexedDB
-          // (videoStore), never uploaded. saveVideo never rejects.
-          tasks.push(saveVideo(file, { id: photoId }).then(function(rec) {
-            var url = URL.createObjectURL(file);
-            videoUrls.current[photoId] = url;
-            setVideos(function(prev) { var n = Object.assign({}, prev); n[photoId] = rec; return n; });
-            return { id: photoId, url: url, alt: file.name, isFavorite: false, category: "Video" } as Photo;
-          }));
-        } else {
-          // Extract EXIF from the ORIGINAL file in parallel with the downscale
-          // (downscale strips EXIF, so we have to read it before reencoding).
-          tasks.push(
-            Promise.all([
-              extractPhotoMeta(file),
-              downscaleImageToDataUrl(file),
-            ]).then(function(results) {
-              var meta = results[0];
-              var dataUrl = results[1];
-              return {
-                id: photoId, url: dataUrl, alt: file.name,
-                isFavorite: false, category: "Uploaded",
-                meta: meta,
-              } as Photo;
-            })
-          );
-        }
-      })(files[i]);
+    function flush() {
+      if (!buffer.length) return;
+      var batch = buffer; buffer = []; lastFlush = Date.now();
+      addUploadedPhotos(batch);
+      added += batch.length;
+      if (!user) return; // guest → stays device-local
+      batch.forEach(function(p) {
+        if (notVideo(p) && p.url.indexOf("data:") === 0) uploadLimit(function() { return uploadOne(p); });
+      });
     }
 
-    Promise.allSettled(tasks).then(function(results) {
-      var photos = results
-        .filter(function(r): r is PromiseFulfilledResult<Photo> { return r.status === "fulfilled"; })
-        .map(function(r) { return r.value; });
-      var failCount = results.length - photos.length;
-      if (photos.length === 0) {
-        toast("Couldn't process " + (failCount === 1 ? "that file" : "those files") + " — try again");
+    function settle(p: Photo | null) {
+      done++;
+      if (p) buffer.push(p);
+      if (buffer.length >= 4 || Date.now() - lastFlush > 700 || done === total) flush();
+      if (done < total) {
+        if (showProgress) toast.loading("Processing " + done + "/" + total + "…", { id: toastId });
         return;
       }
+      if (added) track("photo_uploaded", { count: added });
+      var notes: string[] = [];
+      if (heic) notes.push(heic + " HEIC photo" + (heic === 1 ? "" : "s") + " this browser can't open — use Safari or export as JPEG");
+      if (tooBig) notes.push(tooBig + " over 40 MB skipped");
+      if (failed) notes.push(failed + " couldn't be processed");
+      var msg = added
+        ? "Added " + added + (added === 1 ? " item" : " items") + " to pool"
+        : "Couldn't add " + (total === 1 ? "that file" : "those files");
+      if (notes.length) msg += " (" + notes.join("; ") + ")";
+      (added ? toast.success : toast.error)(msg, { id: toastId, duration: notes.length ? 8000 : 4000 });
+    }
 
-      // Show them in the pool right away (data URLs render instantly), then for
-      // signed-in users push each photo's bytes to Supabase Storage and swap in
-      // the durable HTTPS URL. This is what makes photos survive a refresh and
-      // appear on every device — the cloud holds the bytes, not just IndexedDB.
-      addUploadedPhotos(photos);
-      track("photo_uploaded", { count: photos.length });
-      var msg = "Added " + photos.length + (photos.length === 1 ? " item" : " items") + " to pool";
-      if (failCount > 0) msg += " (" + failCount + " couldn't be processed)";
-      toast(msg);
-
-      if (!user) return; // guest → stays device-local, nothing to upload
-
-      // Upload data-URL photos with limited concurrency, swapping each pool
-      // entry's url to the cloud URL as it lands. Failures keep the data URL.
-      // videos are device-only by owner decision — never uploaded.
-      var uploadable = photos.filter(function(p) { return notVideo(p) && p.url.indexOf("data:") === 0; });
-      var idx = 0;
-      function next(): Promise<void> {
-        if (idx >= uploadable.length) return Promise.resolve();
-        var p = uploadable[idx++];
-        return uploadPhotoToCloud(p.id, p.url).then(function(cloudUrl) {
-          if (cloudUrl) replacePhotoUrl(p.id, cloudUrl);
-        }).catch(function() { /* keep data URL */ }).then(next);
+    list.forEach(function(file) {
+      var photoId = "upload-" + nanoid(8);
+      if (file.type.startsWith("video/")) {
+        // videos are device-only by owner decision — saved to IndexedDB
+        // (videoStore), never uploaded. saveVideo never rejects. Not limited:
+        // no decode happens here.
+        saveVideo(file, { id: photoId }).then(function(rec) {
+          var url = URL.createObjectURL(file);
+          videoUrls.current[photoId] = url;
+          setVideos(function(prev) { var n = Object.assign({}, prev); n[photoId] = rec; return n; });
+          settle({ id: photoId, url: url, alt: file.name, isFavorite: false, category: "Video" } as Photo);
+        }, function() { failed++; settle(null); });
+        return;
       }
-      var LANES = 4;
-      var lanes: Promise<void>[] = [];
-      for (var L = 0; L < LANES; L++) lanes.push(next());
-      Promise.all(lanes); // fire-and-forget; state updates as each completes
+      if (file.size > MAX_PHOTO_BYTES) { tooBig++; settle(null); return; }
+      // ponytail: the limiter IS the queue — huge selections just wait their turn as cheap closures.
+      photoLimit(async function() {
+        var r = await downscaleImageFile(file, PHOTO_MAX_DIM);
+        // EXIF from the ORIGINAL file (downscale strips it), reusing decoded dims.
+        var meta = await extractPhotoMeta(file, r.width && r.height ? { w: r.width, h: r.height } : undefined);
+        await yieldToUI();
+        return { id: photoId, url: r.dataUrl, alt: file.name, isFavorite: false, category: "Uploaded", meta: meta } as Photo;
+      }).then(settle, function(e) {
+        if (e && e.message === HEIC_UNSUPPORTED) heic++; else failed++;
+        settle(null);
+      });
     });
   }, [addUploadedPhotos, replacePhotoUrl, user]);
 
