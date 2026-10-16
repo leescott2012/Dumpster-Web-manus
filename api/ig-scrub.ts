@@ -14,7 +14,7 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Anthropic from "@anthropic-ai/sdk";
-import { checkCredits } from "../server/creditGate.js";
+import { checkCredits, runCharged } from "../server/creditGate.js";
 import { captureServerError } from "../server/sentry.js";
 
 const IMAGE_EXT = /\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i;
@@ -66,9 +66,8 @@ async function scrapeWithApify(igUrls: string[]): Promise<{ items: ScrapedItem[]
   const items: ScrapedItem[] = [];
 
   for (const post of posts) {
-    const postUrl = post.url || post.shortCode
-      ? `https://www.instagram.com/p/${post.shortCode}/`
-      : undefined;
+    const postUrl = post.url
+      || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : undefined);
 
     if (post.type === "GraphSidecar" && Array.isArray(post.images) && post.images.length > 0) {
       // Carousel — extract each slide
@@ -269,6 +268,10 @@ Respond with ONLY the JSON object. No preamble, no markdown fences, no commentar
     }
   }
 
+  if (!parsed.styleDescription && !parsed.engagementPlaybook) {
+    return res.status(502).json({ error: "Couldn't analyze this profile. Try again." });
+  }
+
   return res.status(200).json({
     description: parsed.styleDescription ?? "",
     engagementPlaybook: parsed.engagementPlaybook ?? "",
@@ -298,7 +301,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const gate = await checkCredits(req, res, "ig_scrub");
   if (!gate.proceed) return;
 
-  const { urls, profileURL, resultsLimit } = req.body as {
+  // Same contract as the AI routes: refund unless we wrote a useful 200.
+  await runCharged(res, gate, "ig-scrub", () => runScrub(req, res, gate.userId));
+}
+
+async function runScrub(req: VercelRequest, res: VercelResponse, userId: string | null): Promise<boolean> {
+  const { urls, profileURL, resultsLimit } = (req.body || {}) as {
     urls?: string[];
     profileURL?: string;
     resultsLimit?: number;
@@ -307,15 +315,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Mode B: profile scrub (native "Generate from Instagram")
   if (typeof profileURL === "string" && profileURL) {
     try {
-      return await handleProfileScrub(req, res, profileURL, resultsLimit ?? 12);
+      await handleProfileScrub(req, res, profileURL, resultsLimit ?? 12);
+      return res.statusCode === 200;
     } catch (err) {
-      captureServerError(err, "ig-scrub.profile", { userId: gate.userId });
-      return res.status(500).json({ error: "Scrub failed" });
+      captureServerError(err, "ig-scrub.profile", { userId });
+      res.status(500).json({ error: "Scrub failed" });
+      return false;
     }
   }
 
   if (!urls || !Array.isArray(urls)) {
-    return res.status(400).json({ error: "urls array required" });
+    res.status(400).json({ error: "urls array required" });
+    return false;
   }
 
   try {
@@ -345,11 +356,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       errors.push(...apifyErrors);
     }
 
-    return res.status(200).json({ results, errors });
+    // An empty scrub (everything failed / nothing found) still returns 200 so
+    // the sheet can show the per-URL errors, but it isn't charged.
+    res.status(200).json({ results, errors });
+    return results.length > 0;
   } catch (err) {
     // Previously unhandled — an Apify/network failure here would 500 with no
     // observability at all (backend security audit, 2026-07-01).
-    captureServerError(err, "ig-scrub", { userId: gate.userId });
-    return res.status(500).json({ error: "Scrub failed" });
+    captureServerError(err, "ig-scrub", { userId });
+    res.status(500).json({ error: "Scrub failed" });
+    return false;
   }
 }
