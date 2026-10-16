@@ -136,6 +136,20 @@ export async function checkCredits(
 }
 
 /**
+ * Free auto-label abuse limits. The `auto` flag comes from the client, so the
+ * server can't prove a request is really system-initiated — instead the free
+ * path is bounded so abusing it is worth little:
+ *   - at most AUTO_LABEL_MAX_PER_REQUEST images per request (client batches 6);
+ *     larger requests get 429 `auto_label_limit` (client stops auto-healing);
+ *   - at most 60 images per user per rolling 24h (rateLimit.ts
+ *     `ai_label_auto_daily`, consumed one unit per image), same 429 code;
+ *   - plus the existing 3 requests / 10 min burst limit (`ai_label_auto`).
+ * Worst case ≈ 60 × ~2¢ ≈ $1.20/user/day, still inside the global $ breaker.
+ * Note: if Upstash env vars are missing, rate limits fail open (dev only).
+ */
+export var AUTO_LABEL_MAX_PER_REQUEST = 6;
+
+/**
  * Same gates as checkCredits (auth, rate limit, daily budget) but skips the
  * per-user credit deduction — for system-initiated actions that shouldn't
  * cost the user anything (e.g. auto re-labeling a photo stuck with a stale
@@ -145,7 +159,8 @@ export async function checkCredits(
 export async function checkAutoCredits(
   req: IncomingMessage,
   res: ServerResponse,
-  action: string
+  action: string,
+  imageCount: number
 ): Promise<{ userId: string | null; proceed: boolean; refund: () => Promise<void> }> {
   var userId = await getUserFromRequest(req);
   if (!userId) {
@@ -154,8 +169,23 @@ export async function checkAutoCredits(
     return { userId: null, proceed: false, refund: noopRefund };
   }
 
+  if (imageCount > AUTO_LABEL_MAX_PER_REQUEST) {
+    res.writeHead(429, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      error: "Too many photos for a free auto-scan (max " + AUTO_LABEL_MAX_PER_REQUEST + ").",
+      code: "auto_label_limit",
+    }));
+    return { userId: userId, proceed: false, refund: noopRefund };
+  }
+
   var rlOk = await enforceRateLimit(req, res, action, userId);
   if (!rlOk) return { userId: userId, proceed: false, refund: noopRefund };
+
+  var dailyOk = await enforceRateLimit(req, res, action + "_daily", userId, {
+    rate: Math.max(1, imageCount),
+    code: "auto_label_limit",
+  });
+  if (!dailyOk) return { userId: userId, proceed: false, refund: noopRefund };
 
   var budgetOk = await checkBudget(res);
   if (!budgetOk) return { userId: userId, proceed: false, refund: noopRefund };
