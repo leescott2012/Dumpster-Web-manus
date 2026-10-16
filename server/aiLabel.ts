@@ -11,7 +11,7 @@ import { fetchImageAsBase64 } from "./imageBase64.js";
 import { captureServerError } from "./sentry.js";
 
 export interface LabelPhotoInput { id: string; url: string }
-export interface LabelResult { id: string; category: string; label: string }
+export interface LabelResult { id: string; category: string; label: string; confidence?: number }
 
 const MAX_PHOTOS = 12; // per request — client chunks larger sets
 
@@ -54,7 +54,8 @@ export function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-export interface AILabelBody { photos?: LabelPhotoInput[]; auto?: boolean }
+// audit: Label Health's independent second opinion — differently-worded prompt, same gates.
+export interface AILabelBody { photos?: LabelPhotoInput[]; auto?: boolean; audit?: boolean }
 
 /**
  * `preParsedBody` lets the route wrapper read+parse the body itself first (to
@@ -80,9 +81,11 @@ export async function handleAILabel(
   }
 
   let photos: LabelPhotoInput[];
+  let audit = false;
   try {
     const parsed = preParsedBody ?? JSON.parse(await readBody(req));
     photos = Array.isArray(parsed.photos) ? parsed.photos.slice(0, MAX_PHOTOS) : [];
+    audit = parsed.audit === true;
   } catch {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Invalid JSON body" }));
@@ -115,8 +118,22 @@ Label rules — SPECIFICITY IS THE WHOLE JOB:
 - If you genuinely can't identify the specific subject, describe the most concrete visible details instead ("Neon-lit ramen bar", not "restaurant").
 - Match each result to the photo's id given before its image.
 
+Confidence: for each photo give "confidence", a number 0–1 for how sure you are the CATEGORY is right (0.9+ obvious, 0.6–0.9 likely, below 0.6 genuinely ambiguous). Be honest — low numbers are useful.
+
 Respond ONLY with valid JSON, no markdown, no code fences:
-{"labels":[{"id":"<id>","category":"<CATEGORY>","label":"<short label>"}]}`;
+{"labels":[{"id":"<id>","category":"<CATEGORY>","label":"<short label>","confidence":0.0}]}`;
+
+  // Independent second pass for Label Health audits — deliberately worded
+  // differently from the main prompt so agreement between the two means something.
+  const auditSystem = `You are reviewing a photo library. For each photo, imagine the owner browsing their collection by section: which ONE section would they expect to find this photo in? Decide from the main subject only, ignoring background details.
+
+Sections (answer with the UPPERCASE name):
+${CATEGORY_HINTS}
+
+Then name the subject in 2–5 concrete words (brand, color, dish, place — never "photo", "scene" or a lone generic noun), and rate 0–1 how sure you are of the section.
+
+Return ONLY JSON, nothing else:
+{"labels":[{"id":"<id>","category":"<SECTION>","label":"<subject>","confidence":0.0}]}`;
 
   type ContentBlock =
     | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string } }
@@ -147,7 +164,7 @@ Respond ONLY with valid JSON, no markdown, no code fences:
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 80 * usableIds.length + 250,
-      system,
+      system: audit ? auditSystem : system,
       messages: [{ role: "user", content }],
     });
 
@@ -163,7 +180,7 @@ Respond ONLY with valid JSON, no markdown, no code fences:
       const raw = typeof l.category === "string" ? l.category.toUpperCase() : "";
       const cat = CATEGORIES.indexOf(raw) >= 0 ? raw : FALLBACK_CATEGORY;
       const label = typeof l.label === "string" ? l.label.slice(0, 60) : "";
-      labels.push({ id: l.id, category: cat, label });
+      labels.push({ id: l.id, category: cat, label, confidence: typeof l.confidence === "number" ? Math.max(0, Math.min(1, l.confidence)) : undefined });
     }
 
     res.writeHead(200, { "Content-Type": "application/json" });

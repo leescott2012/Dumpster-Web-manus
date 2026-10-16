@@ -96,6 +96,7 @@ interface PhotoPoolProps {
   onCancelDeleteMode: () => void;
   onScan?: () => void;        // AI scan + label unlabeled photos
   scanning?: boolean;         // true while a scan is in flight
+  labelHealthChip?: React.ReactNode; // Label Health chip, shown next to Scan
   videos?: Record<string, VideoMeta>;     // device-only Video Pool meta, by photo id
   onOpenVideo?: (photo: Photo) => void;   // open the play/trim sheet
   onDeleteVideo?: (id: string) => void;
@@ -108,7 +109,7 @@ export default function PhotoPool({
   selectionMode, selectedIds, onTogglePoolSelection, onConfirmSelection, onCancelSelection,
   targetDumpId, selectedPhotoId,
   deleteMode, selectedDeleteIds, onEnterDeleteMode, onToggleDeleteSelection, onConfirmDelete, onCancelDeleteMode,
-  onScan, scanning = false,
+  onScan, scanning = false, labelHealthChip,
   videos = {}, onOpenVideo, onDeleteVideo, onSetVideoTags, videosOnly = false,
 }: PhotoPoolProps) {
   var poolRef = useRef<HTMLDivElement>(null);
@@ -288,7 +289,7 @@ export default function PhotoPool({
 
           {/* Row 2— size toggle (left) + delete (right), both flush to edges */}
           {photos.length > 0 && (
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" as const }}>
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: "2px",
                 background: "rgba(255,255,255,0.04)", border: "1px solid #2a2a2a",
@@ -311,7 +312,8 @@ export default function PhotoPool({
                   );
                 })}
               </div>
-              <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
+              <div style={{ display: "inline-flex", gap: "8px", alignItems: "center", flexWrap: "wrap" as const, justifyContent: "flex-end", marginLeft: "auto" }}>
+                {!videosOnly && labelHealthChip}
                 {onScan && (
                   <button
                     onClick={scanning ? undefined : onScan}
