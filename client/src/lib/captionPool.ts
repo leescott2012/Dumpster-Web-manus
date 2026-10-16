@@ -172,6 +172,13 @@ export function removeCaption(id: string): PoolCaption[] {
   return list.filter(c => !c.deleted);
 }
 
+/** Undo removeCaption: put back the row exactly as it was before the delete. */
+export function restoreCaption(prev: PoolCaption): PoolCaption[] {
+  const list = loadCaptionsRaw().map(c => c.id === prev.id ? prev : c);
+  saveCaptions(list);
+  return list.filter(c => !c.deleted);
+}
+
 /**
  * Mark a caption as used → archive it so it drops off the active list.
  * Reversible via the same toggle (un-archive). Returns the active list.
