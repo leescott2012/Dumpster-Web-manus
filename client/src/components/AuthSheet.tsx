@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { X, Loader } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import PhoneCodeForm from "@/components/PhoneCodeForm";
 
 interface AuthSheetProps {
   open: boolean;
@@ -12,10 +13,7 @@ interface AuthSheetProps {
 }
 
 export default function AuthSheet({ open, onClose }: AuthSheetProps) {
-  var { signInWithGoogle, signInWithApple, signInWithFacebook, requestPhoneOtp, verifyPhoneOtp } = useAuth();
-  var [phone, setPhone] = useState("");
-  var [code, setCode] = useState("");
-  var [codeSent, setCodeSent] = useState(false);
+  var { signInWithGoogle, signInWithApple, signInWithFacebook } = useAuth();
   var [error, setError] = useState<string | null>(null);
   var [loading, setLoading] = useState<string | null>(null);
 
@@ -30,27 +28,6 @@ export default function AuthSheet({ open, onClose }: AuthSheetProps) {
     if (provider === "facebook") result = await signInWithFacebook();
     setLoading(null);
     if (result.error) setError(result.error);
-  }
-
-  // US numbers by default: 10 digits -> +1XXXXXXXXXX; anything starting with + is used as typed.
-  function toE164(raw: string) {
-    var t = raw.trim();
-    if (t.charAt(0) === "+") return "+" + t.replace(/\D/g, "");
-    var d = t.replace(/\D/g, "");
-    if (d.length === 11 && d.charAt(0) === "1") return "+" + d;
-    return d.length === 10 ? "+1" + d : "";
-  }
-
-  async function handlePhone() {
-    setError(null);
-    var e164 = toE164(phone);
-    if (!e164) { setError("Enter a valid phone number, like 404 555 1234."); return; }
-    setLoading("phone");
-    var result = codeSent ? await verifyPhoneOtp(e164, code.trim()) : await requestPhoneOtp(e164);
-    setLoading(null);
-    if (result.error) { setError(result.error); return; }
-    if (!codeSent) setCodeSent(true);
-    else onClose();
   }
 
   return (
@@ -168,40 +145,8 @@ export default function AuthSheet({ open, onClose }: AuthSheetProps) {
             </button>
 
             {/* Phone */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4, paddingTop: 16, borderTop: "1px solid #1a1a1a" }}>
-              <input
-                type="tel" inputMode="tel" autoComplete="tel" placeholder="Phone number"
-                value={phone} disabled={codeSent || loading !== null}
-                onChange={function(e) { setPhone(e.target.value); }}
-                style={{ width: "100%", padding: "14px 16px", borderRadius: 12, background: "#141414", border: "1px solid #2a2a2a", color: "#e8e8e8", fontSize: 16, fontFamily: "inherit", boxSizing: "border-box" }}
-              />
-              {codeSent && (
-                <input
-                  type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="6-digit code"
-                  value={code} disabled={loading !== null}
-                  onChange={function(e) { setCode(e.target.value.replace(/\D/g, "")); }}
-                  style={{ width: "100%", padding: "14px 16px", borderRadius: 12, background: "#141414", border: "1px solid #2a2a2a", color: "#e8e8e8", fontSize: 16, letterSpacing: 4, fontFamily: "inherit", boxSizing: "border-box" }}
-                />
-              )}
-              <button
-                onClick={handlePhone}
-                disabled={loading !== null || (codeSent ? code.length < 6 : phone.trim().length < 10)}
-                style={{
-                  width: "100%", padding: "15px 20px", borderRadius: 12, background: "var(--accent)", border: "none",
-                  color: "#000", fontSize: 15, fontWeight: 700, fontFamily: "inherit",
-                  cursor: loading ? "wait" : "pointer", opacity: loading !== null ? 0.6 : 1,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                }}
-              >
-                {loading === "phone" && <Loader size={18} style={{ animation: "spin 0.8s linear infinite" }} />}
-                {codeSent ? "Verify code" : "Text me a code"}
-              </button>
-              {codeSent && (
-                <button onClick={function() { setCodeSent(false); setCode(""); setError(null); }}
-                  style={{ background: "none", border: "none", color: "#8a8a8a", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
-                  Wrong number? Go back
-                </button>
-              )}
+            <div style={{ marginTop: 4, paddingTop: 16, borderTop: "1px solid #1a1a1a" }}>
+              <PhoneCodeForm mode="signin" onDone={onClose} lockedHint="Or continue with Apple, Google or Facebook above." />
             </div>
           </div>
 
