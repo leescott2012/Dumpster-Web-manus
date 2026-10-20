@@ -10,6 +10,7 @@ import checkUsername from "../server/handlers/check-username.js";
 import connections from "../server/handlers/connections.js";
 import dm from "../server/handlers/dm.js";
 import notifications from "../server/handlers/notifications.js";
+import dumpComments from "../server/handlers/dump-comments.js";
 import dumpVisibility from "../server/handlers/dump-visibility.js";
 import iapVerify from "../server/handlers/iap-verify.js";
 import apiKeyTest from "../server/handlers/api-key-test.js";
@@ -25,6 +26,7 @@ const ROUTES: Record<string, Handler> = {
   "dm": dm as Handler,
   "notifications": notifications as Handler,
   "dump-visibility": dumpVisibility as Handler,
+  "dump-comments": dumpComments as Handler,
   "iap-verify": iapVerify as Handler,
   "apple-webhook": appleWebhook as Handler,
   "api-key-test": apiKeyTest as Handler,

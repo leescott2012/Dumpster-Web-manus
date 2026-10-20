@@ -54,6 +54,10 @@
       "destination": "/api/social?fn=dump-visibility"
     },
     {
+      "source": "/api/dump-comments",
+      "destination": "/api/social?fn=dump-comments"
+    },
+    {
       "source": "/api/iap-verify",
       "destination": "/api/social?fn=iap-verify"
     },

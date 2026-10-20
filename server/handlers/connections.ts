@@ -22,6 +22,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+function isDemoAccount(email: string | null | undefined): boolean {
+  return !!email && email.endsWith("@demo.dumpster.invalid");
+}
+
 function editDistance(a: string, b: string): number {
   const row = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {
@@ -73,6 +77,43 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ results: close, fuzzy: close.length > 0 });
   }
 
+  if (mode === "profile") {
+    // A connection's profile: their public dumps (all of them if it's you).
+    const targetId = String(req.query.userId || "");
+    if (!targetId) return res.status(400).json({ error: "userId required" });
+    if (targetId !== userId) {
+      const { data: link } = await supabaseAdmin
+        .from("connections").select("id").eq("status", "accepted")
+        .or(`and(requester_id.eq.${userId},addressee_id.eq.${targetId}),and(requester_id.eq.${targetId},addressee_id.eq.${userId})`)
+        .limit(1).maybeSingle();
+      if (!link) return res.status(403).json({ error: "Connect with this person to see their profile." });
+    }
+    const { data: prof } = await supabaseAdmin
+      .from("profiles").select("id, username, display_name, avatar_icon, avatar_color").eq("id", targetId).maybeSingle();
+    if (!prof) return res.status(404).json({ error: "User not found" });
+    let dq = supabaseAdmin.from("dumps").select("id, title, subtitle, created_at").eq("user_id", targetId).order("created_at", { ascending: false });
+    if (targetId !== userId) dq = dq.eq("public", true);
+    const { data: dumps } = await dq;
+    const dumpIds = (dumps ?? []).map((d) => d.id);
+    const { data: links } = dumpIds.length
+      ? await supabaseAdmin.from("dump_photos").select("dump_id, photo_id, order").in("dump_id", dumpIds).order("order")
+      : { data: [] as { dump_id: string; photo_id: string; order: number | null }[] };
+    const photoIds = Array.from(new Set((links ?? []).map((l) => l.photo_id)));
+    const { data: photos } = photoIds.length
+      ? await supabaseAdmin.from("photos").select("id, url, label").in("id", photoIds)
+      : { data: [] as { id: string; url: string; label: string | null }[] };
+    const photoById = new Map((photos ?? []).map((p) => [p.id, p]));
+    const { data: counts } = dumpIds.length
+      ? await supabaseAdmin.from("dump_comments").select("dump_id").in("dump_id", dumpIds)
+      : { data: [] as { dump_id: string }[] };
+    const out = (dumps ?? []).map((d) => ({
+      id: d.id, title: d.title, subtitle: d.subtitle,
+      photos: (links ?? []).filter((l) => l.dump_id === d.id).map((l) => photoById.get(l.photo_id)).filter(Boolean),
+      commentCount: (counts ?? []).filter((c) => c.dump_id === d.id).length,
+    }));
+    return res.status(200).json({ profile: prof, dumps: out });
+  }
+
   // mode === "list"
   const { data, error } = await supabaseAdmin
     .from("connections")
@@ -112,7 +153,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 
   const { data: target, error: lookupError } = await supabaseAdmin
     .from("profiles")
-    .select("id")
+    .select("id, email")
     .ilike("username", username)
     .maybeSingle();
   if (lookupError) return res.status(500).json({ error: lookupError.message });
@@ -121,7 +162,10 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 
   const { data, error } = await supabaseAdmin
     .from("connections")
-    .insert({ requester_id: userId, addressee_id: target.id, status: "pending" })
+    // Seeded demo friend (can't sign in to accept) auto-accepts so the profile + comments flow is testable.
+    .insert(isDemoAccount(target.email)
+      ? { requester_id: userId, addressee_id: target.id, status: "accepted", responded_at: new Date().toISOString() }
+      : { requester_id: userId, addressee_id: target.id, status: "pending" })
     .select("id")
     .single();
   if (error) {
