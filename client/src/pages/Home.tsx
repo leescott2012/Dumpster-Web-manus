@@ -30,6 +30,7 @@ import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
 import AuthSheet from "@/components/AuthSheet";
 import PhoneGate from "@/components/PhoneGate";
+import PinGate from "@/components/PinGate";
 import OnboardingFlow from "@/components/OnboardingFlow";
 import NotificationBell from "@/components/NotificationBell";
 import ConnectionsPanel from "@/components/ConnectionsPanel";
@@ -1230,6 +1231,7 @@ function HomeContent() {
       <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} onVisibilityChange={setDemoBannerVisible} />
       <GuidedTour active={tourActive} onEnd={endTour} />
       {user && !user.phone && <PhoneGate />}
+      {user && user.phone && <PinGate />}
       <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} />
       <OnboardingFlow
         open={onboardingOpen}
