@@ -1123,6 +1123,7 @@ function HomeContent() {
         onIGScrub={function() { setIGScrubOpen(true); }}
         onTour={startTour}
         onSignIn={function() { setAuthSheetOpen(true); }}
+        onFriends={function() { if (user) setConnectionsOpen(true); else setAuthSheetOpen(true); }}
         dumpCount={dumps.length}
         poolCount={pool.length}
       />
