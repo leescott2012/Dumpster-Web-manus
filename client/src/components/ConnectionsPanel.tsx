@@ -24,6 +24,8 @@ export default function ConnectionsPanel({ open, onClose, myUserId }: Connection
   var [query, setQuery] = useState("");
   var [results, setResults] = useState<Profile[]>([]);
   var [searching, setSearching] = useState(false);
+  var [searched, setSearched] = useState(""); // query the current results belong to
+  var [fuzzy, setFuzzy] = useState(false);
   var [connections, setConnections] = useState<ConnectionRow[]>([]);
   var [sentTo, setSentTo] = useState<Set<string>>(new Set());
   var [dmWith, setDmWith] = useState<Profile | null>(null);
@@ -40,16 +42,18 @@ export default function ConnectionsPanel({ open, onClose, myUserId }: Connection
   useEffect(function () {
     if (!open) return;
     if (timerRef.current) clearTimeout(timerRef.current);
-    var q = query.trim();
-    if (q.length < 2) { setResults([]); return; }
+    var q = query.trim().replace(/^@+/, "");
+    if (q.length < 1) { setResults([]); setSearched(""); setFuzzy(false); setSearching(false); return; }
     setSearching(true);
     timerRef.current = setTimeout(async function () {
       var headers = await getAuthHeaders();
       var res = await fetch("/api/connections?mode=search&q=" + encodeURIComponent(q), { headers: headers });
-      var data = await res.json();
+      var data = res.ok ? await res.json() : {};
       setResults(data.results || []);
+      setFuzzy(!!data.fuzzy);
+      setSearched(q);
       setSearching(false);
-    }, 350);
+    }, 200);
   }, [query, open]);
 
   if (!open) return null;
@@ -127,6 +131,12 @@ export default function ConnectionsPanel({ open, onClose, myUserId }: Connection
             />
             {searching && <Loader size={14} color="#666" style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", animation: "spin 0.8s linear infinite" }} />}
           </div>
+          {!searching && searched && searched === query.trim().replace(/^@+/, "") && results.length === 0 && (
+            <div style={{ fontSize: 12, color: "#777", padding: "0 0 20px" }}>No one found for @{searched}. Check the spelling — try fewer letters.</div>
+          )}
+          {results.length > 0 && fuzzy && (
+            <div style={{ fontSize: 11, color: "#777", marginBottom: 6 }}>No exact match for @{searched} — did you mean:</div>
+          )}
           {results.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               {results.map(function (p) {
