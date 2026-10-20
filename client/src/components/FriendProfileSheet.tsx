@@ -14,6 +14,7 @@ interface Comment { id: string; body: string; created_at: string; mine: boolean;
 
 export default function FriendProfileSheet({ person, onClose }: { person: Person | null; onClose: () => void }) {
   var [dumps, setDumps] = useState<FriendDump[] | null>(null);
+  var [displayName, setDisplayName] = useState("");
   var [error, setError] = useState("");
   var [open, setOpen] = useState<FriendDump | null>(null);
   var [comments, setComments] = useState<Comment[]>([]);
@@ -26,7 +27,7 @@ export default function FriendProfileSheet({ person, onClose }: { person: Person
     getAuthHeaders().then(function (h) {
       return fetch("/api/connections?mode=profile&userId=" + encodeURIComponent(person!.id), { headers: h });
     }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-      .then(function (x) { if (x.ok) setDumps(x.d.dumps || []); else setError(x.d.error || "Couldn't load this profile."); })
+      .then(function (x) { if (x.ok) { setDumps(x.d.dumps || []); setDisplayName((x.d.profile && x.d.profile.display_name) || ""); } else setError(x.d.error || "Couldn't load this profile."); })
       .catch(function () { setError("Couldn't load this profile."); });
   }, [person && person.id]);
 
@@ -59,7 +60,7 @@ export default function FriendProfileSheet({ person, onClose }: { person: Person
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", zIndex: 650 }} />
       <div style={{
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 651, background: "#0e0e0e", borderTop: "1px solid #2a2a2a",
-        borderRadius: "20px 20px 0 0", overflow: "hidden", height: "88vh", display: "flex", flexDirection: "column",
+        borderRadius: "20px 20px 0 0", overflow: "hidden", height: "95vh", maxWidth: 680, margin: "0 auto", display: "flex", flexDirection: "column",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", borderBottom: "1px solid #1a1a1a", flexShrink: 0 }}>
           {open && (
@@ -73,21 +74,49 @@ export default function FriendProfileSheet({ person, onClose }: { person: Person
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+          {!open && (
+            <div style={{ textAlign: "center", padding: "8px 0 22px" }}>
+              <div style={{
+                width: 84, height: 84, borderRadius: "50%", margin: "0 auto 12px",
+                background: "linear-gradient(135deg, " + (person.avatar_color || "#C8A96E") + ", #1a1a1a)",
+                border: "2px solid var(--accent)", boxShadow: "0 8px 28px rgba(0,0,0,0.5)",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 800, color: "#0e0e0e",
+              }}>{(person.username || "?").slice(0, 1).toUpperCase()}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>@{person.username}</div>
+              {displayName && <div style={{ fontSize: 13, color: "#8a8a8a", marginTop: 2 }}>{displayName}</div>}
+              {dumps && (
+                <div style={{ display: "flex", justifyContent: "center", gap: 28, marginTop: 14 }}>
+                  {[
+                    [dumps.length, "Dumps"],
+                    [dumps.reduce(function (n, d) { return n + d.photos.length; }, 0), "Photos"],
+                    [dumps.reduce(function (n, d) { return n + d.commentCount; }, 0), "Comments"],
+                  ].map(function (st) {
+                    return (
+                      <div key={String(st[1])}>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>{st[0]}</div>
+                        <div style={{ fontSize: 10, color: "#777", letterSpacing: "0.08em", textTransform: "uppercase" }}>{st[1]}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
           {error && <div style={{ color: "#999", fontSize: 13 }}>{error}</div>}
           {!error && dumps === null && <Loader size={16} color="#666" style={{ animation: "spin 0.8s linear infinite" }} />}
           {dumps && dumps.length === 0 && !open && <div style={{ color: "#777", fontSize: 13 }}>@{person.username} hasn't shared any dumps yet.</div>}
 
           {!open && dumps && dumps.map(function (d) {
             return (
-              <button key={d.id} onClick={function () { openDump(d); }} style={{ ...card, display: "block", width: "100%", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
-                <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 10 }}>
-                  {d.photos.slice(0, 5).map(function (p) {
-                    return <img key={p.id} src={p.url} alt={p.label || ""} loading="lazy" style={{ width: 74, height: 96, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />;
+              <button key={d.id} onClick={function () { openDump(d); }} style={{ ...card, display: "block", width: "100%", textAlign: "left", cursor: "pointer", fontFamily: "inherit", padding: 14, borderRadius: 18 }}>
+                <div style={{ display: "flex", gap: 10, overflowX: "auto", marginBottom: 12, scrollSnapType: "x mandatory" }}>
+                  {d.photos.slice(0, 6).map(function (p) {
+                    return <img key={p.id} src={p.url} alt={p.label || ""} loading="lazy" style={{ width: 168, height: 216, objectFit: "cover", borderRadius: 12, flexShrink: 0, scrollSnapAlign: "start" }} />;
                   })}
                 </div>
-                <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>{d.title}</div>
-                {d.subtitle && <div style={{ color: "#8a8a8a", fontSize: 12 }}>{d.subtitle}</div>}
-                <div style={{ color: "var(--accent)", fontSize: 11, marginTop: 6 }}>
+                <div style={{ color: "#fff", fontSize: 17, fontWeight: 800, letterSpacing: "-0.01em" }}>{d.title}</div>
+                {d.subtitle && <div style={{ color: "#8a8a8a", fontSize: 13, marginTop: 2 }}>{d.subtitle}</div>}
+                <div style={{ color: "var(--accent)", fontSize: 12, fontWeight: 600, marginTop: 8 }}>
                   {d.photos.length + " photos · " + (d.commentCount ? d.commentCount + " comment" + (d.commentCount === 1 ? "" : "s") : "Tap to comment")}
                 </div>
               </button>
@@ -96,9 +125,14 @@ export default function FriendProfileSheet({ person, onClose }: { person: Person
 
           {open && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 18 }}>
-                {open.photos.map(function (p) {
-                  return <img key={p.id} src={p.url} alt={p.label || ""} loading="lazy" style={{ width: "100%", aspectRatio: "4 / 5", objectFit: "cover", borderRadius: 8 }} />;
+              <div style={{ display: "flex", gap: 12, overflowX: "auto", scrollSnapType: "x mandatory", margin: "0 -20px 18px", padding: "0 20px" }}>
+                {open.photos.map(function (p, i) {
+                  return (
+                    <div key={p.id} style={{ position: "relative", flexShrink: 0, width: "82%", maxWidth: 420, scrollSnapAlign: "center" }}>
+                      <img src={p.url} alt={p.label || ""} loading="lazy" style={{ width: "100%", aspectRatio: "4 / 5", objectFit: "cover", borderRadius: 16, display: "block" }} />
+                      <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.6)", borderRadius: 100, padding: "3px 9px", fontSize: 11, color: "#fff" }}>{(i + 1) + " / " + open!.photos.length}</div>
+                    </div>
+                  );
                 })}
               </div>
               <div style={{ color: "#8a8a8a", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>Ideas &amp; comments</div>
