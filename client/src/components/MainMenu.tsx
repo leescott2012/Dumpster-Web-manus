@@ -77,6 +77,7 @@ export function initAccent() {
 
 export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, onTour, onSignIn, onFriends, dumpCount, poolCount }: MainMenuProps) {
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
+  const edgeSwipe = useRef<{ x: number; y: number } | null>(null); // left-edge swipe = back to the folder list
   const [visible, setVisible] = useState(false);
   const [accent, setAccent] = useState(loadAccent);
   const { user, profile, signOut } = useAuth();
@@ -161,7 +162,15 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
   if (!open && !visible) return null;
 
   return (
-    <div style={{
+    <div
+      onTouchStart={function(e) { var t = e.touches[0]; edgeSwipe.current = t.clientX < 32 ? { x: t.clientX, y: t.clientY } : null; }}
+      onTouchEnd={function(e) {
+        var st = edgeSwipe.current; edgeSwipe.current = null;
+        if (!st || !activeTab) return;
+        var t = e.changedTouches[0];
+        if (t.clientX - st.x > 70 && Math.abs(t.clientY - st.y) < 80) setActiveTab(null);
+      }}
+      style={{
       position: "fixed", inset: 0, zIndex: 500,
       display: "flex", alignItems: "stretch",
     }}>
