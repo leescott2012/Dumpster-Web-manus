@@ -16,6 +16,9 @@ interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   actions?: ChatAction[];
+  proposed?: boolean;                        // suggested by the Valet, waiting for the user to tap Apply
+  undo?: { ids: string[]; vibe: string };    // dump as it was before these actions ran
+  undone?: boolean;
 }
 
 interface ChatAction {
@@ -133,6 +136,46 @@ export default function DumpChatSheet({
     }
   }, [onReorder, onSwapIn, onSwapOut, onUpdateVibe]);
 
+  function snapshotDump(d: Dump) {
+    return { ids: d.photos.map(function(p) { return p.id; }), vibe: d.vibe || "" };
+  }
+
+  // Tap Apply on a suggestion: run its actions, keep a snapshot so Undo works.
+  var applyMessage = useCallback(function(idx: number) {
+    if (!dump) return;
+    var msg = messages[idx];
+    if (!msg || !msg.actions) return;
+    var next = messages.map(function(m, i) {
+      return i === idx ? Object.assign({}, m, { proposed: false, undo: snapshotDump(dump) }) : m;
+    });
+    executeActions(msg.actions, dump);
+    setMessages(next);
+    saveChatHistory(dump.id, next);
+    onChatHistoryChange?.(dump.id, next.slice(-20));
+  }, [dump, messages, executeActions, onChatHistoryChange]);
+
+  // Put the dump back the way it was before the actions ran.
+  var undoMessage = useCallback(function(idx: number) {
+    if (!dump) return;
+    var msg = messages[idx];
+    if (!msg || !msg.undo) return;
+    var orig = msg.undo.ids;
+    for (var i = dump.photos.length - 1; i >= 0; i--) {
+      if (orig.indexOf(dump.photos[i].id) < 0) onSwapOut(dump.id, i);
+    }
+    var have = dump.photos.map(function(p) { return p.id; });
+    for (var j = 0; j < orig.length; j++) {
+      if (have.indexOf(orig[j]) < 0) onSwapIn(orig[j], dump.id, j);
+    }
+    onReorder(dump.id, orig);
+    onUpdateVibe(dump.id, msg.undo.vibe);
+    var next = messages.map(function(m, k) { return k === idx ? Object.assign({}, m, { undone: true }) : m; });
+    setMessages(next);
+    saveChatHistory(dump.id, next);
+    onChatHistoryChange?.(dump.id, next.slice(-20));
+    toast("Undone");
+  }, [dump, messages, onSwapOut, onSwapIn, onReorder, onUpdateVibe, onChatHistoryChange]);
+
   var resolvePref = useCallback(function(pref: string, save: boolean) {
     setPendingPrefs(function(prev) { return prev.filter(function(p) { return p !== pref; }); });
     if (!save) return;
@@ -142,7 +185,7 @@ export default function DumpChatSheet({
     else if (result === "full") toast("Taste Profile is full — trim it in the menu first");
   }, []);
 
-  var sendMessage = useCallback(async function(messageText: string) {
+  var sendMessage = useCallback(async function(messageText: string, askFirst?: boolean) {
     if (!messageText.trim() || !dump || loading) return;
 
     var userMsg: ChatMessage = { role: "user", text: messageText.trim() };
@@ -189,9 +232,14 @@ export default function DumpChatSheet({
         actions: data.actions && data.actions.length > 0 ? data.actions : undefined,
       };
 
-      // Execute actions on the dump
+      // Execute actions on the dump — unless the Valet is only suggesting (rules changed).
       if (data.actions && data.actions.length > 0) {
-        executeActions(data.actions, dump);
+        if (askFirst) {
+          assistantMsg.proposed = true;
+        } else {
+          assistantMsg.undo = snapshotDump(dump);
+          executeActions(data.actions, dump);
+        }
       }
 
       var finalMessages = newMessages.concat([assistantMsg]);
@@ -230,6 +278,24 @@ export default function DumpChatSheet({
     var timer = setTimeout(function() { sendMessage(initialMessage); }, 300);
     return function() { clearTimeout(timer); };
   }, [open, dump, initialMessage, sendMessage]);
+
+  // Rules / style changed since this dump was last opened: have the Valet review the dump
+  // and suggest changes (ask first — nothing moves until the user taps Apply).
+  var rulesCheckedRef = useRef<string | null>(null);
+  useEffect(function() {
+    if (!(open && dump) || rulesCheckedRef.current === dump.id) return;
+    rulesCheckedRef.current = dump.id;
+    var key = "dumpster_valet_rules_seen_" + dump.id;
+    var sig = buildTasteBlock();
+    var seen: string | null = null;
+    try { seen = localStorage.getItem(key); if (seen === null) localStorage.setItem(key, sig); } catch {}
+    if (seen === null || seen === sig || dump.photos.length === 0) return;
+    var timer = setTimeout(function() {
+      try { localStorage.setItem(key, sig); } catch {}
+      sendMessage("My AI rules or dump style changed. Check this dump against my current rules. Don't change anything yet: tell me what doesn't fit, suggest fixes, or ask me a question first.", true);
+    }, 400);
+    return function() { clearTimeout(timer); rulesCheckedRef.current = null; };
+  }, [open, dump, sendMessage]);
 
   var handleKeyDown = useCallback(function(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -421,6 +487,19 @@ export default function DumpChatSheet({
                       })}
                     </div>
                   )}
+
+                  {/* Ask-first suggestion → Apply; applied changes → Undo */}
+                  {msg.proposed && (
+                    <button type="button" onClick={function() { applyMessage(i); }} style={{ marginTop: 8, padding: "6px 12px", borderRadius: 999, border: "1px solid var(--accent)", background: "rgba(var(--accent-rgb),0.15)", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                      Apply these changes
+                    </button>
+                  )}
+                  {msg.undo && !msg.proposed && !msg.undone && (
+                    <button type="button" onClick={function() { undoMessage(i); }} style={{ marginTop: 8, padding: "6px 12px", borderRadius: 999, border: "1px solid #2a2a2a", background: "#0a0a0a", color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                      Undo
+                    </button>
+                  )}
+                  {msg.undone && <div style={{ marginTop: 8, fontSize: 10, color: "#8a8a8a" }}>Undone</div>}
                 </div>
               </div>
             );

@@ -593,6 +593,7 @@ function TasteProfileSection() {
   const profileSavedHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rulesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rulesSavedHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [openRule, setOpenRule] = useState<number | null>(null);
   const profileInitialRef = useRef(profile);
   const rulesInitialRef = useRef(rules);
   // Latest values, refreshed every render, so the unmount flush below saves what
@@ -701,19 +702,35 @@ function TasteProfileSection() {
             ? "Strict rules the AI must follow. One per line. Saves automatically."
             : "Strict rules the AI must follow. Sign in to sync across devices."}
         </div>
-        <textarea
-          value={rules}
-          maxLength={AI_RULES_MAX}
-          onChange={e => setRules(e.target.value)}
-          placeholder={"no emojis\nno hashtags\nlowercase only"}
-          style={{
-            width: "100%", minHeight: 80, resize: "vertical",
-            background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 8,
-            padding: "10px 12px", fontSize: 12, color: "#e8e8e8",
-            fontFamily: "inherit", lineHeight: 1.55, outline: "none",
-            boxSizing: "border-box",
-          }}
-        />
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: openRule !== null ? 10 : 0 }}>
+          {rules.split("\n").map((r, i) => (
+            <button key={i} type="button" aria-pressed={openRule === i} onClick={() => setOpenRule(openRule === i ? null : i)} style={styleChip(openRule === i)}>
+              {"Rule " + (i + 1)}
+            </button>
+          ))}
+          <button type="button" style={{ ...styleChip(false), borderStyle: "dashed" }}
+            onClick={() => { setRules(rules ? rules + "\n" : ""); setOpenRule(rules ? rules.split("\n").length : 0); }}>
+            + Add rule
+          </button>
+        </div>
+        {openRule !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <input
+              autoFocus
+              value={rules.split("\n")[openRule] || ""}
+              maxLength={AI_RULES_MAX}
+              onChange={e => { const l = rules.split("\n"); l[openRule] = e.target.value.replace(/\n/g, " "); setRules(l.join("\n")); }}
+              placeholder="e.g. no emojis"
+              style={fieldStyle}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" style={{ ...styleChip(false), color: "#e5484d" }}
+                onClick={() => { const l = rules.split("\n"); l.splice(openRule, 1); setRules(l.join("\n")); setOpenRule(null); }}>
+                Delete rule
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <DumpStylesSection signedIn={isSignedIn} />
@@ -741,7 +758,7 @@ function styleChip(on: boolean): React.CSSProperties {
 function DumpStylesSection({ signedIn }: { signedIn: boolean }) {
   const [styles, setStyles] = useState<DumpStyle[]>(() => loadDumpStyles());
   const [activeId, setActiveId] = useState<string>(() => loadActiveDumpStyleId());
-  const [editId, setEditId] = useState<string>(() => loadActiveDumpStyleId() || (loadDumpStyles()[0] || { id: "" }).id);
+  const [editId, setEditId] = useState<string>("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [switched, setSwitched] = useState(false);
   const [status, setStatus] = useState<SaveStatus>("idle");
@@ -788,7 +805,6 @@ function DumpStylesSection({ signedIn }: { signedIn: boolean }) {
     }
     setActiveId(id);
     saveActiveDumpStyleId(id);
-    if (id) setEditId(id);
     setConfirmDelete(false);
   }
   function addStyle() {
@@ -823,13 +839,13 @@ function DumpStylesSection({ signedIn }: { signedIn: boolean }) {
         Saved recipes for how the AI builds your dumps. The active one is used on every AI suggestion.
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-        <button type="button" aria-pressed={!activeId} onClick={() => activate("")} style={styleChip(!activeId)}>None</button>
+        <button type="button" aria-pressed={!activeId} onClick={() => { activate(""); setEditId(""); }} style={styleChip(!activeId)}>None</button>
         {styles.map(s => (
           <button
             key={s.id}
             type="button"
             aria-pressed={s.id === activeId}
-            onClick={() => activate(s.id)}
+            onClick={() => { activate(s.id); setEditId(editId === s.id ? "" : s.id); }}
             style={{ ...styleChip(s.id === activeId), display: "inline-flex", alignItems: "center", gap: 6, outline: s.id === editId && s.id !== activeId ? "1px dashed #555" : "none" }}
           >
             {s.name || "Untitled"}
