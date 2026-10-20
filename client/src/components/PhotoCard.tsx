@@ -260,7 +260,16 @@ export default function PhotoCard({
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
     >
-      {photo.category === "Video" && !videoThumb(photo.id) ? (
+      {photo.category === "Video" && (source.type === "dump" || isSelected) ? (
+        // Videos play (muted, looping) while they sit in a dump or are selected.
+        <video
+          src={photo.url} autoPlay muted loop playsInline
+          poster={videoThumb(photo.id) || undefined}
+          style={fill
+            ? { width: "100%", aspectRatio: width + " / " + height, height: "auto", objectFit: "cover", display: "block", pointerEvents: "none" }
+            : { width: widthPx, height: heightPx, objectFit: "cover", display: "block", pointerEvents: "none" }}
+        />
+      ) : photo.category === "Video" && !videoThumb(photo.id) ? (
         // No poster frame (iOS Safari often fails to grab one) — let the browser paint the first frame.
         <video
           src={photo.url + "#t=0.1"} muted playsInline preload="metadata"
@@ -277,8 +286,8 @@ export default function PhotoCard({
         />
       )}
 
-      {/* Video play icon overlay */}
-      {photo.category === "Video" && (
+      {/* Video play icon overlay — hidden while the video is playing */}
+      {photo.category === "Video" && source.type !== "dump" && !isSelected && (
         <div style={{
           position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
           pointerEvents: "none",
@@ -291,19 +300,6 @@ export default function PhotoCard({
             <Play size={16} color="#fff" fill="#fff" style={{ marginLeft: "2px" }} />
           </div>
         </div>
-      )}
-
-      {/* Slide number badge — top left */}
-      {/* Slot number — dump slides only; pool cards stay clean. */}
-      {source.type === "dump" && (
-      <div style={{
-        position: "absolute", top: "8px", left: "8px",
-        background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-        color: "#fff", fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em",
-        padding: "3px 8px", borderRadius: "4px", pointerEvents: "none",
-      }}>
-        {badgeLabel}
-      </div>
       )}
 
       {/* Possible-duplicate badge — amber, sits under the slide number */}
