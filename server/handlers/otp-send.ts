@@ -5,7 +5,7 @@
  * hashed phone/email), so clearing a browser or switching devices doesn't reset it. Then
  * forwards to Supabase Auth, which sends the code (Twilio Verify for phones).
  *
- * body: { channel: "phone" | "email", identifier: string, mode?: "signin" | "add" }
+ * body: { channel: "phone" | "email", identifier: string, mode?: "signin" | "add", redirectTo?: "dumpster://auth/callback" }
  *   signin: sign in / create account.
  *   add:    attach a phone to the signed-in account (needs Authorization: Bearer <jwt>).
  * 429 -> { error, retryAfterSeconds }. Verifying a code still goes straight to Supabase.
@@ -49,6 +49,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const jwt = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
   if (mode === "add" && !jwt) return res.status(401).json({ error: "Sign in first." });
 
+  // Native app's magic link: only our own deep link is allowed as a redirect.
+  const redirectTo = body.redirectTo === "dumpster://auth/callback" ? "dumpster://auth/callback" : "";
+  const redirectQuery = redirectTo && channel === "email" ? `?redirect_to=${encodeURIComponent(redirectTo)}` : "";
+
   // 1) Limit check + record, atomically in the database.
   const admin = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const hash = createHash("sha256").update(`${channel}:${identifier}`).digest("hex");
@@ -72,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         headers: { apikey, Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
         body: JSON.stringify({ phone: identifier }),
       })
-    : await fetch(`${url}/auth/v1/otp`, {
+    : await fetch(`${url}/auth/v1/otp${redirectQuery}`, {
         method: "POST",
         headers: { apikey, "Content-Type": "application/json" },
         body: JSON.stringify(channel === "phone" ? { phone: identifier, create_user: true } : { email: identifier, create_user: true }),
