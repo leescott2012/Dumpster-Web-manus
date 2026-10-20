@@ -151,9 +151,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error ? error.message : null };
   }, []);
 
-  var requestPhoneOtp = useCallback(async function(phone: string) {
-    var { error } = await supabase.auth.signInWithOtp({ phone: phone });
-    return { error: error ? error.message : null };
+  // Codes are requested through /api/otp-send so the 3-per-hour limit is enforced per account on the server.
+  async function sendCodeViaServer(phone: string, mode: "signin" | "add", token?: string) {
+    try {
+      var r = await fetch("/api/otp-send", {
+        method: "POST",
+        headers: token
+          ? { "Content-Type": "application/json", Authorization: "Bearer " + token }
+          : { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: "phone", identifier: phone, mode: mode }),
+      });
+      if (r.ok) return { error: null as string | null };
+      var j = await r.json().catch(function() { return {} as { error?: string }; });
+      return { error: j.error || "Could not send the code." };
+    } catch (e) {
+      return { error: "Network error. Try again." };
+    }
+  }
+
+  var requestPhoneOtp = useCallback(function(phone: string) {
+    return sendCodeViaServer(phone, "signin");
   }, []);
 
   var verifyPhoneOtp = useCallback(async function(phone: string, code: string) {
@@ -162,9 +179,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   var addPhone = useCallback(async function(phone: string) {
-    var { error } = await supabase.auth.updateUser({ phone: phone });
-    return { error: error ? error.message : null };
-  }, []);
+    return sendCodeViaServer(phone, "add", session ? session.access_token : undefined);
+  }, [session]);
 
   var verifyAddedPhone = useCallback(async function(phone: string, code: string) {
     var { error } = await supabase.auth.verifyOtp({ phone: phone, token: code, type: "phone_change" });
