@@ -46,6 +46,10 @@ interface AuthState {
   signInWithApple: () => Promise<{ error: string | null }>;
   /** Sign in with Facebook OAuth */
   signInWithFacebook: () => Promise<{ error: string | null }>;
+  /** Text a 6-digit code to a phone (E.164, e.g. +14045551234) */
+  requestPhoneOtp: (phone: string) => Promise<{ error: string | null }>;
+  /** Verify the code from the text message and sign in */
+  verifyPhoneOtp: (phone: string, code: string) => Promise<{ error: string | null }>;
   /** Sign out */
   signOut: () => Promise<void>;
   /** Refresh profile + credits from DB */
@@ -143,6 +147,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error ? error.message : null };
   }, []);
 
+  var requestPhoneOtp = useCallback(async function(phone: string) {
+    var { error } = await supabase.auth.signInWithOtp({ phone: phone });
+    return { error: error ? error.message : null };
+  }, []);
+
+  var verifyPhoneOtp = useCallback(async function(phone: string, code: string) {
+    var { error } = await supabase.auth.verifyOtp({ phone: phone, token: code, type: "sms" });
+    return { error: error ? error.message : null };
+  }, []);
+
   var signInWithGoogle = useCallback(async function() {
     var { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -235,6 +249,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signInWithGoogle: signInWithGoogle,
     signInWithApple: signInWithApple,
     signInWithFacebook: signInWithFacebook,
+    requestPhoneOtp: requestPhoneOtp,
+    verifyPhoneOtp: verifyPhoneOtp,
     signOut: signOut,
     refreshProfile: refreshProfile,
     canAfford: canAfford,
