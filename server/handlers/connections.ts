@@ -22,6 +22,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+function editDistance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0]; row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = tmp;
+    }
+  }
+  return row[b.length];
+}
+
 async function handleGet(req: VercelRequest, res: VercelResponse) {
   const userId = await getUserFromRequest(req);
   if (!userId) return res.status(401).json({ error: "Sign in required." });
@@ -29,17 +42,35 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   const mode = String(req.query.mode || "list");
 
   if (mode === "search") {
-    const q = String(req.query.q || "").trim();
-    if (q.length < 2) return res.status(200).json({ results: [] });
+    // Instagram-style: starts at 1 char, ignores a leading "@", prefix matches first,
+    // then "contains", then close spellings ("did you mean") when nothing matches.
+    const q = String(req.query.q || "").trim().replace(/^@+/, "").replace(/[%_,()]/g, "");
+    if (q.length < 1) return res.status(200).json({ results: [] });
+    const cols = "id, username, avatar_icon, avatar_color";
     const { data, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, username, avatar_icon, avatar_color")
-      .ilike("username", `${q}%`)
+      .select(cols)
+      .ilike("username", `%${q}%`)
       .not("username", "is", null)
       .neq("id", userId)
-      .limit(20);
+      .limit(50);
     if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json({ results: data ?? [] });
+    const lq = q.toLowerCase();
+    const rank = (u: string | null) => { const l = (u || "").toLowerCase(); return l === lq ? 0 : l.startsWith(lq) ? 1 : 2; };
+    const direct = (data ?? []).sort((x, y) => rank(x.username) - rank(y.username) || (x.username || "").length - (y.username || "").length).slice(0, 20);
+    if (direct.length > 0 || q.length < 3) return res.status(200).json({ results: direct });
+
+    // ponytail: scan ≤500 usernames in-process; swap for pg_trgm similarity() if the user table outgrows this.
+    const { data: pool } = await supabaseAdmin
+      .from("profiles").select(cols).not("username", "is", null).neq("id", userId).limit(500);
+    const maxDist = Math.max(2, Math.floor(q.length / 3));
+    const close = (pool ?? [])
+      .map((p) => ({ p, d: editDistance(lq, (p.username || "").toLowerCase()) }))
+      .filter((x) => x.d <= maxDist)
+      .sort((x, y) => x.d - y.d)
+      .slice(0, 8)
+      .map((x) => x.p);
+    return res.status(200).json({ results: close, fuzzy: close.length > 0 });
   }
 
   // mode === "list"
