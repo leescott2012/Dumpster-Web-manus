@@ -66,6 +66,10 @@
       "destination": "/api/social?fn=apple-webhook"
     },
     {
+      "source": "/api/otp-send",
+      "destination": "/api/social?fn=otp-send"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
