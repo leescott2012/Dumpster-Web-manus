@@ -294,6 +294,8 @@ export default function PhotoCard({
       )}
 
       {/* Slide number badge — top left */}
+      {/* Slot number — dump slides only; pool cards stay clean. */}
+      {source.type === "dump" && (
       <div style={{
         position: "absolute", top: "8px", left: "8px",
         background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
@@ -302,6 +304,7 @@ export default function PhotoCard({
       }}>
         {badgeLabel}
       </div>
+      )}
 
       {/* Possible-duplicate badge — amber, sits under the slide number */}
       {isDuplicate && !selectionMode && !deleteMode && (
