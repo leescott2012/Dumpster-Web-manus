@@ -34,6 +34,12 @@ export default function Terms() {
         account is your responsibility.
       </P>
 
+      <P>
+        You must verify a mobile phone number to use your account. By entering it,
+        you agree that we may text you a one-time verification code. Message and
+        data rates may apply. We only send codes you request.
+      </P>
+
       <H2>2. Your content stays yours</H2>
       <P>
         The photos, videos, captions, and dump arrangements you create remain

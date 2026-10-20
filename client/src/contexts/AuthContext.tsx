@@ -50,6 +50,10 @@ interface AuthState {
   requestPhoneOtp: (phone: string) => Promise<{ error: string | null }>;
   /** Verify the code from the text message and sign in */
   verifyPhoneOtp: (phone: string, code: string) => Promise<{ error: string | null }>;
+  /** Attach a phone to the signed-in account: texts a code (E.164 number) */
+  addPhone: (phone: string) => Promise<{ error: string | null }>;
+  /** Confirm the code; on success the account's verified phone is saved by Supabase Auth */
+  verifyAddedPhone: (phone: string, code: string) => Promise<{ error: string | null }>;
   /** Sign out */
   signOut: () => Promise<void>;
   /** Refresh profile + credits from DB */
@@ -157,6 +161,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error ? error.message : null };
   }, []);
 
+  var addPhone = useCallback(async function(phone: string) {
+    var { error } = await supabase.auth.updateUser({ phone: phone });
+    return { error: error ? error.message : null };
+  }, []);
+
+  var verifyAddedPhone = useCallback(async function(phone: string, code: string) {
+    var { error } = await supabase.auth.verifyOtp({ phone: phone, token: code, type: "phone_change" });
+    return { error: error ? error.message : null };
+  }, []);
+
   var signInWithGoogle = useCallback(async function() {
     var { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -251,6 +265,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signInWithFacebook: signInWithFacebook,
     requestPhoneOtp: requestPhoneOtp,
     verifyPhoneOtp: verifyPhoneOtp,
+    addPhone: addPhone,
+    verifyAddedPhone: verifyAddedPhone,
     signOut: signOut,
     refreshProfile: refreshProfile,
     canAfford: canAfford,
