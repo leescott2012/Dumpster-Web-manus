@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { X, Search, UserPlus, Check, MessageCircle, Loader } from "lucide-react";
 import { getAuthHeaders } from "@/lib/supabase";
 import DMSheet from "@/components/DMSheet";
+import FriendProfileSheet from "@/components/FriendProfileSheet";
 
 interface Profile { id: string; username: string | null; avatar_icon: string | null; avatar_color: string | null; }
 interface ConnectionRow {
@@ -29,6 +30,7 @@ export default function ConnectionsPanel({ open, onClose, myUserId }: Connection
   var [connections, setConnections] = useState<ConnectionRow[]>([]);
   var [sentTo, setSentTo] = useState<Set<string>>(new Set());
   var [dmWith, setDmWith] = useState<Profile | null>(null);
+  var [viewing, setViewing] = useState<Profile | null>(null);
   var timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function loadConnections() {
@@ -193,7 +195,9 @@ export default function ConnectionsPanel({ open, onClose, myUserId }: Connection
               return (
                 <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
                   {avatarDot(c.other)}
-                  <div style={{ flex: 1, fontSize: 13, color: "#e8e8e8" }}>@{c.other.username}</div>
+                  <button onClick={function () { setViewing(c.other); }} style={{ flex: 1, textAlign: "left", background: "transparent", border: "none", padding: 0, fontSize: 13, color: "#e8e8e8", cursor: "pointer", fontFamily: "inherit" }}>
+                    @{c.other.username}<span style={{ color: "var(--accent)", fontSize: 11, marginLeft: 8 }}>View profile</span>
+                  </button>
                   <button onClick={function () { setDmWith(c.other); }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, background: "#1a1a1a", border: "1px solid #2a2a2a", color: "#e8e8e8", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
                     <MessageCircle size={12} /> Message
                   </button>
@@ -213,6 +217,7 @@ export default function ConnectionsPanel({ open, onClose, myUserId }: Connection
         </div>
       </div>
 
+      <FriendProfileSheet person={viewing} onClose={function () { setViewing(null); }} />
       <DMSheet open={!!dmWith} other={dmWith} onClose={function () { setDmWith(null); }} />
     </>
   );
