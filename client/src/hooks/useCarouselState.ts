@@ -44,18 +44,29 @@ function loadSaved<T>(key: string): T | null {
   return null;
 }
 
-function persist(key: string, value: unknown) {
-  // Durable copy → IndexedDB (no ~5 MB cap; survives refresh well past the
-  // point where localStorage gives out, so uploaded photos actually stick).
-  idbSet(key, value);
-  // Fast first-paint cache → localStorage. Best-effort: a QuotaExceededError
-  // here is now harmless because IndexedDB holds the authoritative copy, so we
-  // no longer warn or lose data — we just keep whatever fit.
+// localStorage copy is written once per quiet moment, not on every state change:
+// stringifying a pool full of base64 photos on the main thread, dozens of times
+// during a bulk upload, is what froze the page. IndexedDB (debounced in
+// localStore) stays the durable copy.
+var lsPending: Record<string, unknown> = {};
+var lsTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+function writeLocal(key: string) {
+  if (lsTimers[key]) { clearTimeout(lsTimers[key]); delete lsTimers[key]; }
+  if (!(key in lsPending)) return;
+  var value = lsPending[key];
+  delete lsPending[key];
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
     /* localStorage full — fine, IndexedDB has the full set. */
   }
+}
+function flushLocal() { Object.keys(lsPending).forEach(writeLocal); }
+function persist(key: string, value: unknown) {
+  idbSet(key, value);
+  lsPending[key] = value;
+  if (lsTimers[key]) clearTimeout(lsTimers[key]);
+  lsTimers[key] = setTimeout(function() { writeLocal(key); }, 600);
 }
 
 // ── Deep clone helpers ─────────────────────────────────────────────────────
@@ -168,11 +179,14 @@ export function useCarouselState() {
     var handleBeforeUnload = function() {
       persist(SK_DUMPS, dumpsRef.current);
       persist(SK_POOL, poolRef.current);
+      flushLocal();
       idbFlush(); // push any debounced IndexedDB writes before the tab dies
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handleBeforeUnload); // iOS Safari skips beforeunload
     return function() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handleBeforeUnload);
     };
   }, []);
 
