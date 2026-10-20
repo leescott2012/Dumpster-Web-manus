@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const identifier = channel === "email" ? raw.toLowerCase() : raw.replace(/[\s().-]/g, "");
   if (channel === "phone" && !/^\+[1-9]\d{7,14}$/.test(identifier)) return res.status(400).json({ error: "Enter a valid phone number with country code." });
-  if (channel === "email" && !/^\S+@\S+\.\S+$/.test(identifier)) return res.status(400).json({ error: "Enter a valid email address." });
+  if (channel === "email" && !looksLikeEmail(identifier)) return res.status(400).json({ error: "Enter a valid email address." });
   if (mode === "add" && channel !== "phone") return res.status(400).json({ error: "add mode is phone only." });
 
   const jwt = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
@@ -84,6 +84,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502).json({ error: message });
   }
   return res.status(200).json({ ok: true });
+}
+
+// Linear-time check (a backtracking regex here could be slowed by crafted input).
+function looksLikeEmail(s: string) {
+  if (s.length > 254 || /\s/.test(s)) return false;
+  const at = s.indexOf("@");
+  return at > 0 && at === s.lastIndexOf("@") && s.indexOf(".", at + 2) > 0 && !s.endsWith(".");
 }
 
 function safeJson(s: string) { try { return JSON.parse(s); } catch { return null; } }
