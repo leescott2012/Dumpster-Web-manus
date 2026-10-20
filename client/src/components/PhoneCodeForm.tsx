@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { Loader } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { logBug } from "@/lib/bugLogger";
 
 var MAX_SENDS = 3;
 var WINDOW_MS = 60 * 60 * 1000;
@@ -51,6 +52,9 @@ export default function PhoneCodeForm({ mode, onDone, lockedHint }: Props) {
   var [cooldown, setCooldown] = useState(0);
   var [wrong, setWrong] = useState(0);
   var [sends, setSends] = useState<number[]>(recentSends());
+  // Adding a phone that another account already owns (e.g. the person once signed in with just that number).
+  var [inUse, setInUse] = useState(false);
+  var [reported, setReported] = useState(false);
 
   var locked = sends.length >= MAX_SENDS;
   var minutesLeft = locked ? Math.max(1, Math.ceil((sends[0] + WINDOW_MS - Date.now()) / 60000)) : 0;
@@ -69,7 +73,11 @@ export default function PhoneCodeForm({ mode, onDone, lockedHint }: Props) {
     setBusy(true);
     var result = mode === "add" ? await addPhone(e164) : await requestPhoneOtp(e164);
     setBusy(false);
-    if (result.error) { setError(result.error); return; }
+    if (result.error) {
+      if (mode === "add" && /already|registered|exists|in use|taken/i.test(result.error)) { setInUse(true); return; }
+      setError(result.error);
+      return;
+    }
     recordSend();
     setSends(recentSends());
     setCode("");
@@ -98,6 +106,33 @@ export default function PhoneCodeForm({ mode, onDone, lockedHint }: Props) {
 
   var field = { width: "100%", padding: "14px 16px", borderRadius: 12, background: "#141414", border: "1px solid #2a2a2a", color: "#e8e8e8", fontSize: 16, fontFamily: "inherit", boxSizing: "border-box" } as const;
   var link = { background: "none", border: "none", color: "#8a8a8a", fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: 4 } as const;
+
+  if (inUse) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ fontSize: 13, color: "#c8c8c8", lineHeight: 1.5, padding: "12px 14px", background: "#141414", border: "1px solid #2a2a2a", borderRadius: 12 }}>
+          That number is already linked to another Dumpster account. If it's yours, send this to us and we'll match it to this account.
+        </div>
+        <button
+          disabled={reported}
+          onClick={function() {
+            logBug({
+              source: "phone-in-use",
+              message: "Can't verify phone: number already used by another account",
+              context: { phone: toE164(phone), note: "User says the number is theirs; link or free it for their signed-in account." },
+              silent: true,
+            });
+            setReported(true);
+          }}
+          style={{ width: "100%", padding: "15px 20px", borderRadius: 12, background: "var(--accent)", border: "none", color: "#000", fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: reported ? "default" : "pointer", opacity: reported ? 0.6 : 1 }}>
+          {reported ? "Sent. We'll sort it out." : "This is my number: send to support"}
+        </button>
+        <button onClick={function() { setInUse(false); setStep("number"); setPhone(""); setError(null); }} style={link}>
+          Use a different number
+        </button>
+      </div>
+    );
+  }
 
   if (locked && step === "number") {
     return (
