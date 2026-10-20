@@ -32,6 +32,7 @@ interface PhotoCardProps {
   isDeleteSelected?: boolean;
   /** Flagged as a possible duplicate of another photo — amber border + badge. */
   isDuplicate?: boolean;
+  hideLabel?: boolean;
 }
 
 export default function PhotoCard({
@@ -41,6 +42,7 @@ export default function PhotoCard({
   selectionMode = false, selectionIndex,
   deleteMode = false, isDeleteSelected = false,
   isDuplicate = false,
+  hideLabel = false,
 }: PhotoCardProps) {
   var { startDrag, dragState } = useDrag();
 
@@ -258,12 +260,22 @@ export default function PhotoCard({
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
     >
-      <img
-        src={(photo.category === "Video" && videoThumb(photo.id)) || photo.url} alt={photo.alt || "Photo " + badgeLabel} draggable={false} loading="lazy"
-        style={fill
-          ? { width: "100%", aspectRatio: width + " / " + height, height: "auto", objectFit: "cover", display: "block", pointerEvents: "none" }
-          : { width: widthPx, height: heightPx, objectFit: "cover", display: "block", pointerEvents: "none" }}
-      />
+      {photo.category === "Video" && !videoThumb(photo.id) ? (
+        // No poster frame (iOS Safari often fails to grab one) — let the browser paint the first frame.
+        <video
+          src={photo.url + "#t=0.1"} muted playsInline preload="metadata"
+          style={fill
+            ? { width: "100%", aspectRatio: width + " / " + height, height: "auto", objectFit: "cover", display: "block", pointerEvents: "none" }
+            : { width: widthPx, height: heightPx, objectFit: "cover", display: "block", pointerEvents: "none" }}
+        />
+      ) : (
+        <img
+          src={(photo.category === "Video" && videoThumb(photo.id)) || photo.url} alt={photo.alt || "Photo " + badgeLabel} draggable={false} loading="lazy"
+          style={fill
+            ? { width: "100%", aspectRatio: width + " / " + height, height: "auto", objectFit: "cover", display: "block", pointerEvents: "none" }
+            : { width: widthPx, height: heightPx, objectFit: "cover", display: "block", pointerEvents: "none" }}
+        />
+      )}
 
       {/* Video play icon overlay */}
       {photo.category === "Video" && (
@@ -379,7 +391,7 @@ export default function PhotoCard({
           description ("Matte black G-Wagon") and hide the bar entirely when a
           photo hasn't been scanned yet (empty alt) rather than fall back to
           the raw category. */}
-      {photo.alt && (
+      {photo.alt && !hideLabel && photo.category !== "Video" && (
         <div style={{
           position: "absolute", bottom: 0, left: 0, right: 0,
           background: "linear-gradient(transparent, rgba(0,0,0,0.85))",

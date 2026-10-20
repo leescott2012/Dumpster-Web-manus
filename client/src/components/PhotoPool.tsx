@@ -171,7 +171,7 @@ export default function PhotoPool({
   // Filter/sort pool photos
   var displayPhotos: Photo[];
   if (filter === "starred") {
-    displayPhotos = photos.filter(function(p) { return p.isFavorite; });
+    displayPhotos = photos.filter(function(p) { return p.isFavorite && p.category !== "Video"; });
   } else if (filter === "videos") {
     displayPhotos = photos.filter(function(p) { return p.category === "Video"; });
   } else {
@@ -185,11 +185,9 @@ export default function PhotoPool({
     }
     displayPhotos = starred.concat(rest);
   }
-  var sectionVideos: Photo[] = filter === "all" ? photos.filter(function(p) { return p.category === "Video"; }) : [];
 
   // Counts for chip badges
-  var starredCount = photos.filter(function(p) { return p.isFavorite; }).length;
-  var videoCount = photos.filter(function(p) { return p.category === "Video"; }).length;
+  var starredCount = photos.filter(function(p) { return p.isFavorite && p.category !== "Video"; }).length;
   var usedCount = usedPhotos.length;
 
   var handleUploadClick = function() {
@@ -287,14 +285,6 @@ export default function PhotoPool({
                 </span>
               )}
             </button>
-            {videoCount > 0 && (
-              <button aria-pressed={filter === "videos"} onClick={function() { setFilter("videos"); }} style={filterBtnStyle(filter === "videos")}>
-                <Play size={10} style={{ marginRight: "4px" }} />Videos
-                <span style={{ marginLeft: "5px", background: filter === "videos" ? "rgba(var(--accent-rgb),0.2)" : "rgba(255,255,255,0.08)", borderRadius: "100px", padding: "1px 6px", fontSize: "10px" }}>
-                  {videoCount}
-                </span>
-              </button>
-            )}
           </div>}
 
           {/* Row 2— size toggle (left) + delete (right), both flush to edges */}
@@ -422,6 +412,7 @@ export default function PhotoPool({
                 deleteMode={deleteMode}
                 isDeleteSelected={delIdx >= 0}
                 isDuplicate={duplicateIds ? duplicateIds.has(photo.id) : false}
+                hideLabel={poolSize === "S"}
               />
             );
             if (!vm) return card;
@@ -561,38 +552,6 @@ export default function PhotoPool({
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Video section — "all" view only. Videos stay on this device (blob URLs, never uploaded). */}
-      {filter === "all" && sectionVideos.length > 0 && (
-        <div style={{ marginTop: "28px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", color: "#8a8a8a", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>
-            <Play size={11} />
-            Videos · {sectionVideos.length}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: size.cols, gap: "12px" }}>
-            {sectionVideos.map(function(photo, i) {
-              var selIdx = selectedIds.indexOf(photo.id);
-              var delIdx = selectedDeleteIds.indexOf(photo.id);
-              var anyMode = selectionMode || deleteMode;
-              return (
-                <PhotoCard key={photo.id} photo={photo} index={i}
-                  source={{ type: "pool" }}
-                  isSelected={selectionMode ? selIdx >= 0 : deleteMode ? delIdx >= 0 : selectedPhotoId === photo.id}
-                  onSelect={selectionMode ? onTogglePoolSelection : deleteMode ? onToggleDeleteSelection : onSelectPhoto}
-                  onDotsClick={anyMode ? undefined : onDotsClick}
-                  onDoubleTap={anyMode ? undefined : onDoubleTapPhoto}
-                  width={size.w} height={size.h} fill
-                  selectionMode={anyMode}
-                  selectionIndex={selectionMode && selIdx >= 0 ? selIdx : undefined}
-                  deleteMode={deleteMode}
-                  isDeleteSelected={delIdx >= 0}
-                  isDuplicate={false}
-                />
-              );
-            })}
-          </div>
         </div>
       )}
 
