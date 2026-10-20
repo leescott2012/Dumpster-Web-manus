@@ -106,7 +106,7 @@ interface PhotoPoolProps {
 }
 
 export default function PhotoPool({
-  photos, dumps = [], duplicateIds, onSelectPhoto, onDotsClick, onDoubleTapPhoto, onDropToPool, onUploadPhotos,
+  photos: allPhotos, dumps = [], duplicateIds, onSelectPhoto, onDotsClick, onDoubleTapPhoto, onDropToPool, onUploadPhotos,
   selectionMode, selectedIds, onTogglePoolSelection, onConfirmSelection, onCancelSelection,
   targetDumpId, selectedPhotoId,
   deleteMode, selectedDeleteIds, onEnterDeleteMode, onToggleDeleteSelection, onConfirmDelete, onCancelDeleteMode,
@@ -120,6 +120,8 @@ export default function PhotoPool({
   var isOverRef = useRef(false);
   var [filterState, setFilter] = useState<FilterMode>("all");
   var filter: FilterMode = videosOnly ? "videos" : filterState;
+  // Videos live in their own tab: photo mode never sees them
+  var photos = videosOnly ? allPhotos : allPhotos.filter(function(p) { return p.category !== "Video"; });
   var [poolSize, setPoolSize] = useState<PoolSize>(function() {
     var saved = localStorage.getItem(POOL_SIZE_KEY);
     return saved === "S" || saved === "M" || saved === "L" ? saved : "M";
