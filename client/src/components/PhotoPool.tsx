@@ -289,7 +289,7 @@ export default function PhotoPool({
 
           {/* Row 2— size toggle (left) + delete (right), both flush to edges */}
           {photos.length > 0 && (
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" as const }}>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" as const }}>
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: "2px",
                 background: "rgba(255,255,255,0.04)", border: "1px solid #2a2a2a",
@@ -312,7 +312,7 @@ export default function PhotoPool({
                   );
                 })}
               </div>
-              <div style={{ display: "inline-flex", gap: "8px", alignItems: "center", flexWrap: "wrap" as const, justifyContent: "flex-end", marginLeft: "auto" }}>
+              <div style={{ display: "contents" }}>
                 {!videosOnly && labelHealthChip}
                 {onScan && (
                   <button
