@@ -53,6 +53,13 @@ export default function Privacy() {
         contact you about service issues. We do not receive your Google password,
         contacts, drive files, or any other Google data.
       </P>
+      <P>
+        To keep accounts secure, every account must also verify a
+        <Strong> mobile phone number</Strong>. We text a one-time code to that
+        number, and the verified number is stored with your account. We use it
+        only for sign-in, account security, and account recovery. We do not sell
+        it or use it for marketing. Message and data rates may apply.
+      </P>
 
       <H2>2. AI personalization</H2>
       <P>
@@ -124,7 +131,9 @@ export default function Privacy() {
         <LI><Strong>Anthropic</Strong> — photos and taste profile per AI request. Governed
           by the <A href="https://www.anthropic.com/legal/commercial-terms">Anthropic Commercial Terms</A>. Per those terms, Anthropic does not use API
           inputs/outputs to train their models.</LI>
-        <LI><Strong>Supabase</Strong> — account email, AI memory, subscription status.
+        <LI><Strong>Twilio</Strong> — delivers the verification text and sees your phone number to do so.
+          <A href="https://www.twilio.com/legal/privacy"> Twilio Privacy Policy</A>.</LI>
+        <LI><Strong>Supabase</Strong> — account email, phone number, AI memory, subscription status.
           <A href="https://supabase.com/privacy"> Supabase Privacy Policy</A>.</LI>
         <LI><Strong>Stripe</Strong> — payment details. <A href="https://stripe.com/privacy">Stripe Privacy Policy</A>.</LI>
         <LI><Strong>Vercel</Strong> — hosts the application; sees request metadata in
