@@ -6,7 +6,7 @@
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 import {
-  X, Sparkles, Archive, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Instagram,
+  X, Sparkles, Users, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Instagram,
   KeyRound, LogOut, User, Share2, Check, Cloud, CloudOff,
 } from "lucide-react";
 import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpStyles, saveDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, TASTE_PROFILE_MAX, AI_RULES_MAX, DUMP_STYLE_USED_BY, type DumpStyle } from "@/lib/captionPool";
@@ -15,7 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-type Tab = "ai" | "dumps" | "pool" | "appearance" | "about" | "social" | "keys";
+type Tab = "ai" | "friends" | "pool" | "appearance" | "about" | "social" | "keys";
 
 interface Folder {
   id: Tab;
@@ -33,6 +33,7 @@ interface MainMenuProps {
   onIGScrub: () => void;
   onTour?: () => void;
   onSignIn?: () => void;
+  onFriends?: () => void;   // opens Connections (signed-in) or the sign-in sheet
   dumpCount: number;
   poolCount: number;
 }
@@ -74,8 +75,9 @@ export function initAccent() {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, onTour, onSignIn, dumpCount, poolCount }: MainMenuProps) {
+export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, onTour, onSignIn, onFriends, dumpCount, poolCount }: MainMenuProps) {
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
+  const edgeSwipe = useRef<{ x: number; y: number } | null>(null); // left-edge swipe = back to the folder list
   const [visible, setVisible] = useState(false);
   const [accent, setAccent] = useState(loadAccent);
   const { user, profile, signOut } = useAuth();
@@ -95,12 +97,9 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
   }
 
   function handleFolderClick(id: Tab) {
-    if (id === "dumps") {
+    if (id === "friends") {
       onClose();
-      setTimeout(() => {
-        const el = document.querySelector("[data-dump-id]");
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 350);
+      setTimeout(function() { if (onFriends) onFriends(); }, 300);
       return;
     }
     if (id === "pool") {
@@ -134,14 +133,9 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
       icon: <Sparkles size={18} strokeWidth={1.5} />,
     },
     {
-      id: "dumps", title: "MY DUMPS", tabColor: "var(--accent)",
-      subtitle: dumpCount + " dump" + (dumpCount !== 1 ? "s" : "") + " · Drag & sequence",
-      icon: <Archive size={18} strokeWidth={1.5} />,
-    },
-    {
-      id: "pool", title: "PHOTO POOL", tabColor: "var(--accent)",
-      subtitle: poolCount + " photos available",
-      icon: <Image size={18} strokeWidth={1.5} />,
+      id: "friends", title: "FRIENDS", tabColor: "var(--accent)",
+      subtitle: "Find friends · Profiles · Comments",
+      icon: <Users size={18} strokeWidth={1.5} />,
     },
     {
       id: "appearance", title: "APPEARANCE", tabColor: "var(--accent)",
@@ -168,7 +162,15 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
   if (!open && !visible) return null;
 
   return (
-    <div style={{
+    <div
+      onTouchStart={function(e) { var t = e.touches[0]; edgeSwipe.current = t.clientX < 32 ? { x: t.clientX, y: t.clientY } : null; }}
+      onTouchEnd={function(e) {
+        var st = edgeSwipe.current; edgeSwipe.current = null;
+        if (!st || !activeTab) return;
+        var t = e.changedTouches[0];
+        if (t.clientX - st.x > 70 && Math.abs(t.clientY - st.y) < 80) setActiveTab(null);
+      }}
+      style={{
       position: "fixed", inset: 0, zIndex: 500,
       display: "flex", alignItems: "stretch",
     }}>
