@@ -612,6 +612,7 @@ function HomeContent() {
   // each one decodes → EXIF → yields to the UI, and finished photos stream into
   // the pool every few items while a "Processing 12/40…" toast counts up.
   // Cloud uploads start per streamed batch on their own limiter.
+  var [upload, setUpload] = useState<{ done: number; total: number; start: number } | null>(null);
   var handleUploadPhotos = useCallback(function(files: FileList) {
     var list = Array.from(files); // copy — the <input> may be reset after onChange
     var total = list.length;
@@ -622,6 +623,8 @@ function HomeContent() {
     var buffer: Photo[] = [];
     var lastFlush = Date.now();
     var showProgress = total > 1 || list[0].size > 1_500_000;
+    var startTs = Date.now();
+    if (showProgress) setUpload({ done: 0, total: total, start: startTs });
     if (showProgress) toast.loading("Processing 0/" + total + "…", { id: toastId });
 
     // Signed-in: push bytes to Storage and swap in the durable HTTPS URL.
@@ -645,6 +648,7 @@ function HomeContent() {
 
     function settle(p: Photo | null) {
       done++;
+      if (showProgress) setUpload(done < total ? { done: done, total: total, start: startTs } : null);
       if (p) buffer.push(p);
       if (buffer.length >= 4 || Date.now() - lastFlush > 700 || done === total) flush();
       if (done < total) {
@@ -1026,6 +1030,23 @@ function HomeContent() {
           </div>
         </div>
 
+        {upload && (
+          <div role="status" aria-live="polite" style={{
+            position: "fixed", left: 16, right: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 6000,
+            maxWidth: 420, margin: "0 auto", padding: "12px 14px", borderRadius: 14,
+            background: "rgba(20,20,20,0.96)", border: "1px solid #2a2a2a", boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#e8e8e8", marginBottom: 8 }}>
+              <span>{"Adding photos " + upload.done + " of " + upload.total}</span>
+              <span style={{ color: "#8a8a8a" }}>
+                {upload.done < 2 ? "estimating…" : "about " + Math.max(1, Math.ceil(((Date.now() - upload.start) / upload.done) * (upload.total - upload.done) / 1000)) + "s left"}
+              </span>
+            </div>
+            <div style={{ height: 6, borderRadius: 3, background: "#222", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: Math.max(4, Math.round(upload.done / upload.total * 100)) + "%", background: "var(--accent)", transition: "width 0.25s" }} />
+            </div>
+          </div>
+        )}
         {poolTab !== "captions" ? (
           <PhotoPool
             videosOnly={poolTab === "videos"}
