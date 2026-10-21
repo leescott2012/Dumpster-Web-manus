@@ -60,7 +60,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
       var data = await res.json() as { results: ScrubResult[]; errors: string[] };
       if (data.results.length === 0) {
         var errMsg = data.errors && data.errors.length > 0 ? data.errors[0] : "";
-        setError("No images found. Make sure the posts are public and the URLs are valid instagram.com/p/… or /reel/… links." + (errMsg ? " (" + errMsg + ")" : ""));
+        setError("No images found. Make sure the account or posts are public and the @name or URLs are valid (instagram.com/p/… or /reel/… links)." + (errMsg ? " (" + errMsg + ")" : ""));
       } else {
         setResults(data.results);
         setFailedUrls(data.errors || []);
@@ -182,6 +182,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
                 </div>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.7 }}>
                   <div>• Paste <b style={{ color: "#aaa" }}>Instagram post URLs</b> (instagram.com/p/… or /reel/…) — Apify scrapes them server-side</div>
+                  <div>• Or just type <b style={{ color: "#aaa" }}>@name</b> to pull that account's latest public posts</div>
                   <div>• Carousel posts return all slides automatically</div>
                   <div>• <b style={{ color: "#aaa" }}>Direct image URLs</b> are passed through instantly without Apify</div>
                   <div>• Paste multiple URLs — one per line or comma-separated</div>
@@ -192,7 +193,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
               <textarea
                 value={urlText}
                 onChange={function(e) { setUrlText(e.target.value); setError(null); }}
-                placeholder={"https://www.instagram.com/p/ABC123/\nhttps://scontent-sjc3-1.cdninstagram.com/v/…"}
+                placeholder={"@name\nhttps://www.instagram.com/p/ABC123/"}
                 style={{
                   width: "100%", minHeight: 140, resize: "vertical",
                   background: "#141414", border: "1px solid #2a2a2a", borderRadius: 10,

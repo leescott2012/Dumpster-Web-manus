@@ -70,7 +70,7 @@ interface ScrapedItem {
 
 // ── Apify ────────────────────────────────────────────────────────────────────
 
-async function scrapeWithApify(igUrls: string[]): Promise<{ items: ScrapedItem[]; errors: string[] }> {
+async function scrapeWithApify(igUrls: string[], resultsLimit = 50): Promise<{ items: ScrapedItem[]; errors: string[] }> {
   const token = process.env.APIFY_TOKEN;
   if (!token) {
     return { items: [], errors: ["APIFY_TOKEN environment variable is not set"] };
@@ -88,7 +88,7 @@ async function scrapeWithApify(igUrls: string[]): Promise<{ items: ScrapedItem[]
     body: JSON.stringify({
       directUrls: igUrls,
       resultsType: "posts",
-      resultsLimit: 50,
+      resultsLimit,
       addParentData: false,
     }),
     // node fetch signal for overall request timeout
@@ -383,6 +383,7 @@ async function runScrub(req: VercelRequest, res: VercelResponse, userId: string 
     const results: ScrapedItem[] = [];
     const errors: string[] = [];
     const igUrls: string[] = [];
+    let profileCount = 0;
 
     for (const raw of urls.slice(0, 30)) {
       const url = raw.trim();
@@ -394,6 +395,10 @@ async function runScrub(req: VercelRequest, res: VercelResponse, userId: string 
         results.push({ src: url, category: "Video" });
       } else if (IG_URL.test(url)) {
         igUrls.push(url);
+      } else if (!/cdninstagram|scontent/i.test(url) && normalizeProfileURL(url)) {
+        // "@name", "name" or instagram.com/name → that profile's recent posts
+        igUrls.push(normalizeProfileURL(url) as string);
+        profileCount++;
       } else {
         errors.push(url + " (unrecognised URL format)");
       }
@@ -401,7 +406,7 @@ async function runScrub(req: VercelRequest, res: VercelResponse, userId: string 
 
     // Batch all IG URLs into one Apify run
     if (igUrls.length > 0) {
-      const { items, errors: apifyErrors } = await scrapeWithApify(igUrls);
+      const { items, errors: apifyErrors } = await scrapeWithApify(igUrls, profileCount ? Math.min(50, igUrls.length - profileCount + profileCount * 12) : 50);
       results.push(...items);
       errors.push(...apifyErrors);
     }
