@@ -372,9 +372,9 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
                   onClick={scrubInstagram}
                   disabled={!igURL.trim() || scrubbing}
                   style={{
-                    padding: "0 16px", borderRadius: 12, border: "1px solid #2a2a2a",
-                    background: "#1a1a1a", color: igURL.trim() ? "#e8e8e8" : "#555",
-                    fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                    padding: "0 16px", borderRadius: 12, border: "1px solid #22c55e",
+                    background: "#22c55e", color: "#06220f", opacity: igURL.trim() ? 1 : 0.4,
+                    fontSize: 13, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "inherit",
                     cursor: igURL.trim() && !scrubbing ? "pointer" : "not-allowed",
                     display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
                   }}
@@ -382,7 +382,7 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
                   {scrubbing
                     ? <Loader size={14} style={{ animation: "spin 0.8s linear infinite" }} />
                     : <Sparkles size={14} />}
-                  {scrubbing ? "Reading" : "Read"}
+                  {scrubbing ? "SCANNING" : "SCAN"}
                 </button>
               </div>
               {scrubError && <div style={errStyle}>{scrubError}</div>}
@@ -404,7 +404,7 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
                 onClick={function () { setStep("finish"); }}
                 disabled={!scrubbed || taste.trim().length < 10}
                 busy={false}
-                label={!scrubbed ? "Enter your Instagram and tap Read" : taste.trim().length < 10 ? "Describe your style to continue" : "Continue"}
+                label={!scrubbed ? "Enter your Instagram and tap SCAN" : taste.trim().length < 10 ? "Describe your style to continue" : "Continue"}
               />
             </>
           )}
