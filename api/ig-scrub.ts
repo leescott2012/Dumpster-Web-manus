@@ -77,7 +77,7 @@ async function scrapeWithApify(igUrls: string[]): Promise<{ items: ScrapedItem[]
   }
 
   // run-sync-get-dataset-items blocks until the actor finishes (up to `timeout` seconds)
-  // memory=1024 keeps cost low; instagram-scraper typically finishes in 15-40 s
+  // memory=1024: more RAM = faster runs (256 MB timed out at 40s once); cost is per result, not RAM
   const url =
     `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items` +
     `?token=${token}&timeout=${APIFY_TIMEOUT_S}&memory=1024`;
