@@ -35,6 +35,7 @@ var COST_CENTS: Record<string, number> = {
   ai_chat: 1,
   ai_recycle: 3,
   ig_scrub: 5,
+  ig_profile: 8, // free to the user (Apify ~5¢ + Claude ~1¢); still counts against the daily budget
   ai_label_auto: 12, // free to the user, but real Claude cost — still counts against the daily budget
 };
 

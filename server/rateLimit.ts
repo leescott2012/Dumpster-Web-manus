@@ -38,6 +38,9 @@ var LIMITS: Record<string, { count: number; window: "10 m" | "1 m" | "1 h" | "24
   ai_chat:     { count: 30, window: "10 m" },
   ai_recycle:  { count: 10, window: "10 m" },
   ig_scrub:    { count: 3,  window: "10 m" }, // expensive scraping
+  // Free taste-profile scrub (no credits): ~8¢ each, so 5/day/user is ~40¢ worst case.
+  ig_profile:  { count: 3,  window: "10 m" },
+  ig_profile_daily: { count: 5, window: "24 h" },
   tts:         { count: 20, window: "10 m" }, // ElevenLabs cost per call
   admin_user_detail: { count: 30, window: "10 m" }, // PII/IP lookup — throttle enumeration
   stripe_checkout: { count: 10, window: "1 h" }, // anti-spam

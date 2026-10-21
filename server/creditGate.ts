@@ -63,7 +63,7 @@ export async function checkCredits(
   req: IncomingMessage,
   res: ServerResponse,
   action: string,
-  opts?: { cost?: number; note?: string } // dynamic per-request cost (ai_label: 1/photo) + ledger note
+  opts?: { cost?: number; note?: string; free?: boolean } // free: no credits, keeps per-user daily cap + $ budget. dynamic per-request cost (ai_label: 1/photo) + ledger note
 ): Promise<{ userId: string | null; proceed: boolean; refund: () => Promise<void> }> {
   // 1) Auth required — no more guest-mode AI calls
   var userId = await getUserFromRequest(req);
@@ -84,6 +84,12 @@ export async function checkCredits(
   // no draw on our daily $ budget (auth + rate limit above still apply).
   if (userAnthropicKey(req)) return { userId: userId, proceed: true, refund: noopRefund };
 
+  // Free actions (one-time taste-profile scrub) also get a per-user DAILY cap.
+  if (opts && opts.free) {
+    var dailyOk = await enforceRateLimit(req, res, action + "_daily", userId, { code: action + "_limit" });
+    if (!dailyOk) return { userId: userId, proceed: false, refund: noopRefund };
+  }
+
   // 3) Global daily budget
   var budgetOk = await checkBudget(res);
   if (!budgetOk) return { userId: userId, proceed: false, refund: noopRefund };
@@ -102,7 +108,7 @@ export async function checkCredits(
   var isProd = (process.env.VERCEL_ENV || process.env.NODE_ENV) === "production";
   var creditsDisabled = !isProd && process.env.DISABLE_CREDIT_LIMIT === "1";
   var refund = noopRefund;
-  if (!creditsDisabled) {
+  if (!creditsDisabled && !(opts && opts.free)) {
     var cost = opts && opts.cost !== undefined ? opts.cost : (COSTS[action] || 2);
     var result = await deductCredits(userId, action, cost, opts && opts.note);
     if (!result.ok && !result.insufficient) {

@@ -13,7 +13,7 @@
  * Step 1 (username) is skipped for anyone who already has one.
  */
 import { useEffect, useRef, useState } from "react";
-import { aiFetch } from "@/lib/creditSync";
+import { scrubInstagramProfile, mergeTaste } from "@/lib/igProfileScrub";
 import { Loader, Check, X as XIcon, Upload, Sparkles, Instagram } from "lucide-react";
 import { getAuthHeaders, supabase } from "@/lib/supabase";
 import { AVATAR_ICONS, AVATAR_COLORS, type AvatarIconName } from "@/lib/avatarIcons";
@@ -132,36 +132,15 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
   async function scrubInstagram() {
     var handle = igURL.trim();
     if (!handle) return;
-    var url = /instagram\.com\//i.test(handle)
-      ? handle
-      : "https://instagram.com/" + handle.replace(/^@/, "");
     setScrubbing(true);
     setScrubError(null);
     try {
-      var headers = await getAuthHeaders();
-      var res = await aiFetch("/api/ig-scrub", {
-        method: "POST",
-        headers: Object.assign({ "Content-Type": "application/json" }, headers),
-        body: JSON.stringify({ profileURL: url }),
-      });
-      var data = await res.json();
-      if (!res.ok) {
-        setScrubError(data.error || "Couldn't read that profile — you can type your style instead");
-        setScrubbing(false);
-        return;
-      }
-      var pieces = [data.description, data.engagementPlaybook].filter(Boolean).join("\n\n");
-      if (!pieces) {
-        setScrubError("Nothing usable came back — try another profile or type your style instead");
-        setScrubbing(false);
-        return;
-      }
-      setTaste(function (prev) { return prev.trim() ? prev.trim() + "\n\n" + pieces : pieces; });
-      setScrubbing(false);
-    } catch {
-      setScrubError("Network error — you can type your style instead");
-      setScrubbing(false);
+      var pieces = await scrubInstagramProfile(handle);
+      setTaste(function (prev) { return mergeTaste(prev, pieces); });
+    } catch (e) {
+      setScrubError(e instanceof Error ? e.message : "Couldn't read that profile. You can type your style instead.");
     }
+    setScrubbing(false);
   }
 
   async function finish(useAI: boolean) {

@@ -52,15 +52,15 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ urls: lines }),
       });
-      if (!res.ok) throw new Error("Server error " + res.status);
+      if (!res.ok) {
+        var errBody: { error?: string } = {};
+        try { errBody = await res.json(); } catch { /* non-JSON */ }
+        throw new Error(errBody.error || (res.status === 401 ? "Sign in first, then try again." : "Scrub failed (error " + res.status + "). Try again in a minute."));
+      }
       var data = await res.json() as { results: ScrubResult[]; errors: string[] };
       if (data.results.length === 0) {
         var errMsg = data.errors && data.errors.length > 0 ? data.errors[0] : "";
-        if (errMsg.includes("APIFY_TOKEN")) {
-          setError("APIFY_TOKEN is not set — add it as an environment variable in your Vercel project dashboard, then redeploy.");
-        } else {
-          setError("No images found. Make sure the posts are public and the URLs are valid instagram.com/p/… or /reel/… links." + (errMsg ? " (" + errMsg + ")" : ""));
-        }
+        setError("No images found. Make sure the posts are public and the URLs are valid instagram.com/p/… or /reel/… links." + (errMsg ? " (" + errMsg + ")" : ""));
       } else {
         setResults(data.results);
         setFailedUrls(data.errors || []);
