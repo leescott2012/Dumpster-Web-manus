@@ -77,10 +77,10 @@ async function scrapeWithApify(igUrls: string[]): Promise<{ items: ScrapedItem[]
   }
 
   // run-sync-get-dataset-items blocks until the actor finishes (up to `timeout` seconds)
-  // memory=256 keeps cost low; instagram-scraper typically finishes in 15-40 s
+  // memory=1024 keeps cost low; instagram-scraper typically finishes in 15-40 s
   const url =
     `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items` +
-    `?token=${token}&timeout=${APIFY_TIMEOUT_S}&memory=256`;
+    `?token=${token}&timeout=${APIFY_TIMEOUT_S}&memory=1024`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -188,7 +188,7 @@ async function handleProfileScrub(
   // 1. Apify scrape (profile → posts)
   const apifyUrl =
     `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items` +
-    `?token=${process.env.APIFY_TOKEN}&timeout=${APIFY_TIMEOUT_S}&memory=256`;
+    `?token=${process.env.APIFY_TOKEN}&timeout=${APIFY_TIMEOUT_S}&memory=1024`;
   const apifyRes = await fetch(apifyUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
