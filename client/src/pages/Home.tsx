@@ -954,7 +954,7 @@ function HomeContent() {
       {/* Action Buttons */}
       <div style={{
         maxWidth: "1100px", margin: "0 auto", padding: "0 32px",
-        display: "flex", gap: "12px", flexWrap: "wrap", position: "relative",
+        display: "flex", gap: "12px", flexWrap: "wrap", justifyContent: "center", position: "relative",
         zIndex: (selectionMode || deleteMode) ? 50 : "auto",
         opacity: (selectionMode || deleteMode) ? 0.3 : 1, transition: "opacity 0.3s",
         pointerEvents: (selectionMode || deleteMode) ? "none" : "auto",
