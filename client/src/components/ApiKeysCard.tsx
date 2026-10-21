@@ -13,13 +13,16 @@ const PROVIDERS = [
   { id: "openai", label: "OpenAI" },
   { id: "openrouter", label: "OpenRouter" },
 ];
-type Status = "verified" | "rejected" | "quota" | "unreachable" | "checking";
+type Status = "verified" | "rejected" | "quota" | "unreachable" | "checking" | "signin" | "toofast" | "badkey";
 const MSG: Record<Status, string> = {
   verified: "Verified ✓",
   rejected: "Key rejected",
   quota: "Key works but is out of quota",
   unreachable: "Couldn't reach provider — try again",
   checking: "Checking…",
+  signin: "Sign in to Dumpster first, then test your key",
+  toofast: "Too many tests — wait a few minutes and try again",
+  badkey: "That doesn't look like a full key — paste the whole thing",
 };
 
 function load(id: string): { last4: string; status: Status } | null {
@@ -44,7 +47,10 @@ export default function ApiKeysCard() {
         headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
         body: JSON.stringify({ provider: id, key }),
       });
-      status = ((await r.json()) as { status?: Status }).status || "unreachable";
+      if (r.status === 401) status = "signin";
+      else if (r.status === 429) status = "toofast";
+      else if (r.status === 400) status = "badkey";
+      else status = ((await r.json()) as { status?: Status }).status || "unreachable";
     } catch { /* stays unreachable */ }
     if (status === "verified" || status === "quota") {
       try {

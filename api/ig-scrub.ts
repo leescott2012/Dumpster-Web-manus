@@ -23,6 +23,44 @@ const IG_URL    = /instagram\.com\/(p|reel|tv|stories)\//i;
 
 type Category = "Image" | "Video";
 
+// Apify run budget. Vercel kills the function at maxDuration (60s, vercel.json) and
+// SKIPS the refund, so Apify + Claude must finish well inside it: 40s + 12s.
+const APIFY_TIMEOUT_S = 40;
+const APIFY_ABORT_MS = 42_000;
+const CLAUDE_TIMEOUT_MS = 12_000;
+const RESERVED_PATHS = /^(p|reel|reels|tv|stories|explore|accounts|direct|about|s)$/i;
+
+/** Plain-English failure. `code` lets clients branch without parsing the message. */
+function fail(res: VercelResponse, status: number, error: string, code: string): false {
+  res.status(status).json({ error, code });
+  return false;
+}
+
+/** "@name", "name", "instagram.com/name/?igsh=…" → canonical profile URL, or null. */
+export function normalizeProfileURL(input: string): string | null {
+  const s = input.trim();
+  const m = /instagram\.com\/([A-Za-z0-9._]+)/i.exec(s) || /^@?([A-Za-z0-9._]{1,30})$/.exec(s);
+  const handle = m?.[1];
+  if (!handle || RESERVED_PATHS.test(handle)) return null;
+  return `https://www.instagram.com/${handle}/`;
+}
+
+const NOT_READABLE =
+  "We couldn't read any posts from that account. It may be private, spelled differently, or Instagram blocked the lookup. " +
+  "Check the handle and that the account is public, then try again.";
+
+/** Apify returns {error, errorDescription} rows (not HTTP errors) for private/missing profiles. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function usablePosts(items: any): any[] {
+  if (!Array.isArray(items)) return [];
+  return items.filter((p) => p && typeof p === "object" && !p.error && (p.caption != null || p.displayUrl || p.likesCount != null));
+}
+
+function isTimeout(e: unknown): boolean {
+  const n = (e as { name?: string })?.name;
+  return n === "TimeoutError" || n === "AbortError";
+}
+
 interface ScrapedItem {
   src: string;
   category: Category;
@@ -41,7 +79,7 @@ async function scrapeWithApify(igUrls: string[]): Promise<{ items: ScrapedItem[]
   // memory=256 keeps cost low; instagram-scraper typically finishes in 15-40 s
   const url =
     `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items` +
-    `?token=${token}&timeout=50&memory=256`;
+    `?token=${token}&timeout=${APIFY_TIMEOUT_S}&memory=256`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -53,17 +91,19 @@ async function scrapeWithApify(igUrls: string[]): Promise<{ items: ScrapedItem[]
       addParentData: false,
     }),
     // node fetch signal for overall request timeout
-    signal: AbortSignal.timeout(55_000),
+    signal: AbortSignal.timeout(APIFY_ABORT_MS),
   });
 
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
-    return { items: [], errors: [`Apify error ${res.status}: ${txt.slice(0, 120)}`] };
+    console.warn("[ig-scrub] apify", res.status, txt.slice(0, 200));
+    return { items: [], errors: [res.status === 408 ? "Instagram took too long to answer" : `Scraper unavailable (${res.status})`] };
   }
 
   // Dataset items — array of post objects
-  const posts = (await res.json()) as ApifyPost[];
+  const posts = usablePosts(await res.json()) as ApifyPost[];
   const items: ScrapedItem[] = [];
+  if (posts.length === 0) return { items, errors: ["Instagram returned nothing (private, deleted, or blocked)"] };
 
   for (const post of posts) {
     const postUrl = post.url
@@ -131,14 +171,15 @@ function formatNum(n: number): string {
 async function handleProfileScrub(
   req: VercelRequest,
   res: VercelResponse,
-  profileURL: string,
+  profileInput: string,
   resultsLimit: number,
 ) {
   if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(503).json({ error: "Profile scrub is not configured on this server." });
+    return fail(res, 503, "Profile scrub isn't set up on our side yet. Please try again later.", "scrub_unconfigured");
   }
-  if (!/instagram\.com\//i.test(profileURL)) {
-    return res.status(400).json({ error: "Provide a valid Instagram profile URL." });
+  const profileURL = normalizeProfileURL(profileInput);
+  if (!profileURL) {
+    return fail(res, 400, "That doesn't look like an Instagram handle. Enter it like @yourname or instagram.com/yourname.", "bad_handle");
   }
 
   const limit = Math.min(Math.max(resultsLimit, 4), 25);
@@ -146,7 +187,7 @@ async function handleProfileScrub(
   // 1. Apify scrape (profile → posts)
   const apifyUrl =
     `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items` +
-    `?token=${process.env.APIFY_TOKEN}&timeout=50&memory=256`;
+    `?token=${process.env.APIFY_TOKEN}&timeout=${APIFY_TIMEOUT_S}&memory=256`;
   const apifyRes = await fetch(apifyUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -157,19 +198,24 @@ async function handleProfileScrub(
       searchType: "user",
       addParentData: false,
     }),
-    signal: AbortSignal.timeout(55_000),
+    signal: AbortSignal.timeout(APIFY_ABORT_MS),
   });
 
   if (!apifyRes.ok) {
     const detail = await apifyRes.text().catch(() => "");
-    return res.status(502).json({ error: "Apify scrub failed", detail: detail.slice(0, 500) });
+    console.warn("[ig-scrub] apify profile", apifyRes.status, detail.slice(0, 300));
+    if (apifyRes.status === 408) {
+      return fail(res, 504, "Instagram took too long to answer. Try again in a minute.", "scrape_timeout");
+    }
+    // 401/402/403 = our Apify token/credit problem, not the user's: surface to Sentry.
+    if ([401, 402, 403].includes(apifyRes.status)) {
+      captureServerError(new Error("Apify " + apifyRes.status + ": " + detail.slice(0, 200)), "ig-scrub.apify-account", {});
+    }
+    return fail(res, 502, "Our Instagram reader is temporarily unavailable. Try again in a few minutes.", "scrape_unavailable");
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const posts = (await apifyRes.json()) as any[];
-  if (!Array.isArray(posts) || posts.length === 0) {
-    return res.status(404).json({ error: "No public posts found on this profile." });
-  }
+  const posts = usablePosts(await apifyRes.json());
+  if (posts.length === 0) return fail(res, 404, NOT_READABLE, "no_public_posts");
 
   // 2. Normalize + rank by engagement
   const ranked: RankedPost[] = posts.map((p) => {
@@ -216,7 +262,7 @@ ${p.location ? `Location: ${p.location}\n` : ""}${p.mentions.length ? `Mentions:
     .map((p, i) => `Post ${i + 4} (${fmtEng(p)}, ${p.productType}): ${p.firstLine || "[no caption]"}`)
     .join("\n");
 
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: CLAUDE_TIMEOUT_MS, maxRetries: 0 });
   const distill = await anthropic.messages.create({
     model: "claude-sonnet-4-5-20250929",
     max_tokens: 700,
@@ -269,7 +315,7 @@ Respond with ONLY the JSON object. No preamble, no markdown fences, no commentar
   }
 
   if (!parsed.styleDescription && !parsed.engagementPlaybook) {
-    return res.status(502).json({ error: "Couldn't analyze this profile. Try again." });
+    return fail(res, 502, "We read the profile but couldn't turn it into a style. Try again.", "analyze_failed");
   }
 
   return res.status(200).json({
@@ -294,11 +340,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Fail fast if Apify isn't configured — don't charge credits for a broken call.
   if (!process.env.APIFY_TOKEN) {
-    return res.status(503).json({ error: "IG Scrub is not configured on this server." });
+    return res.status(503).json({ error: "Instagram scrub isn't set up on our side yet. Please try again later.", code: "scrub_unconfigured" });
   }
 
-  // Auth + rate limit + daily budget + credit gate.
-  const gate = await checkCredits(req, res, "ig_scrub");
+  // Profile scrub = one-time taste-profile creation: FREE (no credits) but still
+  // auth + rate limit (3/10min, 5/day) + global daily $ budget. Media scrub stays 5 credits.
+  const isProfile = typeof (req.body || {}).profileURL === "string" && !!req.body.profileURL;
+  const gate = await checkCredits(req, res, isProfile ? "ig_profile" : "ig_scrub", isProfile ? { free: true } : undefined);
   if (!gate.proceed) return;
 
   // Same contract as the AI routes: refund unless we wrote a useful 200.
@@ -318,15 +366,16 @@ async function runScrub(req: VercelRequest, res: VercelResponse, userId: string 
       await handleProfileScrub(req, res, profileURL, resultsLimit ?? 12);
       return res.statusCode === 200;
     } catch (err) {
+      if (isTimeout(err)) {
+        return fail(res, 504, "Instagram took too long to answer. Try again in a minute.", "scrape_timeout");
+      }
       captureServerError(err, "ig-scrub.profile", { userId });
-      res.status(500).json({ error: "Scrub failed" });
-      return false;
+      return fail(res, 500, "Something went wrong reading that profile. Try again in a minute.", "scrub_error");
     }
   }
 
   if (!urls || !Array.isArray(urls)) {
-    res.status(400).json({ error: "urls array required" });
-    return false;
+    return fail(res, 400, "Paste at least one Instagram post link.", "bad_request");
   }
 
   try {
@@ -363,8 +412,8 @@ async function runScrub(req: VercelRequest, res: VercelResponse, userId: string 
   } catch (err) {
     // Previously unhandled — an Apify/network failure here would 500 with no
     // observability at all (backend security audit, 2026-07-01).
+    if (isTimeout(err)) return fail(res, 504, "Instagram took too long to answer. Try again in a minute.", "scrape_timeout");
     captureServerError(err, "ig-scrub", { userId });
-    res.status(500).json({ error: "Scrub failed" });
-    return false;
+    return fail(res, 500, "Something went wrong with the scrub. Try again in a minute.", "scrub_error");
   }
 }

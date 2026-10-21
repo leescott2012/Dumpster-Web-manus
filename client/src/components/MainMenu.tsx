@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpStyles, saveDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, TASTE_PROFILE_MAX, AI_RULES_MAX, DUMP_STYLE_USED_BY, type DumpStyle } from "@/lib/captionPool";
 import ApiKeysCard from "./ApiKeysCard";
+import { scrubInstagramProfile, mergeTaste } from "@/lib/igProfileScrub";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -587,6 +588,23 @@ function TasteProfileSection() {
   const [profile, setProfile] = useState<string>(() => loadTasteProfile());
   const [rules, setRules] = useState<string>(() => loadAIRules());
   const [profileStatus, setProfileStatus] = useState<SaveStatus>("idle");
+  const [igHandle, setIgHandle] = useState("");
+  const [igBusy, setIgBusy] = useState(false);
+  const [igError, setIgError] = useState<string | null>(null);
+  async function buildFromInstagram() {
+    if (!igHandle.trim() || igBusy) return;
+    setIgBusy(true);
+    setIgError(null);
+    try {
+      const text = await scrubInstagramProfile(igHandle);
+      setProfile(p => mergeTaste(p, text)); // autosaves + cloud-syncs; Valet reads it
+      setIgHandle("");
+      toast.success("Taste profile built from Instagram");
+    } catch (e) {
+      setIgError(e instanceof Error ? e.message : "Couldn't read that profile.");
+    }
+    setIgBusy(false);
+  }
   const [rulesStatus, setRulesStatus] = useState<SaveStatus>("idle");
 
   // Auto-save with 1.2s debounce. Status flips:
@@ -687,6 +705,21 @@ function TasteProfileSection() {
             boxSizing: "border-box",
           }}
         />
+        {/* Free: build the profile from a public Instagram account */}
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <input
+            value={igHandle}
+            onChange={e => { setIgHandle(e.target.value); setIgError(null); }}
+            placeholder="Build from Instagram: @username (free)"
+            aria-label="Instagram handle"
+            style={{ flex: 1, minWidth: 0, background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 8, color: "#fff", padding: "8px 10px", fontSize: 12 }}
+          />
+          <button onClick={buildFromInstagram} disabled={!igHandle.trim() || igBusy}
+            style={{ background: "var(--accent)", color: "#000", border: "none", borderRadius: 8, padding: "0 12px", fontWeight: 600, fontSize: 12, cursor: igHandle.trim() && !igBusy ? "pointer" : "not-allowed", opacity: igHandle.trim() && !igBusy ? 1 : 0.5 }}>
+            {igBusy ? "Reading…" : "Build"}
+          </button>
+        </div>
+        {igError && <div style={{ fontSize: 11, color: "#f87171", marginTop: 6, lineHeight: 1.4 }}>{igError}</div>}
       </div>
 
       {/* AI Rules */}

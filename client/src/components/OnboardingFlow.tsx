@@ -13,7 +13,7 @@
  * Step 1 (username) is skipped for anyone who already has one.
  */
 import { useEffect, useRef, useState } from "react";
-import { aiFetch } from "@/lib/creditSync";
+import { scrubInstagramProfile, mergeTaste } from "@/lib/igProfileScrub";
 import { Loader, Check, X as XIcon, Upload, Sparkles, Instagram } from "lucide-react";
 import { getAuthHeaders, supabase } from "@/lib/supabase";
 import { AVATAR_ICONS, AVATAR_COLORS, type AvatarIconName } from "@/lib/avatarIcons";
@@ -142,38 +142,19 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
       setScrubError("That doesn't look like an Instagram handle. Use @name or your profile link.");
       return;
     }
-    var url = "https://instagram.com/" + handle;
     setScrubbing(true);
     setScrubError(null);
     try {
-      var headers = await getAuthHeaders();
-      var res = await aiFetch("/api/ig-scrub", {
-        method: "POST",
-        headers: Object.assign({ "Content-Type": "application/json" }, headers),
-        body: JSON.stringify({ profileURL: url }),
-      });
-      var data = await res.json();
-      if (!res.ok) {
-        setScrubError(data.error || "Couldn't scrub that profile. Check the handle (it must be public) and try again.");
-        setScrubbing(false);
-        return;
-      }
-      var pieces = [data.description, data.engagementPlaybook].filter(Boolean).join("\n\n");
-      if (!pieces) {
-        setScrubError("Nothing usable came back. Check the handle (it must be public) and try again.");
-        setScrubbing(false);
-        return;
-      }
-      setTaste(function (prev) { return prev.trim() ? prev.trim() + "\n\n" + pieces : pieces; });
+      var pieces = await scrubInstagramProfile(handle);
+      setTaste(function (prev) { return mergeTaste(prev, pieces); });
       // Link the handle to the account (user metadata: no schema change) + device.
       try { localStorage.setItem("dumpster_ig_handle", handle); } catch (_) { /* noop */ }
       try { await supabase.auth.updateUser({ data: { ig_handle: handle } }); } catch (_) { /* non-fatal */ }
       setScrubbed(true);
-      setScrubbing(false);
-    } catch {
-      setScrubError("Network error. Try again.");
-      setScrubbing(false);
+    } catch (e) {
+      setScrubError(e instanceof Error ? e.message : "Couldn't read that profile. Check the handle (it must be public) and try again.");
     }
+    setScrubbing(false);
   }
 
   async function finish(useAI: boolean) {
