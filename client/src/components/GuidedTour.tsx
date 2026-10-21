@@ -13,7 +13,6 @@ import { X } from "lucide-react";
 import { IS_OWNER } from "@/lib/photoData";
 
 var TOUR_KEY = "dumpster_tour_completed_v1";
-export var IG_HANDLE_KEY = "dumpster_ig_handle";
 
 interface TourStep {
   target: string;   // CSS selector
@@ -48,12 +47,11 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
   var [step, setStep] = useState(-1); // -1 = welcome card
   var [rect, setRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   var [missing, setMissing] = useState(false);
-  var [handle, setHandle] = useState("");
   var stepRef = useRef(step);
   stepRef.current = step;
 
   useEffect(function () {
-    if (active) { setStep(-1); setRect(null); setHandle(""); }
+    if (active) { setStep(-1); setRect(null); }
   }, [active]);
 
   function finish() {
@@ -61,9 +59,6 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
     onEnd();
   }
   function begin() {
-    var h = handle.trim().replace(/^@/, "").slice(0, 40);
-    // ponytail: no profile column for this yet; device-local until the scrub work reads it
-    if (h) { try { localStorage.setItem(IG_HANDLE_KEY, h); } catch (_) { /* noop */ } }
     setStep(0);
   }
   function advance() {
@@ -127,12 +122,6 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
           <div style={{ fontSize: 14, color: "#aaa", lineHeight: 1.6, marginBottom: 20 }}>
             A 1-minute tour. Tap the glowing spots to learn by doing.
           </div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#777", marginBottom: 6 }}>
-            INSTAGRAM HANDLE (OPTIONAL)
-          </label>
-          <input value={handle} onChange={function (e) { setHandle(e.target.value); }} placeholder="@yourhandle"
-            autoCapitalize="none" autoCorrect="off" spellCheck={false}
-            style={{ width: "100%", boxSizing: "border-box", padding: "13px 14px", borderRadius: 10, background: "#141414", border: "1px solid #2a2a2a", color: "#fff", fontSize: 15, fontFamily: "inherit", marginBottom: 16, outline: "none" }} />
           <button onClick={begin} style={{ width: "100%", padding: "13px", borderRadius: 10, background: GOLD, border: "none", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
             Start the tour
           </button>
