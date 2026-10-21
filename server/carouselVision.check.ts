@@ -31,4 +31,9 @@ assert.ok(out.length <= 750 && out.includes(line) && out.endsWith(times), "formu
 assert.equal(composePlaybook("base", "", ""), "base");
 assert.equal(composePlaybook("base", "", times), "base " + times);
 assert.ok(VISION_PROMPT.includes("hook") && VISION_PROMPT.includes("ender"));
+const sent = "Large carousels win. " + "Tag creators first and layer brand callouts and fabric details across every slide. ".repeat(10);
+const cleaned = composePlaybook(sent, line, times);
+assert.ok(cleaned.length <= 750 && cleaned.includes(line));
+const lead = cleaned.slice(0, cleaned.indexOf(line)).trimEnd();
+assert.ok(/[.!?]$/.test(lead), "base ends at a sentence end, not mid-word: " + lead.slice(-40));
 console.log("carouselVision ok:", line);

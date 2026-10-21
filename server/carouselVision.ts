@@ -74,11 +74,20 @@ export function formulaLine(r: VisionResult | null): string {
   return full.slice(0, FORMULA_MAX - 1).replace(/\s+\S*$/, "").replace(/[,;:\s]+$/, "") + ".";
 }
 
+/** Trim to <= max chars at a sentence end if one is near, else a word boundary + period (never mid-word). */
+function cutClean(text: string, max: number): string {
+  if (text.length <= max) return text.trimEnd();
+  const head = text.slice(0, Math.max(0, max - 1)); // keep a char for the closing period
+  const sentence = Math.max(head.lastIndexOf(". "), head.lastIndexOf("! "), head.lastIndexOf("? "));
+  if (sentence > max * 0.5) return head.slice(0, sentence + 1);
+  return head.replace(/\s+\S*$/, "").replace(/[,;:\s]+$/, "") + ".";
+}
+
 /** base playbook + carousel formula + best-times line, <=750 chars. Base text is trimmed first; the formula and times line are kept whole. */
 export function composePlaybook(base: string, formula: string, times: string): string {
   const tail = [formula, times].filter(Boolean).join(" ");
   if (!tail) return base;
-  return (base.slice(0, Math.max(0, PLAYBOOK_MAX - tail.length - 1)).trimEnd() + " " + tail).trim().slice(0, PLAYBOOK_MAX);
+  return (cutClean(base, Math.max(0, PLAYBOOK_MAX - tail.length - 1)) + " " + tail).trim().slice(0, PLAYBOOK_MAX);
 }
 
 /** Fetch slides + one vision call. Always resolves; "" on any failure. */
