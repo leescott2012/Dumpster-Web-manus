@@ -6,7 +6,7 @@
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 import {
-  X, Sparkles, Users, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Type, Wand2, Instagram,
+  X, Sparkles, Users, Image, Paintbrush, Info, ChevronRight, ArrowLeft, Instagram,
   KeyRound, LogOut, User, Share2, Check, Cloud, CloudOff,
 } from "lucide-react";
 import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpStyles, saveDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, TASTE_PROFILE_MAX, AI_RULES_MAX, DUMP_STYLE_USED_BY, type DumpStyle } from "@/lib/captionPool";
@@ -29,7 +29,7 @@ interface Folder {
 interface MainMenuProps {
   open: boolean;
   onClose: () => void;
-  onAISuggest: () => void;
+  onAISuggest?: () => void; // Auto-arrange is no longer in the AI menu (Auto Gen is on the main screen)
   onCaptions?: () => void; // no longer shown in AI Tools (captions live on each dump)
   onIGScrub: () => void;
   onTour?: () => void;
@@ -76,7 +76,7 @@ export function initAccent() {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function MainMenu({ open, onClose, onAISuggest, onIGScrub, onTour, onSignIn, onFriends, dumpCount, poolCount }: MainMenuProps) {
+export default function MainMenu({ open, onClose, onIGScrub, onTour, onSignIn, onFriends, dumpCount, poolCount }: MainMenuProps) {
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const edgeSwipe = useRef<{ x: number; y: number } | null>(null); // left-edge swipe = back to the folder list
   const [visible, setVisible] = useState(false);
@@ -114,10 +114,6 @@ export default function MainMenu({ open, onClose, onAISuggest, onIGScrub, onTour
     setActiveTab(id);
   }
 
-  function handleAISuggestClick() {
-    onClose();
-    setTimeout(onAISuggest, 300);
-  }
   function handleIGScrubClick() {
     onClose();
     setTimeout(onIGScrub, 300);
@@ -356,12 +352,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onIGScrub, onTour
             }}>
               <style>{`@keyframes slideInRight { from { opacity:0; transform: translateX(40px); } to { opacity:1; transform: translateX(0); } }`}</style>
               {activeTab === "ai" && (
-                <AIToolsPanel
-                  onAISuggest={handleAISuggestClick}
-                  onIGScrub={handleIGScrubClick}
-                  dumpCount={dumpCount}
-                  poolCount={poolCount}
-                />
+                <AIToolsPanel onIGScrub={handleIGScrubClick} />
               )}
               {activeTab === "appearance" && (
                 <AppearancePanel accent={accent} onAccentChange={handleAccentChange} />
@@ -459,25 +450,11 @@ function FolderRow({ folder, index, visible, onClick }: {
 
 // ── AI Tools Panel ──────────────────────────────────────────────────────────
 
-function AIToolsPanel({ onAISuggest, onIGScrub, poolCount }: {
-  onAISuggest: () => void; onIGScrub: () => void;
-  dumpCount: number; poolCount: number;
-}) {
+function AIToolsPanel({ onIGScrub }: { onIGScrub: () => void }) {
   const { user } = useAuth();
-  // Order on screen (kept simple so nobody gets lost): Auto-arrange -> who you are (Taste Profile + Rules)
-  // -> Instagram Scrub -> Dump Styles (looks formed from scrubs).
+  // Three things only, in this order, so nobody gets lost: who you are (Taste Profile + Rules)
+  // -> Instagram Scrub -> Dump Styles (looks formed from scrubs). Auto Gen lives on the main screen.
   const tools = [
-    {
-      id: "suggest",
-      title: "Auto-arrange Dump",
-      desc: "Claude Vision analyzes your pool and builds one cohesive carousel of 2–20 photos.",
-      tone: "var(--accent)",
-      icon: <Wand2 size={20} strokeWidth={1.5} />,
-      meta: poolCount + " photos in pool",
-      enabled: poolCount >= 2,
-      disabledHint: "Need at least 2 pool photos",
-      onClick: onAISuggest,
-    },
     {
       id: "igscrub",
       title: "Instagram Scrub",
@@ -542,12 +519,10 @@ function AIToolsPanel({ onAISuggest, onIGScrub, poolCount }: {
         Powered by Claude Haiku & Apify
       </div>
 
-      {tile(tools[0])}
-
       {/* Who you are: Taste Profile + Rules (in the slot Generate Captions used to take) */}
       <TasteProfileSection />
 
-      {tile(tools[1])}
+      {tile(tools[0])}
 
       {/* Looks formed from scrubs */}
       <DumpStylesSection signedIn={!!user} />
