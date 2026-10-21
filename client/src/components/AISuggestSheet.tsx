@@ -95,6 +95,7 @@ export default function AISuggestSheet({
         const d = await r.json().catch(() => ({}));
         toast.success("Dump discarded — " + (d.refunded || "") + " credits refunded");
       }
+      else if (r.status === 429) toast("Dump discarded — daily refund limit reached, no credits returned");
     } catch { /* refund is best-effort; balance re-syncs on next read */ }
   }, []);
 
