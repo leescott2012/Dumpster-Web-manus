@@ -153,7 +153,7 @@ export default function DumpActionSheet({
               {dump.photos.length + " photos" + (hasCaptions ? " · captions ready" : "")}
             </div>
           </div>
-          <button aria-label="Close"
+          <button aria-label="Close" data-tour="action-close"
             onClick={onClose}
             style={{
               width: 32, height: 32, borderRadius: "50%", flexShrink: 0, marginLeft: 12,
@@ -221,6 +221,7 @@ export default function DumpActionSheet({
             return (
               <button
                 key={i}
+                data-tour={action.label === "Valet" ? "action-valet" : undefined}
                 onClick={action.disabled ? undefined : action.onClick}
                 disabled={action.disabled}
                 style={{

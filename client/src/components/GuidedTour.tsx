@@ -20,6 +20,7 @@ interface TourStep {
   body: string;
   swallow?: boolean;
   scroll?: boolean;
+  after?: string; // selector to click when leaving this step (closes menus the step opened)
 }
 
 var STEPS: TourStep[] = [
@@ -30,8 +31,10 @@ var STEPS: TourStep[] = [
   { target: "[data-tour='taste-build']", title: "Your style", body: "Your style profile comes from your Instagram. Tap Build to read it (free). Valet and every dump use it.", scroll: true },
   { target: "[data-tour='dump-styles']", title: "Dump Styles", body: "Save named recipes so every dump comes out your way. Tap to look.", scroll: true },
   { target: "[data-tour='menu-close']", title: "Close the menu", body: "Tap the X to head back." },
-  { target: "[data-tour='dump-menu']", title: "Valet", body: "Your AI assistant. Tap the dots, then Valet, to reorder and set the vibe.", swallow: true, scroll: true },
-  { target: ".photo-card", title: "Recycle", body: "Tap a photo's dots to swap it for a fresh one from your pool.", swallow: true, scroll: true },
+  { target: "[data-tour='dump-menu']", title: "Valet", body: "Meet your Valet. Every dump has a menu. Tap the dots.", scroll: true },
+  { target: "[data-tour='action-valet']", title: "Valet is your AI assistant", body: "Chat with it to reorder photos, swap shots and set the vibe for this dump. It already knows your style and rules.", swallow: true, after: "[data-tour='action-close']" },
+  { target: "[data-tour='photo-dots']", title: "Recycle", body: "Every photo has a menu too. Tap its dots.", scroll: true },
+  { target: "[data-tour='photo-recycle']", title: "Recycle swaps a photo", body: "Recycle replaces this photo with a fresh one from your pool of unused photos. Same spot, new shot.", swallow: true, after: "[data-tour='photo-menu-backdrop']" },
   { target: "[data-tour='ai-suggest']", title: "Auto Gen", body: "One tap builds your best carousel from your pool.", swallow: true, scroll: true },
   { target: "[data-tour='new-dump']", title: "New Dump", body: "Start an empty dump and fill it yourself.", swallow: true, scroll: true },
   { target: "[data-tour='pool-section']", title: "The Pool", body: "Your unused photos wait here. Videos and captions have pools too. Tap it.", scroll: true },
@@ -63,6 +66,11 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
     setStep(0);
   }
   function advance() {
+    var leaving = STEPS[stepRef.current];
+    if (leaving && leaving.after) {
+      var closer = document.querySelector(leaving.after) as HTMLElement | null;
+      if (closer) closer.click();
+    }
     if (stepRef.current >= STEPS.length - 1) finish();
     else setStep(stepRef.current + 1);
   }
