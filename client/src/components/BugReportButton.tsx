@@ -12,7 +12,7 @@ import { Bug, X, Send, Paperclip } from "lucide-react";
 import * as Sentry from "@sentry/react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { logBug } from "@/lib/bugLogger";
+import { saveBug } from "@/lib/bugLogger";
 
 var MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024; // Sentry attachment cap headroom
 
@@ -74,13 +74,17 @@ export default function BugReportButton() {
       // screenshot included (Sentry only stores it as an attachment there, which
       // the admin bin can't render) — this is what makes it viewable in-app.
       // Silent: bug button already has its own confirmation UI.
-      logBug({
+      var saved = await saveBug({
         source: "user-bug-button",
         message: trimmed,
         context: { reporter_email: email.trim() || user?.email || null, name: user?.user_metadata?.full_name || null },
         screenshot: screenshot || undefined,
-        silent: true,
       });
+      if (!saved) {
+        toast.error("Couldn't save your report. Please try again.", { position: "top-center", duration: 3500 });
+        setSending(false);
+        return;
+      }
       // Centered + longer than the app default (bottom-center, easy to miss
       // per feedback) — this is the one confirmation a user actually needs
       // to see before the sheet closes under it.

@@ -136,6 +136,17 @@ async function postBug(body: Awaited<ReturnType<typeof buildBody>>): Promise<boo
 }
 
 /**
+ * Save a bug and report whether it landed. Retries without the screenshot
+ * because a phone screenshot as base64 can exceed the 4.5 MB request cap
+ * and the text would otherwise be lost with it.
+ */
+export async function saveBug(args: BugInput): Promise<boolean> {
+  if (await postBug(await buildBody(args))) return true;
+  if (!args.screenshot) return false;
+  return postBug(await buildBody({ ...args, screenshot: undefined }));
+}
+
+/**
  * Log a bug. Fires a toast (unless silent) so the user can confirm + send.
  * The toast's send button calls the same backend.
  *
