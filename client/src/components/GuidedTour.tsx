@@ -106,7 +106,7 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
 
   var skip = (
     <button onClick={finish} aria-label="Skip tour" style={{
-      position: "fixed", top: "calc(14px + env(safe-area-inset-top, 0px))", right: 14, zIndex: 10002,
+      position: "fixed", top: "calc(14px + env(safe-area-inset-top, 0px))", left: 14, zIndex: 10002, // left: right side holds the menu button the first step points at
       display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20,
       background: "rgba(20,20,20,0.9)", border: "1px solid #2a2a2a", color: "#ccc",
       fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
