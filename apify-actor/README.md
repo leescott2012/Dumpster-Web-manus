@@ -1,18 +1,32 @@
-# Dumpster Instagram Scan (Apify actor)
+# Dumpster Instagram Scan
 
-Our own actor on Apify (account `geniussscott`, actor id `Zj1CthOiflFEQ6hnM`). One run = scrape a profile with
-`apify/instagram-scraper`, normalize + rank posts, compute formats and best posting times, retry on timeout.
+Reads the **public** posts of an Instagram profile and turns them into what Dumpster needs to learn a creator's style, in one run.
 
-Used by `api/ig-scrub.ts` (profile scan). If this actor fails, the route falls back to calling
-`apify/instagram-scraper` directly. Override the actor with env `APIFY_PROFILE_ACTOR` (`off` disables it).
+Built for [Dumpster](https://dumpster-web-manus.vercel.app), a photo-dump carousel builder. Private and personal use: it does not log in and never touches private accounts.
 
-Cost per run (verified on Apify, 2026-10-21): about $0.001 for this actor plus the underlying scraper
-(about $0.0025 per post returned).
+## What you get (per profile)
+- **Ranked posts**: each post's caption, first line (hook), hashtags, mentions, likes, comments, views, format and slide count, location and posting time, with an engagement score (comments count 3x, views 0.05x).
+- **Top posts**: the 3 best-performing posts.
+- **Formats**: how many carousel, single-image and video posts, and the average score of each.
+- **Best posting time**: best weekday and 3-hour window by average engagement. Times are in UTC. Needs at least 8 dated posts.
+- **Hashtags** used across the profile.
+- For **post and reel links** instead of a profile: the image and video links of each post, with carousel slides in order.
 
-## Deploy / update
-Apify's web editor only keeps files you have opened. Easiest: `python3 -m http.server` (with CORS) over this folder,
-open each file in the Apify Source editor, replace its content, Save & build. Files: `package.json`,
-`Dockerfile`, `.actor/actor.json`, `.actor/input_schema.json`, `src/main.js`, `src/lib.js`.
+## Input
+| Field | What it does |
+|---|---|
+| `handles` | Public handles, with or without `@` |
+| `postUrls` | `instagram.com/p/`, `/reel/` or `/tv/` links |
+| `resultsPerProfile` | Recent posts to read per handle, 4 to 30 (default 12) |
+| `upstreamTimeoutSecs` | Time allowed for the Instagram scraper per attempt (default 90) |
+| `upstreamMemoryMbytes` | Memory for the Instagram scraper (default 1024) |
+| `retryOnTimeout` | Retry once with 1.5x time if it times out (default on) |
 
-## Test
-`npm test` (runs `test.js`, no Apify needed).
+## Output (one item per handle)
+`mode`, `handle`, `ok`, `postCount`, `topPosts`, `posts`, `hashtags`, `formats`, `bestTimes`, or `ok: false` with an `error` (`bad_handle`, `no_public_posts`, `scrape_timeout`, `scrape_unavailable`).
+
+## Cost
+This actor is about $0.001 per run. It runs `apify/instagram-scraper` underneath, which charges about $0.0025 per post returned (12 posts is about $0.03). Both come out of your Apify usage.
+
+## Notes
+Scraping Instagram, even public pages, is against Instagram's terms of use. Use public data only, store totals and trends rather than other people's personal details, and expect Instagram to block or slow requests at times.

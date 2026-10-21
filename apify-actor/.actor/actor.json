@@ -4,5 +4,6 @@
   "title": "Dumpster Instagram Scan",
   "version": "0.0",
   "buildTag": "latest",
-  "input": "./input_schema.json"
+  "input": "./input_schema.json",
+  "description": "Dumpster's Instagram scan. Reads a public profile's recent posts and returns ranked posts, content formats (carousel, single, video), top hooks, hashtags and best posting times, ready for Dumpster's style profile. Wraps apify/instagram-scraper with a retry."
 }
