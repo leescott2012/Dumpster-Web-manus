@@ -7,6 +7,9 @@ import { aiFetch } from "@/lib/creditSync";
 import { X, Instagram, Search, Plus, Check, AlertCircle, Loader } from "lucide-react";
 import type { Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
+import { toast } from "sonner";
+import { scrubInstagramProfile, parseIgHandle } from "@/lib/igProfileScrub";
+import { loadDumpStyles, saveDumpStyles } from "@/lib/captionPool";
 
 interface ScrubResult {
   src: string;
@@ -27,6 +30,28 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
   var [selected, setSelected] = useState<Set<number>>(new Set());
   var [phase, setPhase] = useState<"input" | "preview">("input");
   var [error, setError] = useState<string | null>(null);
+  var [styleBusy, setStyleBusy] = useState(false);
+  var [styleDone, setStyleDone] = useState<string | null>(null);
+
+  // One @name (and nothing else) typed: offer to save that account's style as a Dump Style.
+  var oneLine = urlText.split(/[\n,]+/).map(function(x) { return x.trim(); }).filter(Boolean);
+  var styleHandle = oneLine.length === 1 ? parseIgHandle(oneLine[0]) : null;
+
+  var saveStyle = useCallback(async function() {
+    if (!styleHandle) return;
+    setStyleBusy(true); setError(null); setStyleDone(null);
+    try {
+      var text = await scrubInstagramProfile(styleHandle);
+      var st = { id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36), name: "@" + styleHandle, profile: text, rules: "", updatedAt: new Date().toISOString() };
+      saveDumpStyles(loadDumpStyles().concat(st));
+      setStyleDone("@" + styleHandle);
+      toast.success("Saved @" + styleHandle + " as a Dump Style");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Couldn't read that account. Try again in a minute.");
+    } finally {
+      setStyleBusy(false);
+    }
+  }, [styleHandle]);
 
   // Reset all state when sheet opens fresh
   useEffect(function() {
@@ -38,6 +63,8 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
       setSelected(new Set());
       setPhase("input");
       setError(null);
+      setStyleBusy(false);
+      setStyleDone(null);
     }
   }, [open]);
 
@@ -236,6 +263,26 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
                   : <><Search size={15} /> Scrub with Apify</>
                 }
               </button>
+              {styleHandle && (
+                <button
+                  onClick={saveStyle}
+                  disabled={styleBusy}
+                  style={{
+                    marginTop: 10, width: "100%", background: "#141414", border: "1px solid #2a2a2a", borderRadius: 12, padding: "13px",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    color: "#e8e8e8", fontSize: 13, fontWeight: 700, cursor: styleBusy ? "wait" : "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  {styleBusy
+                    ? <><Loader size={14} style={{ animation: "spin 0.8s linear infinite" }} /> Reading @{styleHandle}'s style… (up to a minute)</>
+                    : <>Save @{styleHandle}'s style as a Dump Style (free)</>}
+                </button>
+              )}
+              {styleDone && (
+                <div style={{ marginTop: 10, fontSize: 12, color: "#4ade80", lineHeight: 1.5 }}>
+                  Saved {styleDone} as a Dump Style. Find it under Dump Styles in AI Tools and turn it on.
+                </div>
+              )}
               <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </>
           )}

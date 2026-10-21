@@ -30,7 +30,7 @@ interface MainMenuProps {
   open: boolean;
   onClose: () => void;
   onAISuggest: () => void;
-  onCaptions: () => void;
+  onCaptions?: () => void; // no longer shown in AI Tools (captions live on each dump)
   onIGScrub: () => void;
   onTour?: () => void;
   onSignIn?: () => void;
@@ -76,7 +76,7 @@ export function initAccent() {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGScrub, onTour, onSignIn, onFriends, dumpCount, poolCount }: MainMenuProps) {
+export default function MainMenu({ open, onClose, onAISuggest, onIGScrub, onTour, onSignIn, onFriends, dumpCount, poolCount }: MainMenuProps) {
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const edgeSwipe = useRef<{ x: number; y: number } | null>(null); // left-edge swipe = back to the folder list
   const [visible, setVisible] = useState(false);
@@ -117,10 +117,6 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
   function handleAISuggestClick() {
     onClose();
     setTimeout(onAISuggest, 300);
-  }
-  function handleCaptionsClick() {
-    onClose();
-    setTimeout(onCaptions, 300);
   }
   function handleIGScrubClick() {
     onClose();
@@ -362,7 +358,6 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
               {activeTab === "ai" && (
                 <AIToolsPanel
                   onAISuggest={handleAISuggestClick}
-                  onCaptions={handleCaptionsClick}
                   onIGScrub={handleIGScrubClick}
                   dumpCount={dumpCount}
                   poolCount={poolCount}
@@ -464,10 +459,13 @@ function FolderRow({ folder, index, visible, onClick }: {
 
 // ── AI Tools Panel ──────────────────────────────────────────────────────────
 
-function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount }: {
-  onAISuggest: () => void; onCaptions: () => void; onIGScrub: () => void;
+function AIToolsPanel({ onAISuggest, onIGScrub, poolCount }: {
+  onAISuggest: () => void; onIGScrub: () => void;
   dumpCount: number; poolCount: number;
 }) {
+  const { user } = useAuth();
+  // Order on screen (kept simple so nobody gets lost): Auto-arrange -> who you are (Taste Profile + Rules)
+  // -> Instagram Scrub -> Dump Styles (looks formed from scrubs).
   const tools = [
     {
       id: "suggest",
@@ -481,36 +479,19 @@ function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount
       onClick: onAISuggest,
     },
     {
-      id: "captions",
-      title: "Generate Captions",
-      desc: "3 Instagram caption options + vibe descriptor for any dump. Pick a tone.",
-      tone: "#6E8EC8",
-      icon: <Type size={20} strokeWidth={1.5} />,
-      meta: dumpCount + " dump" + (dumpCount !== 1 ? "s" : "") + " ready",
-      enabled: dumpCount > 0,
-      disabledHint: "Create a dump first",
-      onClick: onCaptions,
-    },
-    {
       id: "igscrub",
       title: "Instagram Scrub",
-      desc: "Paste post URLs or direct image links — previews found images so you can pick what goes in your pool.",
+      desc: "Pull photos from Instagram posts, or type an @name to grab its photos and save its style as a Dump Style below.",
       tone: "#C87EC8",
       icon: <Instagram size={20} strokeWidth={1.5} />,
-      meta: "Any public URL",
+      meta: "Photos + styles from any public account",
       enabled: true,
       disabledHint: "",
       onClick: onIGScrub,
     },
   ];
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 4 }}>
-        Powered by Claude Haiku & Apify
-      </div>
-
-      {tools.map(tool => (
+  const tile = (tool: (typeof tools)[number]) => (
         <button
           key={tool.id}
           data-tour={"tool-" + tool.id}
@@ -553,10 +534,23 @@ function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount
             {tool.desc}
           </div>
         </button>
-      ))}
+  );
 
-      {/* Taste Profile + Rules */}
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 4 }}>
+        Powered by Claude Haiku & Apify
+      </div>
+
+      {tile(tools[0])}
+
+      {/* Who you are: Taste Profile + Rules (in the slot Generate Captions used to take) */}
       <TasteProfileSection />
+
+      {tile(tools[1])}
+
+      {/* Looks formed from scrubs */}
+      <DumpStylesSection signedIn={!!user} />
 
       <div style={{
         marginTop: 16, padding: "12px 14px",
@@ -692,8 +686,8 @@ function TasteProfileSection() {
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
           {isSignedIn
-            ? "Describe your aesthetic. Saves automatically and syncs across your devices."
-            : "Describe your aesthetic. Saves on this device. Sign in to sync across devices."}
+            ? "Who you are. Valet, captions and Auto Gen all read this. Build it free from YOUR Instagram below. Saves automatically and syncs."
+            : "Who you are. Valet, captions and Auto Gen all read this. Build it free from YOUR Instagram below. Saves on this device; sign in to sync."}
         </div>
         <textarea
           value={profile}
@@ -773,7 +767,6 @@ function TasteProfileSection() {
         )}
       </div>
 
-      <DumpStylesSection signedIn={isSignedIn} />
     </div>
   );
 }
@@ -876,7 +869,7 @@ function DumpStylesSection({ signedIn }: { signedIn: boolean }) {
         <SaveStatusPill status={status} />
       </div>
       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, marginBottom: 8 }}>
-        Saved recipes for how the AI builds your dumps. The active one is used on every AI suggestion.
+        Looks you borrowed from scrubs (or wrote yourself). Turn one on and every AI suggestion uses it.
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
         <button type="button" aria-pressed={!activeId} onClick={() => { activate(""); setEditId(""); }} style={styleChip(!activeId)}>None</button>
