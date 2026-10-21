@@ -96,7 +96,7 @@
       "memory": 512
     },
     "api/ig-scrub.ts": {
-      "maxDuration": 60,
+      "maxDuration": 120,
       "memory": 512
     },
     "api/ai-chat.ts": {

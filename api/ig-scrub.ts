@@ -23,11 +23,12 @@ const IG_URL    = /instagram\.com\/(p|reel|tv|stories)\//i;
 
 type Category = "Image" | "Video";
 
-// Apify run budget. Vercel kills the function at maxDuration (60s, vercel.json) and
-// SKIPS the refund, so Apify + Claude must finish well inside it: 40s + 12s.
-const APIFY_TIMEOUT_S = 40;
-const APIFY_ABORT_MS = 42_000;
-const CLAUDE_TIMEOUT_MS = 12_000;
+// Apify run budget. Vercel kills the function at maxDuration (120s, vercel.json) and
+// SKIPS the refund, so Apify + Claude must finish well inside it: 90s + 20s.
+// (40s was too short: a real profile run returned TIMED-OUT on 2026-10-21.)
+const APIFY_TIMEOUT_S = 90;
+const APIFY_ABORT_MS = 92_000;
+const CLAUDE_TIMEOUT_MS = 20_000;
 const RESERVED_PATHS = /^(p|reel|reels|tv|stories|explore|accounts|direct|about|s)$/i;
 
 /** Plain-English failure. `code` lets clients branch without parsing the message. */
@@ -204,7 +205,7 @@ async function handleProfileScrub(
   if (!apifyRes.ok) {
     const detail = await apifyRes.text().catch(() => "");
     console.warn("[ig-scrub] apify profile", apifyRes.status, detail.slice(0, 300));
-    if (apifyRes.status === 408) {
+    if (apifyRes.status === 408 || /TIMED-OUT/.test(detail)) {
       return fail(res, 504, "Instagram took too long to answer. Try again in a minute.", "scrape_timeout");
     }
     // 401/402/403 = our Apify token/credit problem, not the user's: surface to Sentry.
