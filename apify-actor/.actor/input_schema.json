@@ -1,0 +1,51 @@
+{
+  "title": "Dumpster Instagram Scan",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "handles": {
+      "title": "Profile handles",
+      "type": "array",
+      "description": "Public Instagram handles (with or without @). Each returns ranked posts, formats and best posting times.",
+      "editor": "stringList",
+      "default": []
+    },
+    "postUrls": {
+      "title": "Post / reel URLs",
+      "type": "array",
+      "description": "instagram.com/p/, /reel/ or /tv/ links. Each returns image/video links.",
+      "editor": "stringList",
+      "default": []
+    },
+    "resultsPerProfile": {
+      "title": "Posts per profile",
+      "type": "integer",
+      "description": "How many recent posts to read per handle (4-30).",
+      "default": 12,
+      "minimum": 4,
+      "maximum": 30
+    },
+    "upstreamTimeoutSecs": {
+      "title": "Scraper timeout (seconds)",
+      "type": "integer",
+      "description": "Per attempt. A timed-out attempt is retried once with 1.5x this.",
+      "default": 90,
+      "minimum": 20,
+      "maximum": 280
+    },
+    "upstreamMemoryMbytes": {
+      "title": "Scraper memory (MB)",
+      "type": "integer",
+      "default": 1024,
+      "minimum": 256,
+      "maximum": 4096,
+      "description": "Memory for the underlying Instagram scraper run. More memory finishes faster."
+    },
+    "retryOnTimeout": {
+      "title": "Retry on timeout",
+      "type": "boolean",
+      "description": "If the underlying scraper times out, retry once with 1.5x the time. Turn off when the caller has its own time budget.",
+      "default": true
+    }
+  }
+}
