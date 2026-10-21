@@ -17,6 +17,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { checkCredits, runCharged } from "../server/creditGate.js";
 import { captureServerError } from "../server/sentry.js";
 import { bestTimesLine } from "../server/bestTimes.js";
+import { carouselFormula, composePlaybook, pickCarousels } from "../server/carouselVision.js";
 
 const IMAGE_EXT = /\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i;
 const VIDEO_EXT = /\.(mp4|mov|webm)(\?|$)/i;
@@ -153,6 +154,7 @@ interface RankedPost {
   carouselLength: number;
   location: string;
   postedAt: string;
+  slideUrls: string[];
   engagementScore: number;
 }
 
@@ -168,12 +170,6 @@ function formatNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toString();
-}
-
-// Clients keep 750 chars of the playbook (iOS prefix(750)); keep room for the times line.
-function withBestTimes(playbook: string, line: string): string {
-  if (!line) return playbook;
-  return (playbook.slice(0, 750 - line.length - 1).trimEnd() + " " + line).trim();
 }
 
 // Our own Apify actor (apify-actor/ in this repo). Calls the store scraper itself, ranks posts, retries.
@@ -210,7 +206,8 @@ async function postsViaDumpsterActor(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return { posts: row.posts.map((p: any) => ({
       caption: p.caption, likesCount: p.likes, commentsCount: p.comments, videoViewCount: p.views,
-      productType: p.type, images: p.slides > 1 ? new Array(p.slides).fill(null) : undefined,
+      productType: p.type,
+      images: Array.isArray(p.slideUrls) && p.slideUrls.length > 1 ? p.slideUrls : p.slides > 1 ? new Array(p.slides).fill(null) : undefined,
       locationName: p.location, timestamp: p.postedAt, hashtags: p.hashtags, mentions: p.mentions,
     })) };
   } catch (e) {
@@ -235,6 +232,7 @@ async function handleProfileScrub(
   }
 
   const limit = Math.min(Math.max(resultsLimit, 4), 25);
+  const t0 = Date.now();
 
   // 1. Apify scrape (profile → posts)
   // Our own actor first (one run = scrape + retry); the plain store scraper is the fallback.
@@ -297,6 +295,7 @@ async function handleProfileScrub(
         : Array.isArray(p?.childPosts) ? p.childPosts.length : 1,
       location: (p?.locationName ?? "").toString(),
       postedAt: (p?.timestamp ?? p?.takenAt ?? "").toString(),
+      slideUrls: Array.isArray(p?.images) ? p.images.filter((u: unknown) => typeof u === "string") : [],
       // comments weighted 3x (engagement quality), views 0.05x (reels reach)
       engagementScore: likes + comments * 3 + views * 0.05,
     };
@@ -323,8 +322,14 @@ ${p.location ? `Location: ${p.location}\n` : ""}${p.mentions.length ? `Mentions:
     .join("\n");
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: CLAUDE_TIMEOUT_MS, maxRetries: 0 });
+  // Carousel order/content (vision) runs alongside the text distill: free of extra wall time, own 25s cap,
+  // skipped if the actor ate the budget (120s fn limit), "" on any failure.
+  const MODEL = "claude-sonnet-4-5-20250929";
+  const formulaP: Promise<string> = Date.now() - t0 > 70_000
+    ? Promise.resolve("")
+    : carouselFormula(anthropic, MODEL, pickCarousels(ranked));
   const distill = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250929",
+    model: MODEL,
     max_tokens: 700,
     messages: [
       {
@@ -380,7 +385,7 @@ Respond with ONLY the JSON object. No preamble, no markdown fences, no commentar
 
   return res.status(200).json({
     description: parsed.styleDescription ?? "",
-    engagementPlaybook: withBestTimes(parsed.engagementPlaybook ?? "", bestTimesLine(ranked)),
+    engagementPlaybook: composePlaybook(parsed.engagementPlaybook ?? "", await formulaP, bestTimesLine(ranked)),
     postsAnalyzed: ranked.length,
     hashtags: allUnique.slice(0, 10),
     topPosts: winners.map((w) => ({
