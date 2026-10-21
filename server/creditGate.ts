@@ -16,6 +16,7 @@ import { deductCredits, refundCredits, supabaseAdmin } from "./supabaseAdmin.js"
 import { enforceRateLimit } from "./rateLimit.js";
 import { checkBudget, recordCost } from "./dailyBudget.js";
 import { captureServerError } from "./sentry.js";
+import { makeRefundToken, claimRefundToken } from "./dumpRefund.js";
 
 /** No-op refund for gates that never deducted anything. */
 async function noopRefund(): Promise<void> {}
@@ -44,7 +45,7 @@ export async function getUserFromRequest(req: IncomingMessage): Promise<string |
 // 1 credit = ~1¢ of real AI cost. Keep in sync with server/dailyBudget.ts
 // COST_CENTS and client/src/lib/credits.ts CREDIT_COSTS.
 var COSTS: Record<string, number> = {
-  ai_suggest: 25, // Claude vision, up to 20 images (~25¢)
+  ai_suggest: 8,  // Auto Gen dump — subsidised (real cost up to ~25¢); refunded if the user rejects it
   ai_caption: 3,  // Claude Haiku vision (~3¢)
   // ai_label: no flat cost — priced per photo, see shared/aiLabelCost.ts (api/ai-label.ts passes opts.cost)
   ai_chat: 1,     // Valet (~1¢)
@@ -145,9 +146,19 @@ export async function checkCredits(
     var deductedUserId = userId;
     var charged = { daily: result.fromDaily, purchased: result.fromPurchased };
     var refunded = false;
+    // Auto Gen: single-use token so the client can claim a refund if the user
+    // rejects the result. Burned on auto-refund so a failed call can't be
+    // refunded twice (client only keeps the token from 2xx responses anyway).
+    var refundTokenId = "";
+    if (action === "ai_suggest") {
+      var rt = makeRefundToken(userId, charged.daily, charged.purchased);
+      refundTokenId = rt.id;
+      res.setHeader("X-Refund-Token", rt.token);
+    }
     refund = async function() {
       if (refunded) return;
       refunded = true;
+      if (refundTokenId) await claimRefundToken(refundTokenId).catch(function() {});
       try {
         await refundCredits(deductedUserId, charged.daily, charged.purchased, action);
       } catch (e) {

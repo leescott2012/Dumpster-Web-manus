@@ -238,7 +238,7 @@ export default function MainMenu({ open, onClose, onAISuggest, onCaptions, onIGS
               {activeTab ? null : "Tap a folder to open"}
             </div>
           </div>
-          <button aria-label="Close menu"
+          <button aria-label="Close menu" data-tour="menu-close"
             onClick={onClose}
             style={{
               width: 36, height: 36, borderRadius: "50%",
@@ -421,6 +421,7 @@ function FolderRow({ folder, index, visible, onClick }: {
 
       {/* Folder card */}
       <button
+        data-tour={"menu-" + folder.id}
         onClick={onClick}
         style={{
           width: "100%", textAlign: "left", cursor: "pointer",
@@ -512,6 +513,7 @@ function AIToolsPanel({ onAISuggest, onCaptions, onIGScrub, dumpCount, poolCount
       {tools.map(tool => (
         <button
           key={tool.id}
+          data-tour={"tool-" + tool.id}
           onClick={tool.enabled ? tool.onClick : undefined}
           disabled={!tool.enabled}
           style={{
@@ -862,7 +864,7 @@ function DumpStylesSection({ signedIn }: { signedIn: boolean }) {
   const editing = styles.find(s => s.id === editId);
 
   return (
-    <div style={{ background: "#141414", border: "1px solid rgba(200,160,110,0.18)", borderRadius: 12, padding: "14px 14px 12px" }}>
+    <div data-tour="dump-styles" style={{ background: "#141414", border: "1px solid rgba(200,160,110,0.18)", borderRadius: 12, padding: "14px 14px 12px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.02em" }}>
           Dump Styles
@@ -1150,7 +1152,7 @@ function AboutPanel({ onTour }: { onTour?: () => void }) {
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             }}
           >
-            TAKE A TOUR
+            REPLAY THE TOUR
           </button>
         </div>
       )}

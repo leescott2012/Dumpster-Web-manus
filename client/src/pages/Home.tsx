@@ -815,7 +815,7 @@ function HomeContent() {
             </button>
           )}
           {user && <NotificationBell />}
-          <button aria-label="Open menu"
+          <button aria-label="Open menu" data-tour="menu-btn"
             onClick={function(e) { e.stopPropagation(); setMenuOpen(true); }}
             style={{
               width: 36, height: 36, borderRadius: 9,
@@ -1263,7 +1263,7 @@ function HomeContent() {
         onUploadPhotos={handleUploadPhotos}
         onAICreateDumps={function() { setAiSheetOpen(true); }}
         onCreateDump={handleCreateDump}
-        onDone={function() { refreshProfile(); }}
+        onDone={function() { refreshProfile(); if (!isTourCompleted()) setTimeout(startTour, 600); }}
       />
       {user && (
         <ConnectionsPanel

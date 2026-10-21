@@ -22,6 +22,12 @@ import { loadTasteProfile, saveTasteProfile } from "@/lib/captionPool";
 /** Photos required before a user can finish setup and start making dumps. */
 export var MIN_PHOTOS = 30;
 
+/** "@name", "name" or an instagram.com/name link -> "name", or null if not a valid handle. */
+function igHandle(raw: string): string | null {
+  var m = raw.trim().match(/^(?:https?:\/\/)?(?:www\.)?(?:instagram\.com\/)?@?([A-Za-z0-9._]{1,30})\/?(?:\?.*)?$/i);
+  return m ? m[1] : null;
+}
+
 interface OnboardingFlowProps {
   open: boolean;
   /** Current pool size — drives the photo-step progress and gate. */
@@ -62,6 +68,7 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
   var [taste, setTaste] = useState(function () { return loadTasteProfile(); });
   var [igURL, setIgURL] = useState("");
   var [scrubbing, setScrubbing] = useState(false);
+  var [scrubbed, setScrubbed] = useState(false); // IG handle is required: set once the scrub succeeds
   var [scrubError, setScrubError] = useState<string | null>(null);
 
   // Step 4 — finishing
@@ -130,15 +137,22 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
    * failure path just surfaces a message and leaves the textarea editable.
    */
   async function scrubInstagram() {
-    var handle = igURL.trim();
-    if (!handle) return;
+    var handle = igHandle(igURL);
+    if (!handle) {
+      setScrubError("That doesn't look like an Instagram handle. Use @name or your profile link.");
+      return;
+    }
     setScrubbing(true);
     setScrubError(null);
     try {
       var pieces = await scrubInstagramProfile(handle);
       setTaste(function (prev) { return mergeTaste(prev, pieces); });
+      // Link the handle to the account (user metadata: no schema change) + device.
+      try { localStorage.setItem("dumpster_ig_handle", handle); } catch (_) { /* noop */ }
+      try { await supabase.auth.updateUser({ data: { ig_handle: handle } }); } catch (_) { /* non-fatal */ }
+      setScrubbed(true);
     } catch (e) {
-      setScrubError(e instanceof Error ? e.message : "Couldn't read that profile. You can type your style instead.");
+      setScrubError(e instanceof Error ? e.message : "Couldn't read that profile. Check the handle (it must be public) and try again.");
     }
     setScrubbing(false);
   }
@@ -342,14 +356,14 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
               </div>
 
               <div style={{ fontSize: 11, color: "#777", marginBottom: 8, letterSpacing: "0.04em" }}>
-                PULL FROM INSTAGRAM — yours, or an account you want to take inspiration from
+                YOUR INSTAGRAM (REQUIRED)
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
                 <div style={{ position: "relative", flex: 1 }}>
                   <Instagram size={15} color="#666" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
                   <input
                     value={igURL}
-                    onChange={function (e) { setIgURL(e.target.value); }}
+                    onChange={function (e) { setIgURL(e.target.value); setScrubbed(false); }}
                     placeholder="@username"
                     style={Object.assign({}, inputStyle, { padding: "12px 12px 12px 34px" })}
                   />
@@ -388,9 +402,9 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
 
               <PrimaryButton
                 onClick={function () { setStep("finish"); }}
-                disabled={taste.trim().length < 10}
+                disabled={!scrubbed || taste.trim().length < 10}
                 busy={false}
-                label={taste.trim().length < 10 ? "Describe your style to continue" : "Continue"}
+                label={!scrubbed ? "Enter your Instagram and tap Read" : taste.trim().length < 10 ? "Describe your style to continue" : "Continue"}
               />
             </>
           )}

@@ -78,6 +78,25 @@ export default function AISuggestSheet({
     setStyleSwitched(false);
   }, [open]);
   const variationRef = useRef(0);
+  // Single-use token from the server for the dump on screen; spent to get the
+  // credits back if the user rejects it (new suggestion / close without Create).
+  const refundTokenRef = useRef<string | null>(null);
+  const refundRejected = useCallback(async () => {
+    const token = refundTokenRef.current;
+    refundTokenRef.current = null;
+    if (!token) return;
+    try {
+      const r = await aiFetch("/api/ai-suggest-refund", {
+        method: "POST",
+        headers: Object.assign({ "Content-Type": "application/json" }, await getAiHeaders()),
+        body: JSON.stringify({ token }),
+      });
+      if (r.ok) {
+        const d = await r.json().catch(() => ({}));
+        toast.success("Dump discarded — " + (d.refunded || "") + " credits refunded");
+      }
+    } catch { /* refund is best-effort; balance re-syncs on next read */ }
+  }, []);
 
   // Apply advanced filters BEFORE truncating to MAX_PHOTOS so the cap is
   // applied to the filtered subset (not the full pool).
@@ -203,6 +222,7 @@ export default function AISuggestSheet({
         return;
       }
 
+      refundTokenRef.current = res.headers.get("X-Refund-Token");
       setCluster(first);
       setPhase("result");
     } catch (e) {
@@ -226,14 +246,16 @@ export default function AISuggestSheet({
 
   const handleNewSuggestion = useCallback(() => {
     if (tooFewCredits) return;
+    refundRejected();
     variationRef.current += 1;
     const next = isCapped ? windowIndex + 1 : 0;
     setWindowIndex(next);
     analyze(variationRef.current, pickPhotoWindow(orderedPool, MAX_PHOTOS, next));
-  }, [analyze, orderedPool, isCapped, windowIndex, tooFewCredits]);
+  }, [analyze, orderedPool, isCapped, windowIndex, tooFewCredits, refundRejected]);
 
   const handleCreate = useCallback(() => {
     if (!cluster) return;
+    refundTokenRef.current = null; // kept — no refund
     onCreateDumps([cluster]);
     onClose();
     setPhase("idle");
@@ -243,6 +265,7 @@ export default function AISuggestSheet({
   }, [cluster, onCreateDumps, onClose]);
 
   const handleClose = useCallback(() => {
+    refundRejected();
     onClose();
     setTimeout(() => {
       setPhase("idle");
@@ -252,7 +275,7 @@ export default function AISuggestSheet({
       variationRef.current = 0;
       setWindowIndex(0);
     }, 300);
-  }, [onClose]);
+  }, [onClose, refundRejected]);
 
   const activeStyle = dumpStyles.find((d) => d.id === activeStyleId);
 

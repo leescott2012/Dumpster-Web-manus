@@ -62,6 +62,10 @@
       "destination": "/api/social?fn=iap-verify"
     },
     {
+      "source": "/api/ai-suggest-refund",
+      "destination": "/api/social?fn=ai-suggest-refund"
+    },
+    {
       "source": "/api/api-key-test",
       "destination": "/api/social?fn=api-key-test"
     },
