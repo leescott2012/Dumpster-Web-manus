@@ -16,6 +16,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkCredits, runCharged } from "../server/creditGate.js";
 import { captureServerError } from "../server/sentry.js";
+import { bestTimesLine } from "../server/bestTimes.js";
 
 const IMAGE_EXT = /\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i;
 const VIDEO_EXT = /\.(mp4|mov|webm)(\?|$)/i;
@@ -167,6 +168,12 @@ function formatNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toString();
+}
+
+// Clients keep 750 chars of the playbook (iOS prefix(750)); keep room for the times line.
+function withBestTimes(playbook: string, line: string): string {
+  if (!line) return playbook;
+  return (playbook.slice(0, 750 - line.length - 1).trimEnd() + " " + line).trim();
 }
 
 async function handleProfileScrub(
@@ -321,7 +328,7 @@ Respond with ONLY the JSON object. No preamble, no markdown fences, no commentar
 
   return res.status(200).json({
     description: parsed.styleDescription ?? "",
-    engagementPlaybook: parsed.engagementPlaybook ?? "",
+    engagementPlaybook: withBestTimes(parsed.engagementPlaybook ?? "", bestTimesLine(ranked)),
     postsAnalyzed: ranked.length,
     hashtags: allUnique.slice(0, 10),
     topPosts: winners.map((w) => ({
