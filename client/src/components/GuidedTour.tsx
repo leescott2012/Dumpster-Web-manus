@@ -29,11 +29,11 @@ var STEPS: TourStep[] = [
   { target: "[data-tour='tool-igscrub']", title: "Scrubs", body: "Pull photos and your style from an Instagram account.", swallow: true },
   { target: "[data-tour='dump-styles']", title: "Dump Styles", body: "Save named recipes so every dump comes out your way. Tap to look.", },
   { target: "[data-tour='menu-close']", title: "Close the menu", body: "Tap the X to head back." },
-  { target: "[data-tour='pool-section']", title: "The Pool", body: "Your unused photos wait here. Videos and captions have pools too. Tap it.", scroll: true },
-  { target: ".photo-card", title: "Recycle", body: "Tap a photo's dots to swap it for a fresh one from your pool.", swallow: true, scroll: true },
   { target: "[data-tour='dump-menu']", title: "Valet", body: "Your AI assistant. Tap the dots, then Valet, to reorder and set the vibe.", swallow: true, scroll: true },
+  { target: ".photo-card", title: "Recycle", body: "Tap a photo's dots to swap it for a fresh one from your pool.", swallow: true, scroll: true },
   { target: "[data-tour='ai-suggest']", title: "Auto Gen", body: "One tap builds your best carousel from your pool.", swallow: true, scroll: true },
   { target: "[data-tour='new-dump']", title: "New Dump", body: "Start an empty dump and fill it yourself.", swallow: true, scroll: true },
+  { target: "[data-tour='pool-section']", title: "The Pool", body: "Your unused photos wait here. Videos and captions have pools too. Tap it.", scroll: true },
 ];
 
 var GOLD = "var(--accent)";
