@@ -20,21 +20,40 @@ export function usablePosts(items) {
   return items.filter((p) => p && typeof p === 'object' && !p.error && (p.caption != null || p.displayUrl || p.likesCount != null));
 }
 
-/** One normalized, scored post. Comments weigh 3x, views 0.05x (same formula as the Dumpster server). */
+/** Top comments on a post: text, likes, replies only (no usernames: we keep trends, not people). */
+function pickComments(p) {
+  const src = Array.isArray(p.latestComments) ? p.latestComments : [];
+  const out = src
+    .filter((c) => c && typeof c.text === 'string' && c.text.trim())
+    .map((c) => ({ text: c.text.trim().slice(0, 240), likes: Math.max(0, Number(c.likesCount ?? 0)), replies: Number(c.repliesCount ?? 0) }))
+    .sort((a, b) => b.likes + b.replies - (a.likes + a.replies));
+  return out.slice(0, 10);
+}
+
+/** One normalized, scored post. Comments weigh 3x, views 0.05x (same formula as the Dumpster server).
+ *  Instagram hides like counts on some posts and the scraper then returns -1: treat that as unknown (0) and flag it. */
 export function normalizePost(p) {
   const caption = String(p.caption ?? '');
-  const likes = Number(p.likesCount ?? 0);
-  const comments = Number(p.commentsCount ?? 0);
-  const views = Number(p.videoViewCount ?? p.videoPlayCount ?? 0);
+  const rawLikes = Number(p.likesCount ?? 0);
+  const likesHidden = rawLikes < 0;
+  const likes = likesHidden ? 0 : rawLikes;
+  const comments = Math.max(0, Number(p.commentsCount ?? 0));
+  const views = Math.max(0, Number(p.videoViewCount ?? p.videoPlayCount ?? 0));
+  const slideUrls = Array.isArray(p.images) ? p.images.filter(Boolean) : [];
   return {
     url: p.url || (p.shortCode ? `https://www.instagram.com/p/${p.shortCode}/` : ''),
     caption,
     firstLine: caption.split(/\r?\n/)[0].trim().slice(0, 200),
     hashtags: Array.isArray(p.hashtags) ? p.hashtags.slice(0, 15) : [],
     mentions: Array.isArray(p.mentions) ? p.mentions.slice(0, 8) : [],
-    likes, comments, views,
+    likes, likesHidden, comments, views,
     type: String(p.productType ?? p.type ?? 'Feed'),
-    slides: Array.isArray(p.images) ? Math.max(p.images.length, 1) : Array.isArray(p.childPosts) ? Math.max(p.childPosts.length, 1) : 1,
+    slides: slideUrls.length > 1 ? slideUrls.length : Array.isArray(p.childPosts) ? Math.max(p.childPosts.length, 1) : 1,
+    slideUrls,                       // in carousel order: first = hook, last = ender
+    slideTypes: Array.isArray(p.childPosts) ? p.childPosts.map((c) => String(c?.type ?? 'Image')) : [],
+    altText: String(p.alt ?? '').slice(0, 300),
+    comments_top: pickComments(p),
+    isPinned: Boolean(p.isPinned),
     location: String(p.locationName ?? ''),
     postedAt: String(p.timestamp ?? p.takenAt ?? ''),
     score: likes + comments * 3 + views * 0.05,
@@ -45,7 +64,7 @@ const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 
 /** Best weekday and 3-hour window (UTC) by average score. Needs >= minPosts dated posts, else null. */
 export function bestTimes(posts, minPosts = 8) {
-  const dated = posts.filter((p) => p.postedAt && !Number.isNaN(new Date(p.postedAt).getTime()));
+  const dated = posts.filter((p) => !p.isPinned && p.postedAt && !Number.isNaN(new Date(p.postedAt).getTime()));
   if (dated.length < minPosts) return null;
   const day = Array(7).fill(0).map(() => ({ s: 0, n: 0 }));
   const win = Array(8).fill(0).map(() => ({ s: 0, n: 0 }));
