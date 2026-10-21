@@ -66,6 +66,10 @@
       "destination": "/api/social?fn=ai-suggest-refund"
     },
     {
+      "source": "/api/referral-claim",
+      "destination": "/api/social?fn=referral-claim"
+    },
+    {
       "source": "/api/api-key-test",
       "destination": "/api/social?fn=api-key-test"
     },

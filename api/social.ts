@@ -15,6 +15,7 @@ import dumpVisibility from "../server/handlers/dump-visibility.js";
 import iapVerify from "../server/handlers/iap-verify.js";
 import apiKeyTest from "../server/handlers/api-key-test.js";
 import aiSuggestRefund from "../server/handlers/ai-suggest-refund.js";
+import referralClaim from "../server/handlers/referral-claim.js";
 import otpSend from "../server/handlers/otp-send.js";
 import appleWebhook from "../server/handlers/apple-webhook.js";
 import { captureServerError } from "../server/sentry.js";
@@ -33,6 +34,7 @@ const ROUTES: Record<string, Handler> = {
   "api-key-test": apiKeyTest as Handler,
   "otp-send": otpSend as Handler,
   "ai-suggest-refund": aiSuggestRefund as Handler,
+  "referral-claim": referralClaim as Handler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

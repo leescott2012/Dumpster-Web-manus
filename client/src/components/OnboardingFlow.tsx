@@ -14,6 +14,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { scrubInstagramProfile, mergeTaste } from "@/lib/igProfileScrub";
+import { claimReferral } from "@/lib/referral";
 import { Loader, Check, X as XIcon, Upload, Sparkles, Instagram } from "lucide-react";
 import { getAuthHeaders, supabase } from "@/lib/supabase";
 import { AVATAR_ICONS, AVATAR_COLORS, type AvatarIconName } from "@/lib/avatarIcons";
@@ -170,6 +171,7 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
         await supabase.from("profiles")
           .update({ onboarding_completed_at: new Date().toISOString() })
           .eq("id", props.userId);
+        await claimReferral();
       }
     } catch {
       // Non-fatal: worst case the flow reopens next load. Never trap the user

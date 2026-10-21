@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { CREDIT_PACKS, SUBSCRIPTION_PLANS, CREDIT_COSTS, CREDIT_LABELS } from "@/lib/credits";
 import { getAuthHeaders } from "@/lib/supabase";
+import { referralLink } from "@/lib/referral";
 
 interface CreditsSheetProps {
   open: boolean;
@@ -75,6 +76,21 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
     }
     setLoading(null);
   }, [user, onNeedAuth]);
+
+  async function shareInvite(code: string) {
+    var link = referralLink(code);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Dumpster", text: "Join me on Dumpster", url: link });
+        return;
+      }
+      await navigator.clipboard.writeText(link);
+      toast.success("Invite link copied");
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return; // user closed the share sheet
+      toast.error("Couldn't share. Copy the link above.");
+    }
+  }
 
   if (!open) return null;
 
@@ -201,6 +217,33 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
               <div style={{ fontSize: 12, color: "#8a8a8a", marginBottom: 4, lineHeight: 1.6 }}>
                 Credits let you use AI features. Free users get 15/day, Pro gets 200/day. Buy more anytime.
               </div>
+
+              {profile && profile.referral_code && (
+                <div data-tour="invite-friend" style={{
+                  background: "#141414", border: "1px solid rgba(var(--accent-rgb),0.25)",
+                  borderRadius: 12, padding: "14px 18px",
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 6 }}>
+                    INVITE A FRIEND
+                  </div>
+                  <div style={{ fontSize: 12, color: "#888", lineHeight: 1.5, marginBottom: 10 }}>
+                    Earn 10 credits for each friend who finishes setup — enough for a new AI dump. Up to 5 friends.
+                  </div>
+                  <div style={{
+                    background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 8,
+                    padding: "10px 12px", fontSize: 12, color: "#e8e8e8", fontFamily: "monospace",
+                    wordBreak: "break-all" as const, marginBottom: 10,
+                  }}>
+                    {referralLink(profile.referral_code)}
+                  </div>
+                  <button onClick={function() { shareInvite(profile!.referral_code); }} style={{
+                    width: "100%", padding: "11px", borderRadius: 10, border: "none", cursor: "pointer",
+                    background: "var(--accent)", color: "#000", fontWeight: 800, fontSize: 13, fontFamily: "inherit",
+                  }}>
+                    Share invite link
+                  </button>
+                </div>
+              )}
 
               {CREDIT_PACKS.map(function(pack) {
                 var isLoading = loading === pack.id;
@@ -367,27 +410,6 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
                 </>
               )}
 
-              {/* Referral section */}
-              {profile && profile.referral_code && (
-                <div style={{
-                  marginTop: 16, background: "#141414", border: "1px solid #2a2a2a",
-                  borderRadius: 12, padding: "14px 18px",
-                }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 6 }}>
-                    REFER FRIENDS — EARN CREDITS
-                  </div>
-                  <div style={{ fontSize: 12, color: "#888", lineHeight: 1.5, marginBottom: 10 }}>
-                    Share your link. You and your friend both get 25 credits when they sign up.
-                  </div>
-                  <div style={{
-                    background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 8,
-                    padding: "10px 12px", fontSize: 12, color: "#e8e8e8", fontFamily: "monospace",
-                    wordBreak: "break-all" as const,
-                  }}>
-                    {window.location.origin + "?ref=" + profile.referral_code}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>

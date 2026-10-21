@@ -6,6 +6,9 @@ import { createRoot } from "react-dom/client";
 import { reactErrorHandler } from "@sentry/react";
 import App from "./App";
 import "./index.css";
+import { captureReferral } from "./lib/referral";
+
+captureReferral();
 
 // React 19+: forward all error categories to Sentry via createRoot hooks.
 // This catches errors that React 19 normally swallows (uncaught + recoverable).
