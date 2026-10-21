@@ -27,7 +27,7 @@ var STEPS: TourStep[] = [
   { target: "[data-tour='menu-friends']", title: "Friends", body: "Find friends, peek at their dumps, leave comments.", swallow: true },
   { target: "[data-tour='menu-ai']", title: "AI Tools", body: "Your AI helpers live here. Tap to open." },
   { target: "[data-tour='tool-igscrub']", title: "Scrubs", body: "Pull photos and your style from an Instagram account.", swallow: true },
-  { target: "[data-tour='dump-styles']", title: "Dump Styles", body: "Save named recipes so every dump comes out your way. Tap to look.", },
+  { target: "[data-tour='dump-styles']", title: "Dump Styles", body: "Save named recipes so every dump comes out your way. Tap to look.", scroll: true },
   { target: "[data-tour='menu-close']", title: "Close the menu", body: "Tap the X to head back." },
   { target: "[data-tour='dump-menu']", title: "Valet", body: "Your AI assistant. Tap the dots, then Valet, to reorder and set the vibe.", swallow: true, scroll: true },
   { target: ".photo-card", title: "Recycle", body: "Tap a photo's dots to swap it for a fresh one from your pool.", swallow: true, scroll: true },
