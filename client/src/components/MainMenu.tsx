@@ -588,7 +588,10 @@ function TasteProfileSection() {
   const [profile, setProfile] = useState<string>(() => loadTasteProfile());
   const [rules, setRules] = useState<string>(() => loadAIRules());
   const [profileStatus, setProfileStatus] = useState<SaveStatus>("idle");
-  const [igHandle, setIgHandle] = useState("");
+  // Prefill with the handle linked at sign-up (onboarding saves it) so "Build" is one tap.
+  const [igHandle, setIgHandle] = useState<string>(function () {
+    try { return localStorage.getItem("dumpster_ig_handle") || (user?.user_metadata?.ig_handle as string) || ""; } catch (_) { return ""; }
+  });
   const [igBusy, setIgBusy] = useState(false);
   const [igError, setIgError] = useState<string | null>(null);
   async function buildFromInstagram() {
@@ -714,7 +717,7 @@ function TasteProfileSection() {
             aria-label="Instagram handle"
             style={{ flex: 1, minWidth: 0, background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 8, color: "#fff", padding: "8px 10px", fontSize: 12 }}
           />
-          <button onClick={buildFromInstagram} disabled={!igHandle.trim() || igBusy}
+          <button data-tour="taste-build" onClick={buildFromInstagram} disabled={!igHandle.trim() || igBusy}
             style={{ background: "var(--accent)", color: "#000", border: "none", borderRadius: 8, padding: "0 12px", fontWeight: 600, fontSize: 12, cursor: igHandle.trim() && !igBusy ? "pointer" : "not-allowed", opacity: igHandle.trim() && !igBusy ? 1 : 0.5 }}>
             {igBusy ? "Reading…" : "Build"}
           </button>
