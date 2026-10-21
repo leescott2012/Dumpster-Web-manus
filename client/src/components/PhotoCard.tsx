@@ -335,6 +335,7 @@ export default function PhotoCard({
         <button
           type="button"
           className="photo-card-dots"
+          data-tour="photo-dots"
           aria-label="Photo options"
           aria-haspopup="menu"
           onTouchStart={function(e) { e.stopPropagation(); }}

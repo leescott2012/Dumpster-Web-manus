@@ -47,7 +47,7 @@ export default function PhotoContextMenu({
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10000, background: "transparent" }} />
+      <div data-tour="photo-menu-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10000, background: "transparent" }} />
       <div style={menuStyle} className="context-menu-enter">
         <button style={itemStyle}
           onClick={function() { onToggleFavorite(photo.id); onClose(); }}
@@ -68,7 +68,7 @@ export default function PhotoContextMenu({
         )}
 
         {showRecycle && (
-          <button style={{
+          <button data-tour="photo-recycle" style={{
             display: "block", width: "100%", padding: "10px 14px",
             background: "transparent", border: "none", color: "#4ade80",
             fontSize: "13px", fontWeight: 600, textAlign: "left", cursor: "pointer",
