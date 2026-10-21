@@ -22,7 +22,7 @@ export var CREDIT_COSTS: Record<string, number> = {
   ai_caption: 3,             // Claude Haiku vision — generates 3 captions (~3¢)
 
   // Dump building
-  ai_suggest: 25,            // Claude Haiku vision — clusters pool into a dump (~25¢)
+  ai_suggest: 8,             // Auto Gen dump — subsidised (real cost up to ~25¢); refunded if rejected
 
   // Chat
   ai_chat: VALET_COST,       // Valet — chat to reorder / swap / set vibe (~1¢)
