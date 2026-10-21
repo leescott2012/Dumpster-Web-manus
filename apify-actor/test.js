@@ -34,4 +34,13 @@ assert.equal(f.carousel.posts, 1); assert.equal(f.single.posts, 1); assert.equal
 const media = mediaFromPost({ type: 'Sidecar', images: ['a', 'b'], shortCode: 'XYZ' });
 assert.deepEqual(media.map((m) => m.src), ['a', 'b']);
 assert.equal(media[0].postUrl, 'https://www.instagram.com/p/XYZ/');
+// hidden likes (-1) are unknown, not negative; comments text is kept without usernames
+const hid = normalizePost({ caption: 'x', likesCount: -1, commentsCount: 9, latestComments: [{ text: 'Trim', ownerUsername: 'someone', likesCount: 3, repliesCount: 1 }, { text: '  ' }], images: ['u1', 'u2', 'u3'], isPinned: true, alt: 'Photo by S.' });
+assert.equal(hid.likes, 0); assert.equal(hid.likesHidden, true); assert.equal(hid.score, 27);
+assert.deepEqual(hid.comments_top, [{ text: 'Trim', likes: 3, replies: 1 }]);
+assert.ok(!JSON.stringify(hid).includes('someone'));
+assert.deepEqual(hid.slideUrls, ['u1', 'u2', 'u3']); assert.equal(hid.slides, 3); assert.equal(hid.isPinned, true);
+// pinned posts do not count toward best times
+const pinned = Array(8).fill(0).map((_, i) => normalizePost({ caption: 'c', likesCount: 10, timestamp: '2026-10-2' + (i % 8) + 'T03:00:00Z', isPinned: true }));
+assert.equal(bestTimes(pinned), null);
 console.log('ok');
