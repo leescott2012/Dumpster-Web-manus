@@ -176,6 +176,50 @@ function withBestTimes(playbook: string, line: string): string {
   return (playbook.slice(0, 750 - line.length - 1).trimEnd() + " " + line).trim();
 }
 
+// Our own Apify actor (apify-actor/ in this repo). Calls the store scraper itself, ranks posts, retries.
+// Default is the actor's id so renaming it on Apify never breaks the route.
+const PROFILE_ACTOR = process.env.APIFY_PROFILE_ACTOR || "Zj1CthOiflFEQ6hnM";
+const ACTOR_TIMEOUT_S = 60; // one scraper attempt; the route owns the retry/fallback budget
+
+/** Posts from our actor in the raw shape the ranking code below expects; null = actor failed (use fallback). */
+async function postsViaDumpsterActor(
+  profileURL: string,
+  limit: number,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<{ posts: any[] } | { timeout: true } | null> {
+  if (!PROFILE_ACTOR || PROFILE_ACTOR === "off") return null;
+  const handle = /instagram\.com\/([A-Za-z0-9._]+)/i.exec(profileURL)?.[1];
+  if (!handle) return null;
+  try {
+    const r = await fetch(
+      `https://api.apify.com/v2/acts/${PROFILE_ACTOR}/run-sync-get-dataset-items?token=${process.env.APIFY_TOKEN}&timeout=${ACTOR_TIMEOUT_S + 10}&memory=512`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handles: [handle], resultsPerProfile: limit, upstreamTimeoutSecs: ACTOR_TIMEOUT_S, retryOnTimeout: false }),
+        signal: AbortSignal.timeout((ACTOR_TIMEOUT_S + 15) * 1000),
+      },
+    );
+    if (!r.ok) { console.warn("[ig-scrub] dumpster actor", r.status, (await r.text().catch(() => "")).slice(0, 200)); return null; }
+    const rows = await r.json();
+    const row = Array.isArray(rows) ? rows.find((x) => x && x.mode === "profile") : null;
+    if (!row) return null;
+    if (row.error === "scrape_timeout") return { timeout: true };
+    if (row.error === "no_public_posts") return { posts: [] };
+    if (!row.ok || !Array.isArray(row.posts)) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { posts: row.posts.map((p: any) => ({
+      caption: p.caption, likesCount: p.likes, commentsCount: p.comments, videoViewCount: p.views,
+      productType: p.type, images: p.slides > 1 ? new Array(p.slides).fill(null) : undefined,
+      locationName: p.location, timestamp: p.postedAt, hashtags: p.hashtags, mentions: p.mentions,
+    })) };
+  } catch (e) {
+    if (isTimeout(e)) return { timeout: true };
+    console.warn("[ig-scrub] dumpster actor failed", (e as Error)?.message);
+    return null;
+  }
+}
+
 async function handleProfileScrub(
   req: VercelRequest,
   res: VercelResponse,
@@ -193,6 +237,13 @@ async function handleProfileScrub(
   const limit = Math.min(Math.max(resultsLimit, 4), 25);
 
   // 1. Apify scrape (profile → posts)
+  // Our own actor first (one run = scrape + retry); the plain store scraper is the fallback.
+  const viaActor = await postsViaDumpsterActor(profileURL, limit);
+  if (viaActor && "timeout" in viaActor) {
+    return fail(res, 504, "Instagram took too long to answer. Try again in a minute.", "scrape_timeout");
+  }
+  let posts: any[] | null = viaActor ? viaActor.posts : null; // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (!posts) {
   const apifyUrl =
     `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items` +
     `?token=${process.env.APIFY_TOKEN}&timeout=${APIFY_TIMEOUT_S}&memory=1024`;
@@ -222,7 +273,8 @@ async function handleProfileScrub(
     return fail(res, 502, "Our Instagram reader is temporarily unavailable. Try again in a few minutes.", "scrape_unavailable");
   }
 
-  const posts = usablePosts(await apifyRes.json());
+  posts = usablePosts(await apifyRes.json());
+  }
   if (posts.length === 0) return fail(res, 404, NOT_READABLE, "no_public_posts");
 
   // 2. Normalize + rank by engagement

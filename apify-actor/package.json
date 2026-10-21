@@ -1,0 +1,16 @@
+{
+  "name": "dumpster-ig-scraper",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Dumpster's Instagram scan: one run = scrape + rank + best posting times, with retry. Wraps apify/instagram-scraper.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "apify": "^3.2.0"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
