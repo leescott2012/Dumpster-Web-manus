@@ -78,3 +78,36 @@ async function doClaim(uid: string): Promise<void> {
   }
   try { localStorage.setItem(OWNER_KEY, uid); } catch { /* noop */ }
 }
+
+/** Signed-in user id from Supabase's stored session (sync, no network) — lets us swap data BEFORE React mounts. */
+function storedSessionUserId(): string | null {
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && /^sb-.+-auth-token$/.test(k)) {
+        var j = JSON.parse(localStorage.getItem(k) || "null");
+        var id = j && (j.user && j.user.id || j.currentSession && j.currentSession.user && j.currentSession.user.id);
+        if (id) return String(id);
+      }
+    }
+  } catch { /* noop */ }
+  return null;
+}
+
+/** Boot gate (main.tsx): if the stored session belongs to a different account than this device's data, swap before the app renders.
+ *  Done pre-mount because a running app writes its in-memory state back to storage on unload, which would undo a late clear. */
+export async function claimOnBoot(): Promise<void> {
+  try {
+    var uid = storedSessionUserId();
+    if (uid && deviceBelongsToOther(uid)) await claimDevice(uid);
+  } catch { /* never block the app from starting */ }
+}
+
+/** A different account signed in while the app was running: reload so claimOnBoot() swaps data cleanly (once per tab+account, no loops). */
+export function reloadForAccountSwitch(uid: string): void {
+  try {
+    if (sessionStorage.getItem("dumpster_swap_reload") === uid) return;
+    sessionStorage.setItem("dumpster_swap_reload", uid);
+  } catch { /* noop */ }
+  window.location.reload();
+}
