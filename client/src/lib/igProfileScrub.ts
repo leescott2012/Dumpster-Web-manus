@@ -11,16 +11,23 @@ import { TASTE_PROFILE_MAX, loadTasteProfile, saveTasteProfile, loadDumpStyles, 
 
 /** Returns the distilled text, or throws Error with a plain-English reason. */
 export async function scrubInstagramProfile(handle: string): Promise<string> {
-  var res: Response;
-  try {
-    res = await aiFetch("/api/ig-scrub", {
-      method: "POST",
-      headers: Object.assign({ "Content-Type": "application/json" }, await getAuthHeaders()),
-      body: JSON.stringify({ profileURL: handle.trim() }),
-    });
-  } catch {
-    throw new Error("Can't reach Dumpster right now. Check your connection and try again.");
+  var res: Response | undefined;
+  // One automatic retry on a transient server error (500/502/503): every new user must scan
+  // during onboarding, so a one-off Apify/AI hiccup must not surface as a failure.
+  for (var attempt = 0; attempt < 2; attempt++) {
+    try {
+      res = await aiFetch("/api/ig-scrub", {
+        method: "POST",
+        headers: Object.assign({ "Content-Type": "application/json" }, await getAuthHeaders()),
+        body: JSON.stringify({ profileURL: handle.trim() }),
+      });
+    } catch {
+      throw new Error("Can't reach Dumpster right now. Check your connection and try again.");
+    }
+    if (res.ok || ![500, 502, 503].includes(res.status)) break;
+    await new Promise(function(r) { setTimeout(r, 2000); });
   }
+  if (!res) throw new Error("Can't reach Dumpster right now. Check your connection and try again.");
   var data: { error?: string; code?: string; description?: string; engagementPlaybook?: string } = {};
   try { data = await res.json(); } catch { /* non-JSON body (gateway timeout page) */ }
   if (!res.ok) {
