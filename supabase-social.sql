@@ -41,6 +41,14 @@ create policy "users_select_own_blocks" on public.dm_blocks for select using (au
 -- Writes go through the server (service role) only.
 
 -- 4. RLS on sending: accepted friends AND no block in either direction.
+-- dm_blocked is security definer: dm_blocks RLS only lets the blocker see their own
+-- rows, so an inline check would never see blocks placed AGAINST the sender.
+create or replace function public.dm_blocked(a uuid, b uuid) returns boolean
+  language sql security definer stable set search_path = public
+as $$ select exists (select 1 from public.dm_blocks
+  where (blocker_id = a and blocked_id = b) or (blocker_id = b and blocked_id = a)) $$;
+revoke all on function public.dm_blocked(uuid, uuid) from public;
+grant execute on function public.dm_blocked(uuid, uuid) to authenticated;
 drop policy if exists "users_insert_dm_if_connected" on public.dm_messages;
 create policy "users_insert_dm_if_connected"
   on public.dm_messages for insert
@@ -52,11 +60,7 @@ create policy "users_insert_dm_if_connected"
         and ((c.requester_id = sender_id and c.addressee_id = recipient_id)
           or (c.requester_id = recipient_id and c.addressee_id = sender_id))
     )
-    and not exists (
-      select 1 from public.dm_blocks b
-      where (b.blocker_id = sender_id and b.blocked_id = recipient_id)
-         or (b.blocker_id = recipient_id and b.blocked_id = sender_id)
-    )
+    and not public.dm_blocked(sender_id, recipient_id)
   );
 -- Length cap in the database too (the API caps at 2000).
 alter table public.dm_messages drop constraint if exists dm_messages_body_len;
