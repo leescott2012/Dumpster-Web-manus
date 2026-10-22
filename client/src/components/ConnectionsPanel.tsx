@@ -19,9 +19,15 @@ interface ConnectionsPanelProps {
   open: boolean;
   onClose: () => void;
   myUserId: string;
+  /** Set by a notification tap: open this friend's thread once connections load. */
+  openDmUserId?: string | null;
 }
 
-export default function ConnectionsPanel({ open, onClose, myUserId }: ConnectionsPanelProps) {
+interface Conversation { other: Profile; last: { body: string; created_at: string; mine: boolean }; unread: number; }
+
+export default function ConnectionsPanel({ open, onClose, myUserId, openDmUserId }: ConnectionsPanelProps) {
+  var [convos, setConvos] = useState<Conversation[]>([]);
+  var handledDm = useRef<string | null>(null);
   var [query, setQuery] = useState("");
   var [results, setResults] = useState<Profile[]>([]);
   var [searching, setSearching] = useState(false);
@@ -39,7 +45,28 @@ export default function ConnectionsPanel({ open, onClose, myUserId }: Connection
     if (res.ok) { var data = await res.json(); setConnections(data.connections || []); }
   }
 
-  useEffect(function () { if (open) loadConnections(); }, [open]);
+  async function loadConvos() {
+    try {
+      var headers = await getAuthHeaders();
+      var res = await fetch("/api/dm", { headers: headers });
+      if (res.ok) { var data = await res.json(); setConvos(data.conversations || []); }
+    } catch { /* messages list is non-critical */ }
+  }
+
+  useEffect(function () {
+    if (!open) return;
+    loadConnections(); loadConvos();
+    var t = setInterval(loadConvos, 15000); // near-real-time unread counts while the panel is open
+    return function () { clearInterval(t); };
+  }, [open]);
+
+  // Bell tap on "new message from X": jump straight into that thread.
+  useEffect(function () {
+    if (!open || !openDmUserId) { handledDm.current = null; return; }
+    if (handledDm.current === openDmUserId) return; // open it once, not on every refresh
+    var hit = connections.find(function (c) { return c.status === "accepted" && c.other.id === openDmUserId; });
+    if (hit) { handledDm.current = openDmUserId; setDmWith(hit.other); }
+  }, [open, openDmUserId, connections]);
 
   useEffect(function () {
     if (!open) return;
@@ -183,6 +210,27 @@ export default function ConnectionsPanel({ open, onClose, myUserId }: Connection
             </div>
           )}
 
+          {/* Messages: latest first, unread count per friend */}
+          {convos.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#8a8a8a", letterSpacing: "0.06em", marginBottom: 10 }}>MESSAGES</div>
+              {convos.map(function (c) {
+                return (
+                  <button key={c.other.id} onClick={function () { setDmWith(c.other); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", width: "100%", background: "transparent", border: "none", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
+                    {avatarDot(c.other)}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: "#e8e8e8", fontWeight: c.unread ? 700 : 500 }}>@{c.other.username}</div>
+                      <div style={{ fontSize: 11.5, color: c.unread ? "#bbb" : "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(c.last.mine ? "You: " : "") + c.last.body}</div>
+                    </div>
+                    {c.unread > 0 && (
+                      <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: "var(--accent)", color: "#0e0e0e", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{c.unread}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* My connections */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#8a8a8a", letterSpacing: "0.06em", marginBottom: 10 }}>
@@ -218,7 +266,7 @@ export default function ConnectionsPanel({ open, onClose, myUserId }: Connection
       </div>
 
       <FriendProfileSheet person={viewing} onClose={function () { setViewing(null); }} />
-      <DMSheet open={!!dmWith} other={dmWith} onClose={function () { setDmWith(null); }} />
+      <DMSheet open={!!dmWith} other={dmWith} onClose={function () { setDmWith(null); loadConvos(); }} />
     </>
   );
 }

@@ -4,7 +4,8 @@
  * focus when open).
  */
 import { useEffect, useRef, useState } from "react";
-import { X, Send } from "lucide-react";
+import { X, Send, Ban } from "lucide-react";
+import { DM_MAX_LEN } from "@shared/notifications";
 import { getAuthHeaders } from "@/lib/supabase";
 import { getCurrentUserId } from "@/lib/currentUser";
 
@@ -21,6 +22,8 @@ export default function DMSheet({ open, other, onClose }: DMSheetProps) {
   var [messages, setMessages] = useState<DMMessage[]>([]);
   var [draft, setDraft] = useState("");
   var [sending, setSending] = useState(false);
+  var [error, setError] = useState<string | null>(null);
+  var [blk, setBlk] = useState({ available: false, byMe: false, byThem: false });
   var timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   var scrollRef = useRef<HTMLDivElement | null>(null);
   var myId = getCurrentUserId();
@@ -29,7 +32,25 @@ export default function DMSheet({ open, other, onClose }: DMSheetProps) {
     if (!other) return;
     var headers = await getAuthHeaders();
     var res = await fetch("/api/dm?with=" + other.id, { headers: headers });
-    if (res.ok) { var data = await res.json(); setMessages(data.messages || []); }
+    if (res.ok) {
+      var data = await res.json();
+      setMessages(data.messages || []);
+      setBlk({ available: !!data.blockingAvailable, byMe: !!data.blockedByMe, byThem: !!data.blockedByThem });
+    }
+  }
+
+  async function toggleBlock() {
+    if (!other) return;
+    var next = !blk.byMe;
+    if (next && !window.confirm("Block @" + other.username + "? Neither of you can message the other until you unblock.")) return;
+    var headers = await getAuthHeaders();
+    var res = await fetch("/api/dm", {
+      method: "PATCH",
+      headers: Object.assign({ "Content-Type": "application/json" }, headers),
+      body: JSON.stringify({ with: other.id, action: next ? "block" : "unblock" }),
+    });
+    if (res.ok) setBlk(function (b) { return { ...b, byMe: next }; });
+    else setError("Blocking isn't available yet.");
   }
 
   useEffect(function () {
@@ -49,6 +70,7 @@ export default function DMSheet({ open, other, onClose }: DMSheetProps) {
     var text = draft.trim();
     if (!text || !other) return;
     setSending(true);
+    setError(null);
     setDraft("");
     var headers = await getAuthHeaders();
     var res = await fetch("/api/dm", {
@@ -58,6 +80,11 @@ export default function DMSheet({ open, other, onClose }: DMSheetProps) {
     });
     setSending(false);
     if (res.ok) load();
+    else {
+      setDraft(text); // keep what they typed
+      var err = await res.json().catch(function () { return {}; });
+      setError(res.status === 429 ? "Slow down a little, then try again." : (err.error || "Couldn't send."));
+    }
   }
 
   return (
@@ -71,6 +98,11 @@ export default function DMSheet({ open, other, onClose }: DMSheetProps) {
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #1a1a1a", flexShrink: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>@{other.username}</div>
+          {blk.available && (
+            <button aria-label={blk.byMe ? "Unblock" : "Block"} onClick={toggleBlock} style={{ marginLeft: "auto", marginRight: 10, display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: blk.byMe ? "var(--accent)" : "#777", fontSize: 11, cursor: "pointer" }}>
+              <Ban size={12} /> {blk.byMe ? "Unblock" : "Block"}
+            </button>
+          )}
           <button aria-label="Close" onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", background: "#1a1a1a", border: "1px solid #2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#8a8a8a" }}>
             <X size={14} />
           </button>
@@ -97,12 +129,16 @@ export default function DMSheet({ open, other, onClose }: DMSheetProps) {
           })}
         </div>
 
+        {error && <div style={{ padding: "6px 20px 0", fontSize: 11.5, color: "#f87171" }}>{error}</div>}
+        {(blk.byMe || blk.byThem) && <div style={{ padding: "6px 20px 0", fontSize: 11.5, color: "#777" }}>{blk.byMe ? "You blocked this person." : "You can't message this person."}</div>}
         <div style={{ display: "flex", gap: 8, padding: "12px 20px calc(16px + env(safe-area-inset-bottom, 0px))", borderTop: "1px solid #1a1a1a", flexShrink: 0 }}>
           <input
             value={draft}
             onChange={function (e) { setDraft(e.target.value); }}
             onKeyDown={function (e) { if (e.key === "Enter") send(); }}
             placeholder="Message"
+            maxLength={DM_MAX_LEN}
+            disabled={blk.byMe || blk.byThem}
             style={{
               flex: 1, padding: "11px 14px", borderRadius: 20,
               background: "#141414", border: "1px solid #2a2a2a", color: "#e8e8e8",

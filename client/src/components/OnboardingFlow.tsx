@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { scrubInstagramProfile, mergeTaste } from "@/lib/igProfileScrub";
 import { claimReferral } from "@/lib/referral";
+import { linkInstagram, markInstagramLater } from "@/lib/igLink";
 import { Loader, Check, X as XIcon, Upload, Sparkles, Instagram } from "lucide-react";
 import { getAuthHeaders, supabase } from "@/lib/supabase";
 import { AVATAR_ICONS, AVATAR_COLORS, type AvatarIconName } from "@/lib/avatarIcons";
@@ -148,9 +149,8 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
     try {
       var pieces = await scrubInstagramProfile(handle);
       setTaste(function (prev) { return mergeTaste(prev, pieces, handle || undefined); });
-      // Link the handle to the account (user metadata: no schema change) + device.
-      try { localStorage.setItem("dumpster_ig_handle", handle); } catch (_) { /* noop */ }
-      try { await supabase.auth.updateUser({ data: { ig_handle: handle } }); } catch (_) { /* non-fatal */ }
+      // Link the handle to the account (user metadata: no schema change) + device; clears any "Later".
+      await linkInstagram(handle);
       setScrubbed(true);
     } catch (e) {
       setScrubError(e instanceof Error ? e.message : "Couldn't read that profile. Check the handle (it must be public) and try again.");
@@ -358,7 +358,7 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
               </div>
 
               <div style={{ fontSize: 11, color: "#777", marginBottom: 8, letterSpacing: "0.04em" }}>
-                YOUR INSTAGRAM (REQUIRED)
+                YOUR INSTAGRAM
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
                 <div style={{ position: "relative", flex: 1 }}>
@@ -408,6 +408,18 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
                 busy={false}
                 label={!scrubbed ? "Enter your Instagram and tap SCAN" : taste.trim().length < 10 ? "Describe your style to continue" : "Continue"}
               />
+              <button
+                onClick={function () { markInstagramLater(); setStep("finish"); }}
+                style={{
+                  width: "100%", marginTop: 10, padding: "12px", borderRadius: 12, background: "transparent",
+                  border: "1px solid #2a2a2a", color: "#aaa", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+                }}
+              >
+                Later
+              </button>
+              <div style={{ fontSize: 11, color: "#666", textAlign: "center" as const, marginTop: 6 }}>
+                We'll remind you once a day until your Instagram is linked.
+              </div>
             </>
           )}
 

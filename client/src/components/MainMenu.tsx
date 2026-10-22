@@ -13,6 +13,8 @@ import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpS
 import ApiKeysCard from "./ApiKeysCard";
 import { scrubInstagramProfile, mergeTaste, parseIgHandle, saveAccountAsDumpStyle, stripIgBlock } from "@/lib/igProfileScrub";
 import { useAuth } from "@/contexts/AuthContext";
+import { NAV_EVENT } from "@/lib/appNav";
+import { linkInstagram } from "@/lib/igLink";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -91,6 +93,25 @@ export default function MainMenu({ open, onClose, onIGScrub, onTour, onSignIn, o
       setTimeout(() => setActiveTab(null), 300);
     }
   }, [open]);
+
+  // Bell tap on the Instagram reminder: open AI Tools and land on the "Build from Instagram" box.
+  useEffect(() => {
+    function onNav(e: Event) {
+      const t = (e as CustomEvent<{ to: string }>).detail;
+      if (!t || t.to !== "taste") return;
+      setActiveTab("ai");
+      setTimeout(() => {
+        const btn = document.querySelector('[data-tour="taste-build"]');
+        if (btn) {
+          btn.scrollIntoView({ behavior: "smooth", block: "center" });
+          const input = btn.parentElement?.querySelector("input") as HTMLInputElement | null;
+          if (input) input.focus({ preventScroll: true });
+        }
+      }, 600);
+    }
+    window.addEventListener(NAV_EVENT, onNav);
+    return () => window.removeEventListener(NAV_EVENT, onNav);
+  }, []);
 
   function handleAccentChange(hex: string) {
     setAccent(hex);
@@ -588,6 +609,7 @@ function TasteProfileSection() {
         setIgError("Your profile text is almost at the limit. Shorten it a little, then build again.");
       } else {
         setProfile(next); // autosaves + cloud-syncs; Valet reads it
+        if (!linked) linkInstagram(handle); // first successful build links the account and ends the daily reminder
         setIgHandle("");
         toast.success("Taste profile built from @" + handle, { action: { label: "Undo", onClick: () => setProfile(prev) } });
       }
