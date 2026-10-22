@@ -11,8 +11,11 @@
 import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { IS_OWNER } from "@/lib/photoData";
+import { getCurrentUserId } from "@/lib/currentUser";
 
-var TOUR_KEY = "dumpster_tour_completed_v1";
+var TOUR_KEY_BASE = "dumpster_tour_completed_v1";
+// Per account: a flag shared by every account on the device meant a 2nd/new account never got the tour.
+function tourKey(): string { var uid = getCurrentUserId(); return uid ? TOUR_KEY_BASE + "_" + uid : TOUR_KEY_BASE; }
 
 interface TourStep {
   target: string;   // CSS selector
@@ -69,7 +72,7 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
   }, [active, step]);
 
   function finish() {
-    try { localStorage.setItem(TOUR_KEY, "1"); } catch (_) { /* noop */ }
+    try { localStorage.setItem(tourKey(), "1"); } catch (_) { /* noop */ }
     onEnd();
   }
   function begin() {
@@ -210,10 +213,10 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
 
 /** Check if tour was already completed */
 export function isTourCompleted(): boolean {
-  try { return localStorage.getItem(TOUR_KEY) === "1"; } catch (_) { return false; }
+  try { return localStorage.getItem(tourKey()) === "1"; } catch (_) { return false; }
 }
 
 /** Reset tour so it can be shown again */
 export function resetTour(): void {
-  try { localStorage.removeItem(TOUR_KEY); } catch (_) { /* noop */ }
+  try { localStorage.removeItem(tourKey()); } catch (_) { /* noop */ }
 }
