@@ -377,13 +377,6 @@ export default function DumpChatSheet({
                 <img src={p.url} alt={p.alt} style={{
                   width: "100%", height: "100%", objectFit: "cover",
                 }} />
-                <div style={{
-                  position: "absolute", bottom: 1, right: 2,
-                  fontSize: 8, fontWeight: 700, color: "rgba(255,255,255,0.6)",
-                  textShadow: "0 1px 2px rgba(0,0,0,0.8)",
-                }}>
-                  {i + 1}
-                </div>
               </div>
             );
           })}
