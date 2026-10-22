@@ -278,15 +278,17 @@ export default function DumpShareSheet({ dump, open, onClose, onArchive }: DumpS
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
                   </div>
-                  {/* Slide number */}
-                  <div style={{
-                    position: "absolute", top: 4, left: 4,
-                    background: "rgba(0,0,0,0.72)", borderRadius: 3,
-                    fontSize: 8, fontWeight: 800, color: done ? "#22c55e" : "#fff",
-                    padding: "1px 5px", letterSpacing: "0.08em",
-                  }}>
-                    {done ? "✓" : String(i + 1).padStart(2, "0")}
-                  </div>
+                  {/* Downloaded check (no photo numbers anywhere) */}
+                  {done && (
+                    <div style={{
+                      position: "absolute", top: 4, left: 4,
+                      background: "rgba(0,0,0,0.72)", borderRadius: 3,
+                      fontSize: 8, fontWeight: 800, color: "#22c55e",
+                      padding: "1px 5px",
+                    }}>
+                      ✓
+                    </div>
+                  )}
                   {/* Download icon overlay */}
                   <div style={{
                     position: "absolute", bottom: 4, right: 4,

@@ -143,7 +143,7 @@ export default function MainMenu({ open, onClose, onIGScrub, onTour, onSignIn, o
   const folders: Folder[] = [
     {
       id: "ai", title: "AI TOOLS", tabColor: "var(--accent)",
-      subtitle: "Auto-arrange · Captions · IG Scrub",
+      subtitle: "Taste Profile · Instagram Scrub · Dump Styles",
       icon: <Sparkles size={18} strokeWidth={1.5} />,
     },
     {
@@ -912,7 +912,7 @@ function DumpStylesSection({ signedIn }: { signedIn: boolean }) {
       )}
       {editing && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <input value={editing.name} maxLength={40} onChange={e => edit("name", e.target.value)} placeholder="Style name (e.g. Fit check)" style={fieldStyle} />
+          <input value={editing.name} maxLength={40} onChange={e => edit("name", e.target.value)} onFocus={e => { if (editing.name === "New style") e.target.select(); }} placeholder="Style name (e.g. Fit check)" style={fieldStyle} />
           <textarea value={editing.profile} maxLength={TASTE_PROFILE_MAX} onChange={e => edit("profile", e.target.value)} placeholder="Recipe: structure, sequencing, poses, mix (e.g. open on a mirror fit, 2 detail shots, end on a candid)" style={{ ...fieldStyle, minHeight: 80, resize: "vertical" }} />
           <textarea value={editing.rules} maxLength={AI_RULES_MAX} onChange={e => edit("rules", e.target.value)} placeholder={"Rules for this style, one per line\nmax 8 photos\nno food shots"} style={{ ...fieldStyle, minHeight: 60, resize: "vertical" }} />
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
