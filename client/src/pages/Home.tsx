@@ -29,7 +29,7 @@ import RecycleSheet from "@/components/RecycleSheet";
 import PoolPill, { type PoolTab } from "@/components/PoolPill";
 import CaptionPool from "@/components/CaptionPool";
 import AuthSheet from "@/components/AuthSheet";
-import PhoneGate from "@/components/PhoneGate";
+import PhoneGate, { phoneSkipped } from "@/components/PhoneGate";
 import PinGate from "@/components/PinGate";
 import OnboardingFlow from "@/components/OnboardingFlow";
 import NotificationBell from "@/components/NotificationBell";
@@ -242,6 +242,9 @@ function HomeContent() {
   var [tourActive, setTourActive] = useState(false);
   var startTour = useCallback(function() { setTourActive(true); }, []);
   var endTour = useCallback(function() { setTourActive(false); }, []);
+  // Onboarding -> phone verify -> tour. The tour waits until the optional phone step is verified or skipped.
+  var [pendingTour, setPendingTour] = useState(false);
+  var [phoneTick, setPhoneTick] = useState(0);
 
   var [aiSheetOpen, setAiSheetOpen] = useState(false);
   var [igScrubOpen, setIGScrubOpen] = useState(false);
@@ -343,6 +346,28 @@ function HomeContent() {
   // Existing accounts were backfilled when the column was added, so only new
   // signups see it.
   var onboardingOpen = !!user && !!profile && !profile.onboarding_completed_at;
+
+  // Start the tour once onboarding is done AND the phone step is resolved (verified or skipped).
+  // Also a safety net: a recent account that finished onboarding but never saw the tour (other device/session,
+  // or before the per-account flag) gets it on sign-in — once per tab session; Skip/finish marks it done.
+  useEffect(function() {
+    if (!user || !profile || onboardingOpen || !profile.username || tourActive) return;
+    if (!(user.phone || phoneSkipped(user.id))) return; // phone prompt still showing: tour comes right after it
+    var start = pendingTour;
+    if (!start) {
+      if (isTourCompleted()) return;
+      var created = profile.created_at ? Date.parse(profile.created_at) : 0;
+      if (!created || Date.now() - created > 3 * 24 * 60 * 60 * 1000) return;
+      try { if (sessionStorage.getItem("dumpster_tour_auto") === user.id) return; } catch (_) { /* noop */ }
+    }
+    var uid = user.id;
+    var tid = setTimeout(function() {
+      try { sessionStorage.setItem("dumpster_tour_auto", uid); } catch (_) { /* noop */ }
+      setPendingTour(false); startTour();
+    }, 700);
+    return function() { clearTimeout(tid); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.phone, profile?.username, profile?.created_at, onboardingOpen, pendingTour, phoneTick]);
 
   // ── Always keep at least one empty dump visible so users have a target for
   // the "From Pool" / "Add More" twin cards. Without this, a freshly cleared
@@ -1268,7 +1293,7 @@ function HomeContent() {
       <WelcomeOverlay onUploadClick={scrollToPoolUpload} onTourClick={startTour} />
       <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} onVisibilityChange={setDemoBannerVisible} />
       <GuidedTour active={tourActive} onEnd={endTour} />
-      {user && !user.phone && !tourActive && <PhoneGate />}
+      {user && !user.phone && !tourActive && <PhoneGate onResolved={function() { setPhoneTick(function(n) { return n + 1; }); }} />}
       {user && user.phone && <PinGate />}
       <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} />
       <OnboardingFlow
@@ -1279,7 +1304,7 @@ function HomeContent() {
         onUploadPhotos={handleUploadPhotos}
         onAICreateDumps={function() { setAiSheetOpen(true); }}
         onCreateDump={handleCreateDump}
-        onDone={function() { refreshProfile(); if (!isTourCompleted()) setTimeout(startTour, 600); }}
+        onDone={function() { refreshProfile(); setPendingTour(true); /* the tour is part of onboarding: always runs, right after the phone step */ }}
       />
       {user && (
         <ConnectionsPanel
