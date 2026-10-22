@@ -1268,7 +1268,7 @@ function HomeContent() {
       <WelcomeOverlay onUploadClick={scrollToPoolUpload} onTourClick={startTour} />
       <DemoBanner hasUserPhotos={hasUserPhotos} onUploadClick={scrollToPoolUpload} onVisibilityChange={setDemoBannerVisible} />
       <GuidedTour active={tourActive} onEnd={endTour} />
-      {user && !user.phone && <PhoneGate />}
+      {user && !user.phone && !tourActive && <PhoneGate />}
       {user && user.phone && <PinGate />}
       <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} />
       <OnboardingFlow
