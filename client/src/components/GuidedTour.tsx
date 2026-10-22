@@ -53,12 +53,20 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
   var [step, setStep] = useState(-1); // -1 = welcome card
   var [rect, setRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   var [missing, setMissing] = useState(false);
+  var [stuck, setStuck] = useState(false); // a step the user has not completed after a few seconds gets a Next button
   var stepRef = useRef(step);
   stepRef.current = step;
 
   useEffect(function () {
     if (active) { setStep(-1); setRect(null); }
   }, [active]);
+
+  useEffect(function () {
+    setStuck(false);
+    if (!active || step < 0) return;
+    var t = setTimeout(function () { setStuck(true); }, 6000);
+    return function () { clearTimeout(t); };
+  }, [active, step]);
 
   function finish() {
     try { localStorage.setItem(TOUR_KEY, "1"); } catch (_) { /* noop */ }
@@ -190,7 +198,7 @@ export default function GuidedTour({ active, onEnd }: GuidedTourProps) {
         </div>
         <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginBottom: 4 }}>{s.title}</div>
         <div style={{ fontSize: 13, color: "#aaa", lineHeight: 1.55 }}>{s.body}</div>
-        {missing && (
+        {(missing || stuck) && (
           <button onClick={advance} style={{ marginTop: 12, padding: "9px 16px", borderRadius: 10, background: GOLD, border: "none", color: "#000", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
             Next
           </button>
