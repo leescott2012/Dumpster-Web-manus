@@ -290,7 +290,23 @@ export function useCarouselState() {
   // Replace entire state at once — used by cloud sync to load saved state.
   // Locally-uploaded photos (data URLs) that the cloud doesn't know about are
   // preserved in the pool so a cloud load never silently wipes them.
-  var replaceState = useCallback(function(newDumps: Dump[], newPool: Photo[]) {
+  var replaceState = useCallback(async function(cloudDumps: Dump[], newPool: Photo[]) {
+    // The cloud dump rows only carry title/photos/public — captions, vibe, rating,
+    // favorite and Valet chat live on this device. Carry them over, or every cloud
+    // load (each sign-in/reload) silently wipes a dump's captions. Local ids are
+    // hashed server-side, so match on the hashed id.
+    // Wait (max ~2s) for the on-device copy to load first, so we read the real local captions.
+    for (var hw = 0; hw < 40 && !hydrationDoneRef.current; hw++) await new Promise(function(r) { setTimeout(r, 50); });
+    var extras: Record<string, Dump> = {};
+    try {
+      for (var li = 0; li < dumpsRef.current.length; li++) {
+        extras[await normDumpId(dumpsRef.current[li].id)] = dumpsRef.current[li];
+      }
+    } catch { /* no crypto: fall back to plain cloud dumps */ }
+    var newDumps = cloudDumps.map(function(nd) {
+      var ld = extras[nd.id] || extras[nd.id.toLowerCase()];
+      return ld ? { ...nd, captions: ld.captions, vibe: ld.vibe, favorited: ld.favorited, rating: ld.rating, chatHistory: ld.chatHistory } : nd;
+    });
     var cloudIds = new Set<string>();
     var ci: number, cj: number;
     for (ci = 0; ci < newPool.length; ci++) cloudIds.add(newPool[ci].id);
