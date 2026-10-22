@@ -14,6 +14,7 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Anthropic from "@anthropic-ai/sdk";
+import { llmComplete, llmConfigured } from "../server/llm.js";
 import { checkCredits, runCharged } from "../server/creditGate.js";
 import { captureServerError } from "../server/sentry.js";
 import { bestTimesLine } from "../server/bestTimes.js";
@@ -223,7 +224,7 @@ async function handleProfileScrub(
   profileInput: string,
   resultsLimit: number,
 ) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!llmConfigured(process.env.ANTHROPIC_API_KEY)) {
     return fail(res, 503, "Profile scrub isn't set up on our side yet. Please try again later.", "scrub_unconfigured");
   }
   const profileURL = normalizeProfileURL(profileInput);
@@ -321,16 +322,18 @@ ${p.location ? `Location: ${p.location}\n` : ""}${p.mentions.length ? `Mentions:
     .map((p, i) => `Post ${i + 4} (${fmtEng(p)}, ${p.productType}): ${p.firstLine || "[no caption]"}`)
     .join("\n");
 
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: CLAUDE_TIMEOUT_MS, maxRetries: 0 });
+  // Carousel vision stays Claude-only (SDK client); the text distill below falls back across providers.
+  const anthropic = process.env.ANTHROPIC_API_KEY
+    ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: CLAUDE_TIMEOUT_MS, maxRetries: 0 })
+    : null;
   // Carousel order/content (vision) runs alongside the text distill: free of extra wall time, own 25s cap,
   // skipped if the actor ate the budget (120s fn limit), "" on any failure.
   const MODEL = "claude-sonnet-4-5-20250929";
-  const formulaP: Promise<string> = Date.now() - t0 > 70_000
+  const formulaP: Promise<string> = !anthropic || Date.now() - t0 > 70_000
     ? Promise.resolve("")
     : carouselFormula(anthropic, MODEL, pickCarousels(ranked));
-  const distill = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 700,
+  const raw = (await llmComplete({
+    claudeKey: process.env.ANTHROPIC_API_KEY, claudeModel: MODEL, maxTokens: 700, totalMs: CLAUDE_TIMEOUT_MS,
     messages: [
       {
         role: "user",
@@ -354,10 +357,7 @@ Top hashtags overall: ${allUnique.slice(0, 12).join(", ") || "none"}
 Respond with ONLY the JSON object. No preamble, no markdown fences, no commentary.`,
       },
     ],
-  });
-
-  const block = distill.content[0];
-  const raw = block && "text" in block ? block.text.trim() : "";
+  })).trim();
 
   // 4. Parse Claude's JSON (robust to fences and trailing chatter)
   let parsed: { styleDescription?: string; engagementPlaybook?: string } = {};

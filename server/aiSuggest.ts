@@ -4,7 +4,7 @@
  * Used as a Vite dev middleware AND as an Express route in production.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import { llmComplete, llmConfigured, type LlmPart } from "./llm.js";
 import { userAnthropicKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
@@ -86,8 +86,9 @@ export async function handleAISuggest(
   }
 
   const startedAt = Date.now();
-  const apiKey = userAnthropicKey(req) || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey === "your_anthropic_api_key_here") {
+  const byoKey = userAnthropicKey(req);
+  const apiKey = byoKey || process.env.ANTHROPIC_API_KEY;
+  if (!llmConfigured(apiKey)) {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
@@ -145,18 +146,7 @@ export async function handleAISuggest(
   }
 
   // Build the message content: one image block per photo + caption
-  type ContentBlock =
-    | {
-        type: "image";
-        source: {
-          type: "base64";
-          media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
-          data: string;
-        };
-      }
-    | { type: "text"; text: string };
-
-  const content: ContentBlock[] = [];
+  const content: LlmPart[] = [];
 
   const variationHint = variation > 0
     ? ` This is attempt #${variation + 1} — pick a DIFFERENT theme or photo selection than you would have chosen before.`
@@ -176,20 +166,15 @@ export async function handleAISuggest(
     : "";
 
   content.push({
-    type: "text",
     text: `You are an expert Instagram content strategist. I'm going to show you ${capped.length} photos. Pick the BEST single Instagram carousel sequence from these photos.${variationHint}\n\n${tastePrefix}Here are the photos (numbered for reference):`,
   });
 
   for (let i = 0; i < capped.length; i++) {
     const img = fetched[i];
     if (img) {
-      content.push({
-        type: "image",
-        source: { type: "base64", media_type: img.mediaType, data: img.base64 },
-      });
+      content.push({ image: { mediaType: img.mediaType, base64: img.base64 } });
     }
     content.push({
-      type: "text",
       text: `Photo ${i + 1} [${capped[i].category}]: ${capped[i].alt}${metaLine(capped[i].meta)}`,
     });
   }
@@ -205,7 +190,6 @@ export async function handleAISuggest(
     : "";
 
   content.push({
-    type: "text",
     text: `From these ${capped.length} photos: ${countInstruction} Give the carousel a punchy name (3–5 words) and a subtitle describing the vibe (under 10 words).${userHintBlock}${restate}
 
 Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
@@ -255,17 +239,13 @@ Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
   const poolHasVariety = new Set(capped.map((p) => catOf(p.id))).size > 1;
 
   try {
-    // 40s, no retries: image fetch (≤8s) + this must finish inside the 60s
-    // maxDuration, or Vercel kills the function before the refund runs.
-    const anthropic = new Anthropic({ apiKey, timeout: 40000, maxRetries: 0 });
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 1024,
-      messages: [{ role: "user", content }],
+    // 40s total across Claude + fallbacks, no retries: image fetch (≤8s) + this
+    // must finish inside the 60s maxDuration, or Vercel kills the function
+    // before the refund runs.
+    const rawText = await llmComplete({
+      claudeKey: apiKey, byo: !!byoKey, claudeModel: "claude-haiku-4-5",
+      maxTokens: 1024, messages: [{ role: "user", content }], totalMs: 40000,
     });
-
-    const rawText =
-      message.content[0].type === "text" ? message.content[0].text : "";
 
     const parsedClusters = parseClusters(rawText);
     if (parsedClusters === null) {
@@ -295,13 +275,12 @@ Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
       if (budgetMs > 10000) {
         try {
           recordCost("ai_suggest").catch(() => {});
-          const retryClient = new Anthropic({ apiKey, timeout: budgetMs, maxRetries: 0 });
           const order = clusters[0].photoIds
             .map((id) => (capped.findIndex((p) => p.id === id) + 1) + " [" + catOf(id) + "]")
             .join(", ");
-          const retry = await retryClient.messages.create({
-            model: "claude-haiku-4-5",
-            max_tokens: 1024,
+          const retryText = await llmComplete({
+            claudeKey: apiKey, byo: !!byoKey, claudeModel: "claude-haiku-4-5",
+            maxTokens: 1024, totalMs: budgetMs,
             messages: [
               { role: "user", content },
               { role: "assistant", content: rawText },
@@ -311,7 +290,6 @@ Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
               },
             ],
           });
-          const retryText = retry.content[0] && retry.content[0].type === "text" ? retry.content[0].text : "";
           const retryClusters = parseClusters(retryText);
           if (retryClusters && retryClusters.length > 0) clusters = retryClusters;
         } catch (e) {
