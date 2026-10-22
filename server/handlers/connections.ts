@@ -9,6 +9,7 @@ import { getUserFromRequest } from "../creditGate.js";
 import { supabaseAdmin } from "../supabaseAdmin.js";
 import { captureServerError } from "../sentry.js";
 import { enforceRateLimit } from "../rateLimit.js";
+import { notify, usernameOf } from "../notify.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -175,13 +176,13 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: error.message });
   }
 
-  await supabaseAdmin.from("notifications").insert({
-    user_id: target.id,
-    type: "connection_request",
-    title: "New connection request",
-    body: null,
-    link: "/connections",
-  });
+  if (!isDemoAccount(target.email)) {
+    await notify({
+      userId: target.id, type: "connection_request", actorId: userId, link: "/connections",
+      title: (await usernameOf(userId)) + " sent you a friend request",
+      dedupeKey: "friend_request:" + data?.id,
+    });
+  }
 
   return res.status(200).json({ ok: true, id: data?.id });
 }
@@ -212,12 +213,10 @@ async function handlePatch(req: VercelRequest, res: VercelResponse) {
   if (error) return res.status(500).json({ error: error.message });
 
   if (body.status === "accepted") {
-    await supabaseAdmin.from("notifications").insert({
-      user_id: row.requester_id,
-      type: "connection_accepted",
-      title: "Connection request accepted",
-      body: null,
-      link: "/connections",
+    await notify({
+      userId: row.requester_id, type: "connection_accepted", actorId: userId, link: "/connections",
+      title: (await usernameOf(userId)) + " accepted your friend request",
+      dedupeKey: "friend_accepted:" + row.id,
     });
   }
 

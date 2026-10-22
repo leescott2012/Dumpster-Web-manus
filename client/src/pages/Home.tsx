@@ -33,6 +33,8 @@ import PhoneGate from "@/components/PhoneGate";
 import PinGate from "@/components/PinGate";
 import OnboardingFlow from "@/components/OnboardingFlow";
 import NotificationBell from "@/components/NotificationBell";
+import { NAV_EVENT } from "@/lib/appNav";
+import type { NavTarget } from "@shared/notifications";
 import ConnectionsPanel from "@/components/ConnectionsPanel";
 import CreditsSheet from "@/components/CreditsSheet";
 import BugReportButton from "@/components/BugReportButton";
@@ -183,6 +185,7 @@ function HomeContent() {
   } | null>(null);
   var [menuOpen, setMenuOpen] = useState(false);
   var [connectionsOpen, setConnectionsOpen] = useState(false);
+  var [dmTargetId, setDmTargetId] = useState<string | null>(null); // bell tap -> open this friend's thread
   var [poolTab, setPoolTab] = useState<PoolTab>("photos");
   var [captionCount, setCaptionCount] = useState<number>(function() { return loadCaptions().length; });
   // Refresh caption count when the tab changes (in case caps were added)
@@ -204,6 +207,19 @@ function HomeContent() {
       window.scrollTo(0, parseInt(scrollY || "0") * -1);
     }
   }, [menuOpen]);
+  // Bell taps (see lib/appNav.ts) open the right sheet.
+  useEffect(function() {
+    function onNav(e: Event) {
+      var t = (e as CustomEvent<NavTarget>).detail;
+      if (!t) return;
+      if (t.to === "connections") setConnectionsOpen(true);
+      else if (t.to === "dm") { setDmTargetId(t.userId); setConnectionsOpen(true); }
+      else if (t.to === "taste") setMenuOpen(true); // MainMenu listens too and scrolls to the box
+      else if (t.to === "credits") setCreditsSheetOpen(true);
+    }
+    window.addEventListener(NAV_EVENT, onNav);
+    return function() { window.removeEventListener(NAV_EVENT, onNav); };
+  }, []);
   // Detect if the user has any real (non-stock) photos — uploads OR cloud-synced
   // owner photos (which have UUID ids, not the "upload-" prefix). Used to hide
   // the "Demo photos" banner once real content is present.
@@ -1268,8 +1284,9 @@ function HomeContent() {
       {user && (
         <ConnectionsPanel
           open={connectionsOpen}
-          onClose={function() { setConnectionsOpen(false); }}
+          onClose={function() { setConnectionsOpen(false); setDmTargetId(null); }}
           myUserId={user.id}
+          openDmUserId={dmTargetId}
         />
       )}
       <CreditsSheet

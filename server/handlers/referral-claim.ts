@@ -6,6 +6,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getUserFromRequest } from "../creditGate.js";
 import { addCredits, supabaseAdmin } from "../supabaseAdmin.js";
+import { notify, usernameOf } from "../notify.js";
 
 const REWARD = 10;
 const MAX_REWARDS_PER_INVITER = 5;
@@ -52,5 +53,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Reward failed" });
   }
   await supabaseAdmin.from("profiles").update({ referred_by: inviter.id }).eq("id", inviteeId);
+  await notify({
+    userId: inviter.id, type: "referral_reward", actorId: inviteeId, link: "/credits",
+    title: "+" + REWARD + " credits: " + (await usernameOf(inviteeId)) + " joined with your invite",
+    data: { amount: REWARD }, dedupeKey: "referral:" + inviteeId,
+  });
   return res.json({ rewarded: true });
 }

@@ -2,16 +2,21 @@
  * GET   /api/notifications                 — newest first, capped 50
  * PATCH /api/notifications { id }          — mark one read
  * PATCH /api/notifications { markAllRead }  — mark all read
+ * POST  /api/notifications { day: "YYYY-MM-DD" } — "app open" tick: creates today's reminders
+ *       (Instagram reminder, credits low) exactly once per day via dedupe_key. No cron needed.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getUserFromRequest } from "../creditGate.js";
 import { supabaseAdmin } from "../supabaseAdmin.js";
 import { captureServerError } from "../sentry.js";
+import { notify } from "../notify.js";
+import { creditsAreLow, creditsLowKey, isValidDay, reminderIgKey, shouldRemindIg } from "../../shared/notifications.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method === "GET") return await handleGet(req, res);
     if (req.method === "PATCH") return await handlePatch(req, res);
+    if (req.method === "POST") return await handleTick(req, res);
     return res.status(405).end();
   } catch (err) {
     captureServerError(err, "notifications", { method: req.method });
@@ -23,16 +28,59 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   const userId = await getUserFromRequest(req);
   if (!userId) return res.status(401).json({ error: "Sign in required." });
 
-  const { data, error } = await supabaseAdmin
+  // New columns first; fall back to the legacy shape if supabase-social.sql isn't applied yet.
+  let rows: Record<string, unknown>[] | null = null;
+  const rich = await supabaseAdmin
     .from("notifications")
-    .select("id, type, title, body, link, read_at, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(50);
-  if (error) return res.status(500).json({ error: error.message });
+    .select("id, type, title, body, link, read_at, created_at, actor_id, data")
+    .eq("user_id", userId).order("created_at", { ascending: false }).limit(60);
+  if (!rich.error) rows = rich.data as Record<string, unknown>[];
+  else {
+    const legacy = await supabaseAdmin
+      .from("notifications").select("id, type, title, body, link, read_at, created_at")
+      .eq("user_id", userId).order("created_at", { ascending: false }).limit(60);
+    if (legacy.error) return res.status(500).json({ error: legacy.error.message });
+    rows = legacy.data as Record<string, unknown>[];
+  }
+  // True unread total (the list is capped, the badge shouldn't be).
+  const { count } = await supabaseAdmin
+    .from("notifications").select("id", { count: "exact", head: true }).eq("user_id", userId).is("read_at", null);
+  return res.status(200).json({ notifications: rows ?? [], unreadCount: count ?? (rows ?? []).filter((n) => !n.read_at).length });
+}
 
-  const unreadCount = (data ?? []).filter((n) => !n.read_at).length;
-  return res.status(200).json({ notifications: data ?? [], unreadCount });
+async function handleTick(req: VercelRequest, res: VercelResponse) {
+  const userId = await getUserFromRequest(req);
+  if (!userId) return res.status(401).json({ error: "Sign in required." });
+  const day = (req.body || {}).day;
+  const nowMs = Date.now();
+  if (!isValidDay(day, nowMs)) return res.status(400).json({ error: "day (YYYY-MM-DD) required" });
+
+  const [{ data: u }, { data: prof }] = await Promise.all([
+    supabaseAdmin.auth.admin.getUserById(userId),
+    supabaseAdmin.from("profiles")
+      .select("credits, daily_credits_remaining, daily_credits_reset_at, lifetime_purchase, subscription_tier")
+      .eq("id", userId).maybeSingle(),
+  ]);
+  const meta = (u?.user?.user_metadata ?? {}) as { ig_handle?: string; ig_pending?: unknown };
+
+  // Instagram: tapped "Later" in onboarding and still not linked -> one reminder a day.
+  if (shouldRemindIg({ pendingDay: meta.ig_pending, linked: !!meta.ig_handle, today: day })) {
+    await notify({
+      userId, type: "reminder", link: "/taste", dedupeKey: reminderIgKey(day),
+      title: "Finish linking your Instagram so Valet knows your style",
+      body: "Tap to open Taste Profile and build it from Instagram.",
+    });
+  }
+
+  // Credits low (skip lifetime/pro: effectively unmetered for them).
+  if (prof && !prof.lifetime_purchase && prof.subscription_tier !== "pro"
+    && creditsAreLow({ credits: prof.credits, daily: prof.daily_credits_remaining, dailyResetAt: prof.daily_credits_reset_at, nowMs })) {
+    await notify({
+      userId, type: "credits_low", link: "/credits", dedupeKey: creditsLowKey(day),
+      title: "You're running low on credits", body: "Tap to top up.",
+    });
+  }
+  return res.status(200).json({ ok: true });
 }
 
 async function handlePatch(req: VercelRequest, res: VercelResponse) {
