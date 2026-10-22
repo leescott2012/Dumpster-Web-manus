@@ -391,24 +391,27 @@ export function useCarouselState() {
   }, []);
 
   var movePhotoFromPoolToDump = useCallback(function(photoId: string, dumpId: string, toIndex: number) {
-    setPool(function(prev) {
-      var photo: Photo | null = null;
-      for (var i = 0; i < prev.length; i++) {
-        if (prev[i].id === photoId) { photo = prev[i]; break; }
-      }
-      if (!photo) return prev;
-      var capturedPhoto = photo;
-      setDumps(function(prevDumps) {
-        return prevDumps.map(function(d) {
-          if (d.id !== dumpId) return d;
-          if (d.photos.length >= 20) return d;
-          var photos = d.photos.slice();
-          photos.splice(toIndex, 0, capturedPhoto);
-          return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
-        });
+    // Sibling updates (not setDumps nested inside setPool's updater): nested, the dump
+    // insert ran AFTER a reorder queued right behind it, so Valet's swap-in-then-reorder
+    // dropped the new photo from the ordering and it landed in the wrong slot.
+    var photo: Photo | null = null;
+    for (var i = 0; i < poolRef.current.length; i++) {
+      if (poolRef.current[i].id === photoId) { photo = poolRef.current[i]; break; }
+    }
+    if (!photo) return;
+    var capturedPhoto = photo;
+    var target = dumpsRef.current.filter(function(d) { return d.id === dumpId; })[0];
+    if (!target || target.photos.length >= 20) return; // full dump: leave the photo in the pool, don't lose it
+    setDumps(function(prevDumps) {
+      return prevDumps.map(function(d) {
+        if (d.id !== dumpId) return d;
+        if (d.photos.length >= 20) return d;
+        var photos = d.photos.slice();
+        photos.splice(toIndex, 0, capturedPhoto);
+        return { id: d.id, number: d.number, title: d.title, subtitle: d.subtitle, photos: photos, captions: d.captions, vibe: d.vibe, favorited: d.favorited, rating: d.rating, chatHistory: d.chatHistory };
       });
-      return prev.filter(function(p) { return p.id !== photoId; });
     });
+    setPool(function(prev) { return prev.filter(function(p) { return p.id !== photoId; }); });
   }, []);
 
   var movePhotoFromDumpToPool = useCallback(function(dumpId: string, photoIndex: number) {
