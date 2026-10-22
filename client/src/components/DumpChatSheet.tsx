@@ -228,7 +228,8 @@ export default function DumpChatSheet({
 
       var assistantMsg: ChatMessage = {
         role: "assistant",
-        text: data.reply,
+        // Valet sometimes echoes markdown bold and internal photo ids; neither belongs in a chat bubble.
+        text: data.reply.replace(/\s*\[[0-9a-f]{8}-[0-9a-f-]{27,}\]/gi, "").replace(/\*\*/g, ""),
         actions: data.actions && data.actions.length > 0 ? data.actions : undefined,
       };
 
