@@ -7,7 +7,7 @@ let plan: Record<string, number> = {}; // provider -> status (default 200)
 (globalThis as any).fetch = async (url: any) => {
   const u = String(url);
   const h = new URL(u).hostname;
-  const host = h.endsWith("anthropic.com") ? "anthropic" : h.endsWith("googleapis.com") ? "gemini" : h === "api.openai.com" ? "openai" : "openrouter";
+  const host = h === "api.anthropic.com" ? "anthropic" : h === "generativelanguage.googleapis.com" ? "gemini" : h === "api.openai.com" ? "openai" : "openrouter";
   calls.push(host);
   assert.ok(!u.includes("key="), "key must not be in URL");
   const st = plan[host] ?? 200;
