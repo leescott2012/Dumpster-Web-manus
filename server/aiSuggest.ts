@@ -10,6 +10,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
 import { publicAIError } from "./sentry.js";
 import { recordCost } from "./dailyBudget.js";
+import { parseModelJson } from "./parseModelJson.js";
 import { MAX_SAME_RUN, longestRun, breakUpRuns, wantsVariety, extractRuleLines } from "./sequenceRules.js";
 
 export interface PhotoInput {
@@ -200,13 +201,9 @@ Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
   // duplicates, at most targetCount; drop clusters with fewer than 2 photos.
   // Returns null if the text isn't JSON.
   const parseClusters = (rawText: string): Cluster[] | null => {
-    const cleaned = rawText
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```\s*$/i, "")
-      .trim();
     let parsed: { clusters?: unknown };
     try {
-      parsed = JSON.parse(cleaned);
+      parsed = parseModelJson(rawText);
     } catch {
       return null;
     }
