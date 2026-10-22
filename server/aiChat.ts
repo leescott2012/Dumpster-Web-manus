@@ -4,7 +4,7 @@
  * and a user message. Returns a reply + structured actions to execute.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import { llmComplete, llmConfigured } from "./llm.js";
 import { userAnthropicKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { publicAIError } from "./sentry.js";
@@ -81,8 +81,9 @@ export async function handleAIChat(
     return false;
   }
 
-  var apiKey = userAnthropicKey(req) || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey === "your_anthropic_api_key_here") {
+  var byoKey = userAnthropicKey(req);
+  var apiKey = byoKey || process.env.ANTHROPIC_API_KEY;
+  if (!llmConfigured(apiKey)) {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "ANTHROPIC_API_KEY is not configured." }));
     return false;
@@ -168,17 +169,13 @@ export async function handleAIChat(
   messages.push({ role: "user", content: body.message });
 
   try {
-    // 22s, no retries: must finish inside the 30s maxDuration, or Vercel kills
-    // the function before the refund runs.
-    var anthropic = new Anthropic({ apiKey: apiKey, timeout: 22000, maxRetries: 0 });
-    var response = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 1500, // 1024 truncated JSON reorders of 20 photo ids
-      system: systemPrompt,
-      messages: messages,
+    // 22s total across Claude + fallbacks, no retries: must finish inside the
+    // 30s maxDuration, or Vercel kills the function before the refund runs.
+    var rawText = await llmComplete({
+      claudeKey: apiKey, byo: !!byoKey, claudeModel: "claude-haiku-4-5",
+      maxTokens: 1500, // 1024 truncated JSON reorders of 20 photo ids
+      system: systemPrompt, messages: messages, totalMs: 22000,
     });
-
-    var rawText = response.content[0].type === "text" ? response.content[0].text : "";
 
     // Strip markdown fences if present
     var cleaned = rawText

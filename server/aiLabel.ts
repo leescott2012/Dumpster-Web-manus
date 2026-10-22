@@ -5,7 +5,7 @@
  * auto-tagged (category drives the pool filters; label becomes the alt text).
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import { llmComplete, llmConfigured, type LlmPart } from "./llm.js";
 import { userAnthropicKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
@@ -75,8 +75,9 @@ export async function handleAILabel(
     return false;
   }
 
-  const apiKey = userAnthropicKey(req) || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey === "your_anthropic_api_key_here") {
+  const byoKey = userAnthropicKey(req);
+  const apiKey = byoKey || process.env.ANTHROPIC_API_KEY;
+  if (!llmConfigured(apiKey)) {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "ANTHROPIC_API_KEY is not configured." }));
     return false;
@@ -137,20 +138,16 @@ Then name the subject in 2–5 concrete words (brand, color, dish, place — nev
 Return ONLY JSON, nothing else:
 {"labels":[{"id":"<id>","category":"<SECTION>","label":"<subject>","confidence":0.0}]}`;
 
-  type ContentBlock =
-    | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string } }
-    | { type: "text"; text: string };
-
   const fetched = await Promise.all(photos.map((p) => fetchImageAsBase64(p.url)));
-  const content: ContentBlock[] = [];
+  const content: LlmPart[] = [];
   const usableIds: string[] = [];
 
   for (let i = 0; i < photos.length; i++) {
     const img = fetched[i];
     if (!img) continue;
     usableIds.push(photos[i].id);
-    content.push({ type: "text", text: `Photo id: ${photos[i].id}` });
-    content.push({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.base64 } });
+    content.push({ text: `Photo id: ${photos[i].id}` });
+    content.push({ image: { mediaType: img.mediaType, base64: img.base64 } });
   }
 
   if (usableIds.length === 0) {
@@ -159,20 +156,17 @@ Return ONLY JSON, nothing else:
     return false;
   }
 
-  content.push({ type: "text", text: `Label all ${usableIds.length} photos now. Return JSON only.` });
+  content.push({ text: `Label all ${usableIds.length} photos now. Return JSON only.` });
 
   try {
-    // 40s, no retries: image fetch (≤8s) + this must finish inside the 60s
-    // maxDuration, or Vercel kills the function before the refund runs.
-    const anthropic = new Anthropic({ apiKey, timeout: 40000, maxRetries: 0 });
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 80 * usableIds.length + 250,
-      system: audit ? auditSystem : system,
-      messages: [{ role: "user", content }],
+    // 40s total across Claude + fallbacks, no retries: image fetch (≤8s) + this
+    // must finish inside the 60s maxDuration, or Vercel kills the function
+    // before the refund runs.
+    const rawText = await llmComplete({
+      claudeKey: apiKey, byo: !!byoKey, claudeModel: "claude-sonnet-4-6",
+      maxTokens: 80 * usableIds.length + 250,
+      system: audit ? auditSystem : system, messages: [{ role: "user", content }], totalMs: 40000,
     });
-
-    const rawText = message.content[0].type === "text" ? message.content[0].text : "";
     const cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
     const parsed = JSON.parse(cleaned);
     const rawLabels: any[] = Array.isArray(parsed.labels) ? parsed.labels : [];

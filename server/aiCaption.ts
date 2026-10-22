@@ -5,7 +5,7 @@
  * user prompt plus optional title/category/tone overrides.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import { llmComplete, llmConfigured, type LlmPart } from "./llm.js";
 import { userAnthropicKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
@@ -99,8 +99,9 @@ export async function handleAICaption(
     return false;
   }
 
-  const apiKey = userAnthropicKey(req) || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey === "your_anthropic_api_key_here") {
+  const byoKey = userAnthropicKey(req);
+  const apiKey = byoKey || process.env.ANTHROPIC_API_KEY;
+  if (!llmConfigured(apiKey)) {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "ANTHROPIC_API_KEY is not configured." }));
     return false;
@@ -137,18 +138,7 @@ Respond ONLY with valid JSON, no markdown, no code fences:
   // Build multi-modal content: photos + text context + user prompt
   const photos = Array.isArray(payload.photos) ? payload.photos.slice(0, MAX_PHOTOS) : [];
 
-  type ContentBlock =
-    | {
-        type: "image";
-        source: {
-          type: "base64";
-          media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
-          data: string;
-        };
-      }
-    | { type: "text"; text: string };
-
-  const content: ContentBlock[] = [];
+  const content: LlmPart[] = [];
 
   // Lead text: dump metadata
   const metaLines: string[] = [`Dump title: "${payload.dumpTitle}"`];
@@ -156,7 +146,7 @@ Respond ONLY with valid JSON, no markdown, no code fences:
   if (payload.category) metaLines.push(`Category: ${payload.category}`);
   const exifSummary = summarizeBatchMeta(photos);
   if (exifSummary) metaLines.push(exifSummary);
-  content.push({ type: "text", text: metaLines.join("\n") });
+  content.push({ text: metaLines.join("\n") });
 
   // Photos
   if (photos.length > 0) {
@@ -169,16 +159,12 @@ Respond ONLY with valid JSON, no markdown, no code fences:
       return false;
     }
     content.push({
-      type: "text",
       text: `Here are the ${photos.length} photo${photos.length === 1 ? "" : "s"} in the carousel:`,
     });
     for (let i = 0; i < photos.length; i++) {
       const img = fetched[i];
       if (img) {
-        content.push({
-          type: "image",
-          source: { type: "base64", media_type: img.mediaType, data: img.base64 },
-        });
+        content.push({ image: { mediaType: img.mediaType, base64: img.base64 } });
       }
     }
   }
@@ -186,28 +172,22 @@ Respond ONLY with valid JSON, no markdown, no code fences:
   // User's specific instruction — final, highest-weight signal
   if (payload.userPrompt && payload.userPrompt.trim()) {
     content.push({
-      type: "text",
       text: `\nUser instructions (follow these carefully):\n${payload.userPrompt.trim()}`,
     });
   }
 
   content.push({
-    type: "text",
     text: `\nWrite 3 caption options now. Return JSON only.`,
   });
 
   try {
-    // 18s, no retries: image fetch (≤8s) + this must finish inside the 30s
-    // maxDuration, or Vercel kills the function before the refund runs.
-    const anthropic = new Anthropic({ apiKey, timeout: 18000, maxRetries: 0 });
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 700,
-      system,
-      messages: [{ role: "user", content }],
+    // 18s total across Claude + fallbacks, no retries: image fetch (≤8s) + this
+    // must finish inside the 30s maxDuration, or Vercel kills the function
+    // before the refund runs.
+    const rawText = await llmComplete({
+      claudeKey: apiKey, byo: !!byoKey, claudeModel: "claude-haiku-4-5",
+      maxTokens: 700, system, messages: [{ role: "user", content }], totalMs: 18000,
     });
-
-    const rawText = message.content[0].type === "text" ? message.content[0].text : "";
     const cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 
     let parsed: { captions?: unknown; vibe?: unknown };
