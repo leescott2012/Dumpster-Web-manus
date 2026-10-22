@@ -146,7 +146,7 @@ export default function OnboardingFlow(props: OnboardingFlowProps) {
     setScrubError(null);
     try {
       var pieces = await scrubInstagramProfile(handle);
-      setTaste(function (prev) { return mergeTaste(prev, pieces); });
+      setTaste(function (prev) { return mergeTaste(prev, pieces, handle || undefined); });
       // Link the handle to the account (user metadata: no schema change) + device.
       try { localStorage.setItem("dumpster_ig_handle", handle); } catch (_) { /* noop */ }
       try { await supabase.auth.updateUser({ data: { ig_handle: handle } }); } catch (_) { /* non-fatal */ }

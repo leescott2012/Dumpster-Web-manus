@@ -7,7 +7,7 @@
  */
 import { aiFetch } from "@/lib/creditSync";
 import { getAuthHeaders, supabase } from "@/lib/supabase";
-import { TASTE_PROFILE_MAX, loadTasteProfile, saveTasteProfile } from "@/lib/captionPool";
+import { TASTE_PROFILE_MAX, loadTasteProfile, saveTasteProfile, loadDumpStyles, saveDumpStyles } from "@/lib/captionPool";
 
 /** Returns the distilled text, or throws Error with a plain-English reason. */
 export async function scrubInstagramProfile(handle: string): Promise<string> {
@@ -37,11 +37,14 @@ export async function scrubInstagramProfile(handle: string): Promise<string> {
   return text;
 }
 
-/** Append scrub output to an existing profile without passing the cap (tail is trimmed, not the user's own text). */
-export function mergeTaste(existing: string, scrubbed: string): string {
-  var base = existing.trim();
-  var next = base ? base + "\n\n" + scrubbed : scrubbed;
-  return next.slice(0, TASTE_PROFILE_MAX);
+import { mergeTaste } from "@/lib/tasteMerge";
+export { mergeTaste, stripIgBlock } from "@/lib/tasteMerge";
+
+/** Save an account's style as a Dump Style named "@handle" (replaces a same-named one). */
+export function saveAccountAsDumpStyle(handle: string, text: string): void {
+  const name = "@" + handle;
+  const st = { id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36), name, profile: text, rules: "", updatedAt: new Date().toISOString() };
+  saveDumpStyles(loadDumpStyles().filter((d) => d.name !== name).concat(st));
 }
 
 /** "@name" / "name" / instagram.com/name/... -> "name", or null if it isn't a profile handle. */
@@ -68,7 +71,7 @@ export async function linkInstagramAndBuildTaste(userId: string, input: string):
   var text: string;
   try { text = await scrubInstagramProfile(handle); }
   catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't read that profile." }; }
-  var merged = mergeTaste(loadTasteProfile(), text);
+  var merged = mergeTaste(loadTasteProfile(), text, handle);
   saveTasteProfile(merged);
   try { localStorage.setItem("dumpster_ig_handle", handle); } catch { /* storage blocked */ }
   var linked = false;
