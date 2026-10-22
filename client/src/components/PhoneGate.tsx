@@ -14,12 +14,13 @@ export function phoneSkipped(id: string | undefined): boolean {
   try { return localStorage.getItem(skipKey(id)) === "1"; } catch (_) { return false; }
 }
 
-export default function PhoneGate() {
+export default function PhoneGate(props: { onResolved?: () => void }) {
   var { signOut, user } = useAuth();
   var [, setTick] = useState(0);
   function skip() {
     try { if (user) localStorage.setItem(skipKey(user.id), "1"); } catch (_) { /* noop */ }
     setTick(function(n) { return n + 1; });
+    if (props.onResolved) props.onResolved();
   }
   if (phoneSkipped(user?.id)) return null;
   // On verify success Supabase fires USER_UPDATED; AuthContext picks up user.phone and this gate unmounts.

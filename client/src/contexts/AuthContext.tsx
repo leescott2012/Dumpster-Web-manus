@@ -24,6 +24,7 @@ export interface UserProfile {
   lifetime_purchase: boolean;
   stripe_customer_id: string | null;
   username: string | null;
+  created_at?: string;
   avatar_icon: string | null;
   avatar_color: string | null;
   /** Set once first-run setup is finished. Null = show OnboardingFlow. */
