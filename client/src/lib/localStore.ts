@@ -102,3 +102,30 @@ export function idbFlush(): void {
     void writeNow(key, v);
   }
 }
+
+/** Awaited write (resolves once the transaction commits). false if IndexedDB is unavailable. */
+export async function idbPutNow(key: string, value: unknown): Promise<boolean> {
+  const db = await openDb();
+  if (!db) return false;
+  return new Promise<boolean>(function (resolve) {
+    try {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put(value, key);
+      tx.oncomplete = function () { resolve(true); };
+      tx.onerror = tx.onabort = function () { resolve(false); };
+    } catch { resolve(false); }
+  });
+}
+
+/** Awaited delete. */
+export async function idbDelNow(key: string): Promise<void> {
+  const db = await openDb();
+  if (!db) return;
+  await new Promise<void>(function (resolve) {
+    try {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).delete(key);
+      tx.oncomplete = tx.onerror = tx.onabort = function () { resolve(); };
+    } catch { resolve(); }
+  });
+}

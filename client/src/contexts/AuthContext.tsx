@@ -7,6 +7,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import { supabase } from "@/lib/supabase";
 import { syncAIProfileOnSignIn, ensureAIProfileWired } from "@/lib/aiProfileSync";
 import { setCurrentUserId } from "@/lib/currentUser";
+import { deviceBelongsToOther, claimDevice } from "@/lib/deviceOwner";
 import { CREDIT_COSTS } from "@/lib/credits";
 import { onCreditChange } from "@/lib/creditSync";
 import type { User, Session } from "@supabase/supabase-js";
@@ -106,7 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Listen to auth changes
   useEffect(function() {
     // Get initial session
-    supabase.auth.getSession().then(function({ data: { session: s } }) {
+    supabase.auth.getSession().then(async function({ data: { session: s } }) {
+      // Another account's photos/captions are on this device: park them, load ours, reload clean.
+      if (s?.user && deviceBelongsToOther(s.user.id)) { await claimDevice(s.user.id); window.location.reload(); return; }
       setSession(s);
       setUser(s?.user ?? null);
       setCurrentUserId(s?.user?.id ?? null);
@@ -124,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Subscribe to changes
     var { data: { subscription } } = supabase.auth.onAuthStateChange(function(_event, s) {
+      if (s?.user && deviceBelongsToOther(s.user.id)) { claimDevice(s.user.id).then(function() { window.location.reload(); }); return; }
       setSession(s);
       setUser(s?.user ?? null);
       setCurrentUserId(s?.user?.id ?? null);
