@@ -8,8 +8,7 @@ import { X, Instagram, Search, Plus, Check, AlertCircle, Loader } from "lucide-r
 import type { Photo } from "@/lib/photoData";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
-import { scrubInstagramProfile, parseIgHandle } from "@/lib/igProfileScrub";
-import { loadDumpStyles, saveDumpStyles } from "@/lib/captionPool";
+import { scrubInstagramProfile, parseIgHandle, saveAccountAsDumpStyle } from "@/lib/igProfileScrub";
 
 interface ScrubResult {
   src: string;
@@ -42,8 +41,7 @@ export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubShee
     setStyleBusy(true); setError(null); setStyleDone(null);
     try {
       var text = await scrubInstagramProfile(styleHandle);
-      var st = { id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36), name: "@" + styleHandle, profile: text, rules: "", updatedAt: new Date().toISOString() };
-      saveDumpStyles(loadDumpStyles().concat(st));
+      saveAccountAsDumpStyle(styleHandle, text);
       setStyleDone("@" + styleHandle);
       toast.success("Saved @" + styleHandle + " as a Dump Style");
     } catch (e: unknown) {

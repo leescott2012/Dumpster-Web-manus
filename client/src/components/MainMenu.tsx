@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpStyles, saveDumpStyles, loadActiveDumpStyleId, saveActiveDumpStyleId, TASTE_PROFILE_MAX, AI_RULES_MAX, DUMP_STYLE_USED_BY, type DumpStyle } from "@/lib/captionPool";
 import ApiKeysCard from "./ApiKeysCard";
-import { scrubInstagramProfile, mergeTaste } from "@/lib/igProfileScrub";
+import { scrubInstagramProfile, mergeTaste, parseIgHandle, saveAccountAsDumpStyle, stripIgBlock } from "@/lib/igProfileScrub";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -565,13 +565,32 @@ function TasteProfileSection() {
   const [igError, setIgError] = useState<string | null>(null);
   async function buildFromInstagram() {
     if (!igHandle.trim() || igBusy) return;
+    const handle = parseIgHandle(igHandle) || igHandle.trim().replace(/^@/, "");
+    // Taste Profile is about YOU. If this isn't the linked account, offer the right place for it.
+    let linked = "";
+    try { linked = (localStorage.getItem("dumpster_ig_handle") || (user?.user_metadata?.ig_handle as string) || "").toLowerCase(); } catch (_) { /* noop */ }
+    const other = !!linked && linked !== handle.toLowerCase();
+    if (other && !window.confirm("Taste Profile is about YOU, and your linked Instagram is @" + linked + ".\n\nSave @" + handle + " as a Dump Style instead?\n\nOK = save as Dump Style\nCancel = do nothing")) return;
     setIgBusy(true);
     setIgError(null);
     try {
-      const text = await scrubInstagramProfile(igHandle);
-      setProfile(p => mergeTaste(p, text)); // autosaves + cloud-syncs; Valet reads it
-      setIgHandle("");
-      toast.success("Taste profile built from Instagram");
+      const text = await scrubInstagramProfile(handle);
+      if (other) {
+        saveAccountAsDumpStyle(handle, text);
+        toast.success("Saved @" + handle + " as a Dump Style");
+        setIgHandle("");
+        setIgBusy(false);
+        return;
+      }
+      const prev = profile;
+      const next = mergeTaste(prev, text, handle);
+      if (next === stripIgBlock(prev)) {
+        setIgError("Your profile text is almost at the limit. Shorten it a little, then build again.");
+      } else {
+        setProfile(next); // autosaves + cloud-syncs; Valet reads it
+        setIgHandle("");
+        toast.success("Taste profile built from @" + handle, { action: { label: "Undo", onClick: () => setProfile(prev) } });
+      }
     } catch (e) {
       setIgError(e instanceof Error ? e.message : "Couldn't read that profile.");
     }
