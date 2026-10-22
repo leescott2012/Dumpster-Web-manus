@@ -434,6 +434,8 @@ async function runScrub(req: VercelRequest, res: VercelResponse, userId: string 
       if (isTimeout(err)) {
         return fail(res, 504, "Instagram took too long to answer. Try again in a minute.", "scrape_timeout");
       }
+      // Also to the function log (message only, never the body) so a 500 is diagnosable without Sentry.
+      console.error("[ig-scrub] profile failed:", (err as { status?: number })?.status ?? "", String((err as Error)?.message ?? err).slice(0, 300));
       captureServerError(err, "ig-scrub.profile", { userId });
       return fail(res, 500, "Something went wrong reading that profile. Try again in a minute.", "scrub_error");
     }
