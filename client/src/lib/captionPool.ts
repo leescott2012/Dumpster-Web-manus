@@ -306,13 +306,15 @@ export function buildTasteBlock(): string {
 
   const parts: string[] = [];
   if (profile) parts.push(`User's aesthetic / taste profile:\n${profile}`);
-  if (rules)   parts.push(`STRICT RULES (must follow):\n${rules}`);
   const activeId = loadActiveDumpStyleId();
   const style = activeId ? loadDumpStyles().find(d => d.id === activeId) : undefined;
   if (style) {
     const body = [style.profile.trim(), style.rules.trim()].filter(Boolean).join("\n");
-    parts.push(`ACTIVE DUMP STYLE — "${style.name}" (follow this recipe for structure, sequencing, poses, and mix):` + (body ? "\n" + body : ""));
+    parts.push(`ACTIVE DUMP STYLE — "${style.name}" (follow this recipe for structure, sequencing, poses, and mix; the STRICT RULES below override it if they conflict):` + (body ? "\n" + body : ""));
   }
+  // Rules come AFTER the style so a Dump Style can never override them. Keep this header EXACT:
+  // server/sequenceRules.ts parses "STRICT RULES (must follow):".
+  if (rules)   parts.push(`STRICT RULES (must follow):\n${rules}`);
   if (favorites.length) parts.push(`User's favorite caption examples (match this voice):\n${favorites.map(c => "- " + c.text).join("\n")}`);
   if (banned.length)    parts.push(`NEVER USE these patterns or anything similar:\n${banned.map(c => "- " + c.text).join("\n")}`);
   return parts.join("\n\n");
