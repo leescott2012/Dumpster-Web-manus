@@ -661,20 +661,12 @@ export default function AISuggestSheet({
 
                 {/* Photo strip */}
                 <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
-                  {clusterPhotos.map((p, i) => (
+                  {clusterPhotos.map((p) => (
                     <div key={p.id} style={{
                       position: "relative", flexShrink: 0,
                       width: 72, height: 90, borderRadius: 8, overflow: "hidden", background: "#1a1a1a",
                     }}>
                       <img src={p.url} alt={p.alt} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      <div style={{
-                        position: "absolute", top: 4, left: 4,
-                        background: "rgba(0,0,0,0.7)", borderRadius: 3,
-                        fontSize: 8, fontWeight: 700, color: "#fff",
-                        padding: "1px 5px", letterSpacing: "0.08em",
-                      }}>
-                        {String(i + 1).padStart(2, "0")}
-                      </div>
                     </div>
                   ))}
                 </div>
