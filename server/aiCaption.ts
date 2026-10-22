@@ -9,6 +9,7 @@ import { llmComplete, llmConfigured, type LlmPart } from "./llm.js";
 import { userAnthropicKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
+import { parseModelJson } from "./parseModelJson.js";
 import { publicAIError } from "./sentry.js";
 
 export interface CaptionPhotoInput {
@@ -188,11 +189,9 @@ Respond ONLY with valid JSON, no markdown, no code fences:
       claudeKey: apiKey, byo: !!byoKey, claudeModel: "claude-haiku-4-5",
       maxTokens: 700, system, messages: [{ role: "user", content }], totalMs: 18000,
     });
-    const cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-
     let parsed: { captions?: unknown; vibe?: unknown };
     try {
-      parsed = JSON.parse(cleaned);
+      parsed = parseModelJson(rawText);
     } catch {
       // Log raw model text server-side only — never echo it to the client.
       console.error("[AI Caption] invalid JSON from model:", rawText.slice(0, 500));

@@ -8,6 +8,7 @@ import { llmComplete, llmConfigured } from "./llm.js";
 import { userAnthropicKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { publicAIError } from "./sentry.js";
+import { parseModelJson } from "./parseModelJson.js";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -185,7 +186,7 @@ export async function handleAIChat(
 
     var parsed: AIChatResponse;
     try {
-      parsed = JSON.parse(cleaned) as AIChatResponse;
+      parsed = parseModelJson(rawText) as AIChatResponse;
     } catch {
       if (cleaned.charAt(0) === "{") {
         // Broken/truncated JSON — fail (and refund) instead of showing raw JSON.
