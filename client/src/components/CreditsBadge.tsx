@@ -93,7 +93,7 @@ export default function CreditsBadge({ onCreditsClick, onAuthClick }: CreditsBad
           <LayoutDashboard size={13} /> <span className="owner-dashboard-label">Dashboard</span>
         </a>
       )}
-    <button aria-label={totalCredits + " credits" + (isPro ? ", Pro" : "") + ". Open credits"}
+    <button data-tour="credits-badge" aria-label={totalCredits + " credits" + (isPro ? ", Pro" : "") + ". Open credits"}
       onClick={onCreditsClick}
       style={{
         display: "flex", alignItems: "center", gap: 6,
