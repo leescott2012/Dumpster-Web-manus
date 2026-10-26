@@ -79,7 +79,7 @@ export function groupByDay<T extends { created_at: string }>(items: T[], now: Da
 }
 
 export type NavTarget =
-  | { to: "connections" } | { to: "dm"; userId: string } | { to: "taste" } | { to: "credits" } | null;
+  | { to: "connections" } | { to: "dm"; userId: string } | { to: "taste" } | { to: "credits" } | { to: "tip"; id: string } | null;
 
 /** Notification links -> in-app targets. Understands the legacy "/connections" and "/messages/<id>" links. */
 export function parseLink(link: string | null | undefined): NavTarget {
@@ -89,6 +89,8 @@ export function parseLink(link: string | null | undefined): NavTarget {
   if (link === "/connections") return { to: "connections" };
   if (link === "/taste") return { to: "taste" };
   if (link === "/credits") return { to: "credits" };
+  const tip = link.match(/^\/tip\/([a-z0-9_-]{1,30})$/i);
+  if (tip) return { to: "tip", id: tip[1] };
   return null;
 }
 
@@ -109,6 +111,9 @@ export const TIPS = [
 ] as const;
 
 export const tipKey = (id: string) => "tip:" + id;
+export const tipLink = (id: string) => "/tip/" + id;
+/** Tips sent before they carried a link: recover the id from the title. */
+export const tipIdForTitle = (title: string) => TIPS.find((t) => t.title === title)?.id ?? null;
 
 /** First tip whose feature is unused and that was never sent; null when nothing is left to teach. */
 export function pickTip(usedEvents: ReadonlySet<string>, sentTipIds: ReadonlySet<string>) {

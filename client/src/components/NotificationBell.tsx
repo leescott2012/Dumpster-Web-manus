@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, MessageCircle, UserPlus, UserCheck, Bug, Info, MessageSquare, Gift, Coins, Clock, Megaphone, Lightbulb } from "lucide-react";
 import { getAuthHeaders } from "@/lib/supabase";
-import { groupByDay, parseLink } from "@shared/notifications";
+import { groupByDay, parseLink, tipIdForTitle } from "@shared/notifications";
 import { localDay, openTarget } from "@/lib/appNav";
 
 interface Notification {
@@ -109,7 +109,8 @@ export default function NotificationBell() {
         });
       } catch { /* next poll reconciles */ }
     }
-    openTarget(parseLink(n.link));
+    var tipId = n.type === "tip" && !n.link ? tipIdForTitle(n.title) : null; // tips sent before they carried a link
+    openTarget(tipId ? { to: "tip", id: tipId } : parseLink(n.link));
   }
 
   var groups = groupByDay(items, new Date());

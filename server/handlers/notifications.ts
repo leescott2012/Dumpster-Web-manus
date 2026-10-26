@@ -10,7 +10,7 @@ import { getUserFromRequest } from "../creditGate.js";
 import { supabaseAdmin } from "../supabaseAdmin.js";
 import { captureServerError } from "../sentry.js";
 import { notify } from "../notify.js";
-import { creditsAreLow, creditsLowKey, isValidDay, pickTip, reminderIgKey, shouldRemindIg, tipKey } from "../../shared/notifications.js";
+import { creditsAreLow, creditsLowKey, isValidDay, pickTip, reminderIgKey, shouldRemindIg, tipKey, tipLink } from "../../shared/notifications.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -91,7 +91,7 @@ async function handleTick(req: VercelRequest, res: VercelResponse) {
     const sent = new Set((tipRows ?? []).map((r) => String(r.dedupe_key ?? "").replace(/^tip:/, "")));
     const sentToday = (tipRows ?? []).some((r) => (r.data as { day?: string } | null)?.day === day);
     const tip = sentToday ? null : pickTip(new Set((usedRows ?? []).map((r) => String(r.event))), sent);
-    if (tip) await notify({ userId, type: "tip", dedupeKey: tipKey(tip.id), title: tip.title, body: tip.body, data: { day } });
+    if (tip) await notify({ userId, type: "tip", link: tipLink(tip.id), dedupeKey: tipKey(tip.id), title: tip.title, body: tip.body, data: { day, tip: tip.id } });
   }
   return res.status(200).json({ ok: true });
 }
