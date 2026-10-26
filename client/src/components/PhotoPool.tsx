@@ -424,9 +424,7 @@ export default function PhotoPool({
                 </div>
                 {filter === "videos" && !anyMode && (
                   <div style={{ display: "flex", alignItems: "flex-start", gap: "4px" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <VideoTagChips v={vm} onChange={function(tags) { if (onSetVideoTags) onSetVideoTags(photo.id, tags); }} />
-                    </div>
+                    <div style={{ flex: 1 }} />
                     {onDeleteVideo && (
                       <button aria-label="Delete video" title="Delete video from this device"
                         onClick={function() { if (window.confirm("Delete this video from this device?")) onDeleteVideo(photo.id); }}
