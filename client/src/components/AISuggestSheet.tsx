@@ -8,6 +8,7 @@
  * Fallback path: pure-JS offline algorithm (free, instant) — used silently
  * if any AI failure happens (5MB, 429, 503, 504, network down).
  */
+import { useTrackWhenOpen } from "@/lib/analytics";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { aiFetch } from "@/lib/creditSync";
 import { toast } from "sonner";
@@ -70,6 +71,7 @@ export default function AISuggestSheet({
   usedPhotoIds,
   onOutOfCredits,
 }: AISuggestSheetProps) {
+  useTrackWhenOpen(open, "feature_autogen");
   const { user, totalCredits } = useAuth();
   const COST = CREDIT_COSTS.ai_suggest;
   // Signed-out users get the server's 401 message; only gate on a known balance.

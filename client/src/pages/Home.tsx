@@ -718,6 +718,7 @@ function HomeContent() {
         // (videoStore), never uploaded. saveVideo never rejects. Not limited:
         // no decode happens here.
         saveVideo(file, { id: photoId }).then(function(rec) {
+          track("feature_video");
           var url = URL.createObjectURL(file);
           videoUrls.current[photoId] = url;
           setVideos(function(prev) { var n = Object.assign({}, prev); n[photoId] = rec; return n; });

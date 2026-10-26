@@ -2,6 +2,7 @@
  * DumpChatSheet — Valet (AI assistant) for a specific dump.
  * The Valet can reorder, swap photos in/out, update vibe, and learn taste preferences.
  */
+import { useTrackWhenOpen } from "@/lib/analytics";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { aiFetch } from "@/lib/creditSync";
 import { getAiHeaders } from "@/lib/supabase";
@@ -80,6 +81,7 @@ export default function DumpChatSheet({
   onReorder, onSwapIn, onSwapOut, onUpdateVibe, onChatHistoryChange,
   initialMessage,
 }: DumpChatSheetProps) {
+  useTrackWhenOpen(open, "feature_valet");
   var [messages, setMessages] = useState<ChatMessage[]>([]);
   var [input, setInput] = useState("");
   var [loading, setLoading] = useState(false);

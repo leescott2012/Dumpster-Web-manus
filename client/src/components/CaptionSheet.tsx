@@ -2,6 +2,7 @@
  * CaptionSheet — Generate Instagram captions for any dump using Claude.
  * Mirrors iOS CaptionService / LLMService.generateCaption flow.
  */
+import { useTrackWhenOpen } from "@/lib/analytics";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { aiFetch } from "@/lib/creditSync";
 import { getAiHeaders } from "@/lib/supabase";
@@ -33,6 +34,7 @@ const TONES: { value: Tone; label: string; hint: string }[] = [
 export default function CaptionSheet({
   open, onClose, dumps, initialDumpId, onCaptionsGenerated,
 }: CaptionSheetProps) {
+  useTrackWhenOpen(open, "feature_captions");
   const [selectedDumpId, setSelectedDumpId] = useState<string | null>(initialDumpId ?? null);
   const [tone, setTone] = useState<Tone>("default");
   const [phase, setPhase] = useState<"picker" | "loading" | "result" | "error">("picker");

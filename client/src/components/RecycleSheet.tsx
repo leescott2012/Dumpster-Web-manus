@@ -4,6 +4,7 @@
  * Step 2a (Manual): Show pool grid, tap to swap
  * Step 2b (AI): Call API, auto-swap, show result
  */
+import { useTrackWhenOpen } from "@/lib/analytics";
 import { useState, useCallback, useEffect } from "react";
 import { aiFetch } from "@/lib/creditSync";
 import { X, Hand, Sparkles, Loader, Check } from "lucide-react";
@@ -31,6 +32,7 @@ type Phase = "choose" | "manual" | "ai-loading" | "ai-done";
 export default function RecycleSheet({
   open, photoId, dumpId, dumps, pool, onClose, onSwap, onOutOfCredits,
 }: RecycleSheetProps) {
+  useTrackWhenOpen(open, "feature_recycle");
   var [phase, setPhase] = useState<Phase>("choose");
   var [aiPickId, setAiPickId] = useState<string | null>(null);
   var [aiReason, setAiReason] = useState<string>("");
