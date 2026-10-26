@@ -68,16 +68,6 @@ export default function PhotoContextMenu({
           </button>
         )}
 
-        {onCrop && photo.category !== "Video" && (
-          <button style={itemStyle}
-            onClick={function() { onCrop(photo); onClose(); }}
-            onMouseEnter={function(e) { e.currentTarget.style.background = "#1a1a1a"; }}
-            onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
-          >
-            {"✂️ Crop"}
-          </button>
-        )}
-
         {showRecycle && (
           <button data-tour="photo-recycle" style={{
             display: "block", width: "100%", padding: "10px 14px",
@@ -90,6 +80,16 @@ export default function PhotoContextMenu({
             onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
           >
             {"♻️ Recycle"}
+          </button>
+        )}
+
+        {onCrop && photo.category !== "Video" && (
+          <button style={itemStyle}
+            onClick={function() { onCrop(photo); onClose(); }}
+            onMouseEnter={function(e) { e.currentTarget.style.background = "#1a1a1a"; }}
+            onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
+          >
+            {"✂️ Crop"}
           </button>
         )}
 
