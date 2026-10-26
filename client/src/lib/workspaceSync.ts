@@ -19,7 +19,7 @@
  * device-local state. Nothing here can break the live app.
  */
 import { supabase } from "./supabase";
-import { type Dump, type Photo } from "./photoData";
+import { type Dump, type Photo, type PhotoMeta } from "./photoData";
 import { notVideo } from "./videoStore";
 
 // Sync runs for ANY signed-in user. RLS scopes every query to the user's own
@@ -32,7 +32,7 @@ function syncEnabled(userId: string | null): userId is string {
 
 interface PhotoRow {
   id: string; url: string; category: string | null; label: string | null; order: number | null;
-  dup_meta: { fileSize?: number; width?: number; height?: number } | null;
+  dup_meta: PhotoMeta | null; // despite the name: the full photo metadata (time, GPS, camera…)
 }
 interface DumpRow { id: string; title: string | null; subtitle: string | null; description: string | null; public: boolean | null; }
 interface DumpPhotoRow { dump_id: string; photo_id: string; order: number | null; }
@@ -141,11 +141,9 @@ function isCloudUrl(url: string) { return url.startsWith("http"); }
 // videos are device-only by owner decision — never in the workspace payload.
 function syncable(p: Photo) { return notVideo(p) && isCloudUrl(p.url); }
 
-// Duplicate-signature fields only — never send GPS/camera/lens/etc to the
-// server (see photoData.ts PhotoMeta; those stay client-local by design).
+// Full photo metadata (owner decision 2026-10-26: save everything). The server allowlists it.
 function dupMeta(p: Photo) {
-  if (!p.meta || !p.meta.fileSize) return undefined;
-  return { fileSize: p.meta.fileSize, width: p.meta.width, height: p.meta.height };
+  return p.meta && Object.keys(p.meta).length ? p.meta : undefined;
 }
 
 function serialize(dumps: Dump[], pool: Photo[]) {
