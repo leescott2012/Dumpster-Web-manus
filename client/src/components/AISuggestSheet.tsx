@@ -46,6 +46,22 @@ type Phase = "idle" | "loading" | "result" | "error";
 
 const MAX_PHOTOS = 20;
 
+// Spread device-only videos evenly through a finished cluster. Runs after the
+// AI call, so no video id/thumbnail/byte ever reaches the server.
+function mixVideos(photoIds: string[], videoIds: string[]): string[] {
+  const n = Math.min(videoIds.length, Math.max(1, Math.round(photoIds.length / 4)));
+  if (n === 0) return photoIds;
+  const gap = Math.ceil(photoIds.length / (n + 1));
+  const out: string[] = [];
+  let v = 0;
+  photoIds.forEach((id, i) => {
+    out.push(id);
+    if (v < n && (i + 1) % gap === 0 && i + 1 < photoIds.length) out.push(videoIds[v++]);
+  });
+  while (v < n) out.push(videoIds[v++]);
+  return out;
+}
+
 export default function AISuggestSheet({
   open,
   onClose,
@@ -60,6 +76,7 @@ export default function AISuggestSheet({
   const tooFewCredits = Boolean(user) && totalCredits < COST;
   const [styleSwitched, setStyleSwitched] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [includeVideos, setIncludeVideos] = useState(false);
   const [filters, setFilters] = useState<AutoGenFilters>(EMPTY_FILTERS);
   const [phase, setPhase] = useState<Phase>("idle");
   const [cluster, setCluster] = useState<SuggestedCluster | null>(null);
@@ -254,16 +271,28 @@ export default function AISuggestSheet({
     analyze(variationRef.current, pickPhotoWindow(orderedPool, MAX_PHOTOS, next));
   }, [analyze, orderedPool, isCapped, windowIndex, tooFewCredits, refundRejected]);
 
+  // Videos from the on-device Video Pool (newest first), not already in a dump.
+  const availableVideoIds = useMemo(
+    () => poolPhotos.filter((p) => p.category === "Video" && !usedPhotoIds?.has(p.id)).map((p) => p.id).reverse(),
+    [poolPhotos, usedPhotoIds]
+  );
+  const finalCluster = useMemo(
+    () => (cluster && includeVideos && availableVideoIds.length
+      ? { ...cluster, photoIds: mixVideos(cluster.photoIds, availableVideoIds) }
+      : cluster),
+    [cluster, includeVideos, availableVideoIds]
+  );
+
   const handleCreate = useCallback(() => {
-    if (!cluster) return;
+    if (!finalCluster) return;
     refundTokenRef.current = null; // kept — no refund
-    onCreateDumps([cluster]);
+    onCreateDumps([finalCluster]);
     onClose();
     setPhase("idle");
     setCluster(null);
     variationRef.current = 0;
     setWindowIndex(0);
-  }, [cluster, onCreateDumps, onClose]);
+  }, [finalCluster, onCreateDumps, onClose]);
 
   const handleClose = useCallback(() => {
     refundRejected();
@@ -306,8 +335,8 @@ export default function AISuggestSheet({
 
   if (!open) return null;
 
-  const clusterPhotos = cluster
-    ? cluster.photoIds.map((id) => photoMap[id]).filter(Boolean)
+  const clusterPhotos = finalCluster
+    ? finalCluster.photoIds.map((id) => photoMap[id]).filter(Boolean)
     : [];
 
   return (
@@ -531,6 +560,15 @@ export default function AISuggestSheet({
                     <div role="status" style={{ fontSize: 11, color: "#C8A06E", marginTop: -8, marginBottom: 14, textAlign: "left" }}>
                       {DUMP_STYLE_USED_BY}
                     </div>
+                  )}
+
+                  {availableVideoIds.length > 0 && (
+                    <label style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 14px", fontSize: 13, color: "#ccc", cursor: "pointer", textAlign: "left" }}>
+                      <input type="checkbox" checked={includeVideos} onChange={(e) => setIncludeVideos(e.target.checked)} />
+                      <span>Mix in videos from my Video Pool ({availableVideoIds.length} available)
+                        <span style={{ display: "block", fontSize: 11, color: "#8a8a8a" }}>Added on this device only — never uploaded.</span>
+                      </span>
+                    </label>
                   )}
 
                   {/* Advanced filters — date, time, category, mix mode, vibe */}
