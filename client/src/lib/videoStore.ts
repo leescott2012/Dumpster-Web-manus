@@ -3,7 +3,8 @@
  *
  * HARD RULE: videos are device-only by owner decision. Nothing in this file
  * talks to the network, and nothing outside it may send video bytes, blob
- * URLs, or thumbnails to Supabase / any /api route. See notVideo() below,
+ * URLs, or thumbnails to Supabase / any /api route. ONE owner-approved exception
+ * (2026-10-25): lib/videoLabel.ts sends a single poster still to the paid label scan. See notVideo() below,
  * which every cloud/AI payload builder filters through.
  *
  * Two object stores so tag/trim edits rewrite a tiny meta record instead of

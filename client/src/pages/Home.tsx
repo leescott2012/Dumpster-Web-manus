@@ -14,6 +14,7 @@ import PhotoLightbox from "@/components/PhotoLightbox";
 import PhotoContextMenu from "@/components/PhotoContextMenu";
 import FindOriginalSheet from "@/components/FindOriginalSheet";
 import CropSheet from "@/components/CropSheet";
+import { labelVideoThumb } from "@/lib/videoLabel";
 import DragGhost from "@/components/DragGhost";
 import type { Photo } from "@/lib/photoData";
 import { Plus, Sparkles, Menu, Users } from "lucide-react";
@@ -721,6 +722,12 @@ function HomeContent() {
           videoUrls.current[photoId] = url;
           setVideos(function(prev) { var n = Object.assign({}, prev); n[photoId] = rec; return n; });
           settle({ id: photoId, url: url, alt: file.name, isFavorite: false, category: "Video" } as Photo);
+          // Signed-in: label from the poster frame only (1 credit). Failure/no credits just leaves the filename.
+          if (user) labelVideoThumb(rec).then(function(r) {
+            if (!r) return;
+            applyPhotoLabels([{ id: photoId, category: "Video", label: r.label }]);
+            patchVideo(photoId, { tags: [r.category] });
+          }).catch(function() { /* no credits / offline: keep filename */ });
         }, function() { failed++; settle(null); });
         return;
       }
@@ -737,7 +744,7 @@ function HomeContent() {
         settle(null);
       });
     });
-  }, [addUploadedPhotos, replacePhotoUrl, user]);
+  }, [addUploadedPhotos, replacePhotoUrl, user, applyPhotoLabels, patchVideo]);
 
   // Scan pool photos with AI and auto-label them (category + short alt). Only
   // scans photos that haven't been labeled yet ("" or "Uploaded" category) or
