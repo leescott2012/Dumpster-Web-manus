@@ -321,7 +321,7 @@ export default function LandingPage() {
           </div>
           <div className="lp-nav__actions">
             <button className="lp-btn lp-btn--ghost" onClick={() => navigate('/app')}>
-              Open App
+              Sign in
             </button>
             <button className="lp-btn lp-btn--gold" onClick={() => goTo(3)}>
               Get Pro
@@ -365,7 +365,7 @@ export default function LandingPage() {
         </Rise>
         <Rise delay={0.24} className="lp-hero__ctas">
           <button className="lp-btn lp-btn--gold lp-btn--lg" onClick={() => navigate('/app')}>
-            Start Building Free <IconArrow />
+            Sign up free <IconArrow />
           </button>
           <button className="lp-btn lp-btn--ghost lp-btn--lg" onClick={() => goTo(2)}>
             See How It Works
@@ -472,11 +472,11 @@ export default function LandingPage() {
             <h2 className="lp-cta__title">Your carousel game starts here.</h2>
           </Rise>
           <Rise delay={0.16}>
-            <p className="lp-cta__sub">No credit card. No setup. Just better posts.</p>
+            <p className="lp-cta__sub">Free account, no credit card. Sign in and start in minutes.</p>
           </Rise>
           <Rise delay={0.24}>
             <button className="lp-btn lp-btn--gold lp-btn--lg" onClick={() => navigate('/app')}>
-              Open Dumpster Free <IconArrow />
+              Sign up free <IconArrow />
             </button>
           </Rise>
         </div>
