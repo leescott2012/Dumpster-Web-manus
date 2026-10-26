@@ -13,6 +13,7 @@ import PhotoPool from "@/components/PhotoPool";
 import PhotoLightbox from "@/components/PhotoLightbox";
 import PhotoContextMenu from "@/components/PhotoContextMenu";
 import FindOriginalSheet from "@/components/FindOriginalSheet";
+import CropSheet from "@/components/CropSheet";
 import DragGhost from "@/components/DragGhost";
 import type { Photo } from "@/lib/photoData";
 import { Plus, Sparkles, Menu, Users } from "lucide-react";
@@ -251,6 +252,7 @@ function HomeContent() {
   var [captionSheetOpen, setCaptionSheetOpen] = useState(false);
   var [scanning, setScanning] = useState(false);
   var [findOriginalPhoto, setFindOriginalPhoto] = useState<Photo | null>(null);
+  var [cropPhoto, setCropPhoto] = useState<Photo | null>(null);
   var [captionInitialDumpId, setCaptionInitialDumpId] = useState<string | null>(null);
   var [shareSheetDumpId, setShareSheetDumpId] = useState<string | null>(null);
   var [actionSheetDumpId, setActionSheetDumpId] = useState<string | null>(null);
@@ -1277,7 +1279,17 @@ function HomeContent() {
         onToggleFavorite={toggleFavorite}
         onRecycle={function(photoId, dumpId) { setRecyclePhotoId(photoId); setRecycleDumpId(dumpId); setContextMenu(null); setSelectedPhotoId(null); }}
         onFindOriginal={function(photo) { setFindOriginalPhoto(photo); setContextMenu(null); setSelectedPhotoId(null); }}
+        onCrop={function(photo) { setCropPhoto(photo); setContextMenu(null); setSelectedPhotoId(null); }}
         onDismissDuplicate={function(photoId) { dismissDuplicate(photoId); setContextMenu(null); setSelectedPhotoId(null); toast("Won't flag this one again"); }}
+      />
+      <CropSheet
+        photo={cropPhoto}
+        onClose={function() { setCropPhoto(null); }}
+        onApply={function(photoId, dataUrl) {
+          setCropPhoto(null);
+          replacePhotoUrl(photoId, dataUrl); // shows instantly; signed-in users then swap in the durable URL
+          if (user) uploadPhotoToCloud(photoId, dataUrl).then(function(u) { if (u) replacePhotoUrl(photoId, u + "?v=" + Date.now()); });
+        }}
       />
       <FindOriginalSheet photo={findOriginalPhoto} onClose={function() { setFindOriginalPhoto(null); }} />
       <RecycleSheet
