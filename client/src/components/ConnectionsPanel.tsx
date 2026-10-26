@@ -3,6 +3,7 @@
  * jump into a DM thread with an accepted connection. Bottom sheet, same
  * visual pattern as AuthSheet.
  */
+import { useTrackWhenOpen } from "@/lib/analytics";
 import { useEffect, useRef, useState } from "react";
 import { X, Search, UserPlus, Check, MessageCircle, Loader } from "lucide-react";
 import { getAuthHeaders } from "@/lib/supabase";
@@ -26,6 +27,7 @@ interface ConnectionsPanelProps {
 interface Conversation { other: Profile; last: { body: string; created_at: string; mine: boolean }; unread: number; }
 
 export default function ConnectionsPanel({ open, onClose, myUserId, openDmUserId }: ConnectionsPanelProps) {
+  useTrackWhenOpen(open, "feature_friends");
   var [convos, setConvos] = useState<Conversation[]>([]);
   var handledDm = useRef<string | null>(null);
   var [query, setQuery] = useState("");

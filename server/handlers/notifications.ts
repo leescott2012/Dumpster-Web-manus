@@ -10,7 +10,7 @@ import { getUserFromRequest } from "../creditGate.js";
 import { supabaseAdmin } from "../supabaseAdmin.js";
 import { captureServerError } from "../sentry.js";
 import { notify } from "../notify.js";
-import { creditsAreLow, creditsLowKey, isValidDay, reminderIgKey, shouldRemindIg } from "../../shared/notifications.js";
+import { creditsAreLow, creditsLowKey, isValidDay, pickTip, reminderIgKey, shouldRemindIg, tipKey } from "../../shared/notifications.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -79,6 +79,19 @@ async function handleTick(req: VercelRequest, res: VercelResponse) {
       userId, type: "credits_low", link: "/credits", dedupeKey: creditsLowKey(day),
       title: "You're running low on credits", body: "Tap to top up.",
     });
+  }
+
+  // Daily TIP: a feature they've never tried. One per day, each tip once ever, not on day one (the tour covers that).
+  const accountAgeMs = nowMs - Date.parse(u?.user?.created_at ?? "");
+  if (accountAgeMs > 24 * 3600 * 1000) {
+    const [{ data: usedRows }, { data: tipRows }] = await Promise.all([
+      supabaseAdmin.from("activity_log").select("event").eq("user_id", userId).limit(5000),
+      supabaseAdmin.from("notifications").select("dedupe_key, data").eq("user_id", userId).eq("type", "tip"),
+    ]);
+    const sent = new Set((tipRows ?? []).map((r) => String(r.dedupe_key ?? "").replace(/^tip:/, "")));
+    const sentToday = (tipRows ?? []).some((r) => (r.data as { day?: string } | null)?.day === day);
+    const tip = sentToday ? null : pickTip(new Set((usedRows ?? []).map((r) => String(r.event))), sent);
+    if (tip) await notify({ userId, type: "tip", dedupeKey: tipKey(tip.id), title: tip.title, body: tip.body, data: { day } });
   }
   return res.status(200).json({ ok: true });
 }

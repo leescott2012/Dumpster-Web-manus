@@ -10,7 +10,7 @@
 
 export const NOTIFICATION_TYPES = [
   "connection_request", "connection_accepted", "dump_comment", "comment_reply", "dm",
-  "referral_reward", "credits_low", "reminder", "system", "bug_reply", "admin_broadcast",
+  "referral_reward", "credits_low", "reminder", "tip", "system", "bug_reply", "admin_broadcast",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -90,4 +90,27 @@ export function parseLink(link: string | null | undefined): NavTarget {
   if (link === "/taste") return { to: "taste" };
   if (link === "/credits") return { to: "credits" };
   return null;
+}
+
+/**
+ * Daily TIP: one feature the user has never tried, each tip at most once ever.
+ * `event` is the activity_log event that proves they've used it (client track()).
+ * Add a tip = add a row here (+ track() somewhere if it's a new event).
+ */
+export const TIPS = [
+  { id: "autogen", event: "feature_autogen", title: "TIP: Auto Gen builds a dump for you", body: "One tap turns your pool into a ready-to-post carousel." },
+  { id: "valet", event: "feature_valet", title: "TIP: Ask Valet to rearrange a dump", body: "Tap ⋯ on a dump, pick Valet, and tell it what you want." },
+  { id: "captions", event: "feature_captions", title: "TIP: Get captions written for you", body: "Open any dump's ⋯ menu and generate captions in your style." },
+  { id: "igscrub", event: "feature_igscrub", title: "TIP: Borrow a style with Instagram Scrub", body: "Scrub any public account and save its style as a Dump Style." },
+  { id: "recycle", event: "feature_recycle", title: "TIP: Recycle swaps a photo", body: "Select a photo, tap ⋯, then Recycle for a fresh one from your pool." },
+  { id: "export", event: "dump_exported", title: "TIP: Export a dump as slides", body: "Download your dump ready to post, in order." },
+  { id: "video", event: "feature_video", title: "TIP: Add videos to your Video Pool", body: "Videos stay on your device only — never uploaded." },
+  { id: "friends", event: "feature_friends", title: "TIP: Add friends and peek at their dumps", body: "Open Friends from the menu to connect, comment and message." },
+] as const;
+
+export const tipKey = (id: string) => "tip:" + id;
+
+/** First tip whose feature is unused and that was never sent; null when nothing is left to teach. */
+export function pickTip(usedEvents: ReadonlySet<string>, sentTipIds: ReadonlySet<string>) {
+  return TIPS.find((t) => !usedEvents.has(t.event) && !sentTipIds.has(t.id)) ?? null;
 }

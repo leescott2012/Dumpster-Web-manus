@@ -53,4 +53,9 @@ const items = [
 const g = n.groupByDay(items, new Date("2026-10-21T12:00:00"));
 assert.deepEqual(g.map((x) => [x.label, x.items.length]).slice(0, 2), [["Today", 2], ["Yesterday", 1]]);
 assert.equal(g.length, 3);
+// daily tip: first unused + unsent feature; null when nothing is left to teach
+assert.equal(n.pickTip(new Set(), new Set())?.id, n.TIPS[0].id);
+assert.equal(n.pickTip(new Set([n.TIPS[0].event]), new Set())?.id, n.TIPS[1].id);
+assert.equal(n.pickTip(new Set(), new Set([n.TIPS[0].id]))?.id, n.TIPS[1].id);
+assert.equal(n.pickTip(new Set(n.TIPS.map((t) => t.event)), new Set()), null);
 console.log("notifications selftest ok");

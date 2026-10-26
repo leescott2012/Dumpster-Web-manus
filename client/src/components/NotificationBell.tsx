@@ -5,7 +5,7 @@
  * Only rendered for signed-in users.
  */
 import { useEffect, useRef, useState } from "react";
-import { Bell, MessageCircle, UserPlus, UserCheck, Bug, Info, MessageSquare, Gift, Coins, Clock, Megaphone } from "lucide-react";
+import { Bell, MessageCircle, UserPlus, UserCheck, Bug, Info, MessageSquare, Gift, Coins, Clock, Megaphone, Lightbulb } from "lucide-react";
 import { getAuthHeaders } from "@/lib/supabase";
 import { groupByDay, parseLink } from "@shared/notifications";
 import { localDay, openTarget } from "@/lib/appNav";
@@ -30,6 +30,7 @@ var TYPE_ICON: Record<string, React.ReactNode> = {
   referral_reward: <Gift size={14} />,
   credits_low: <Coins size={14} />,
   reminder: <Clock size={14} />,
+  tip: <Lightbulb size={14} />,
   admin_broadcast: <Megaphone size={14} />,
 };
 

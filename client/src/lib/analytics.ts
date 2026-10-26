@@ -13,6 +13,7 @@
  *
  * Admin reads via /api/admin-stats (service_role — bypasses RLS).
  */
+import { useEffect } from "react";
 import { supabase } from "./supabase";
 import { getCurrentUserId } from "./currentUser";
 
@@ -21,7 +22,10 @@ export type AnalyticsEvent =
   | "photo_uploaded"
   | "photos_scanned"
   | "photos_auto_relabeled"
-  | "dump_exported";
+  | "dump_exported"
+  // "Tried it" signals for the daily tip (shared/notifications.ts TIPS).
+  | "feature_autogen" | "feature_valet" | "feature_captions" | "feature_igscrub"
+  | "feature_recycle" | "feature_friends" | "feature_video";
 
 /**
  * Track a user event.
@@ -47,4 +51,9 @@ export function track(
         console.warn("[analytics] track failed:", event, result.error.message);
       }
     });
+}
+
+/** Track a feature the first time its sheet opens (each open; the tip logic only needs "ever"). */
+export function useTrackWhenOpen(open: boolean, event: AnalyticsEvent): void {
+  useEffect(function() { if (open) track(event); }, [open, event]);
 }

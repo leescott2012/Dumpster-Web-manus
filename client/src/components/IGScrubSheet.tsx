@@ -2,6 +2,7 @@
  * IGScrubSheet — paste Instagram post URLs or any image URLs,
  * preview what was found, then add selected items to the pool.
  */
+import { useTrackWhenOpen } from "@/lib/analytics";
 import { useState, useCallback, useEffect } from "react";
 import { aiFetch } from "@/lib/creditSync";
 import { getAiHeaders } from "@/lib/supabase";
@@ -23,6 +24,7 @@ interface IGScrubSheetProps {
 }
 
 export default function IGScrubSheet({ open, onClose, onAddToPool }: IGScrubSheetProps) {
+  useTrackWhenOpen(open, "feature_igscrub");
   var [urlText, setUrlText] = useState("");
   var [loading, setLoading] = useState(false);
   var [results, setResults] = useState<ScrubResult[]>([]);
