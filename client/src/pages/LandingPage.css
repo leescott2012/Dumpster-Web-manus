@@ -9,22 +9,18 @@
   height: 100dvh;
   overflow-y: auto;
   overflow-x: hidden;
-  scroll-snap-type: y mandatory;
   overscroll-behavior-y: contain;
-  scroll-behavior: smooth;
 }
 
-/* Each slide fills the viewport and snaps; taller-than-viewport content
-   still scrolls freely inside (per scroll-snap spec). */
+/* Sections flow naturally (no snapping — snapping made the page jump).
+   Only the hero fills the first screen. */
 .lp-slide {
-  min-height: 100vh;
-  min-height: 100dvh;
-  scroll-snap-align: start;
+  min-height: auto;
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 96px 0 48px;
+  padding: 96px 0 64px;
 }
 
 /* ── Navbar ──────────────────────────────────────────────────────── */
@@ -237,6 +233,8 @@
 
 /* ── Hero ────────────────────────────────────────────────────────── */
 .lp-hero {
+  min-height: 100vh;
+  min-height: 100dvh;
   align-items: center;
   text-align: center;
   padding-left: 24px;
