@@ -14,6 +14,7 @@ import PhotoLightbox from "@/components/PhotoLightbox";
 import PhotoContextMenu from "@/components/PhotoContextMenu";
 import FindOriginalSheet from "@/components/FindOriginalSheet";
 import CropSheet from "@/components/CropSheet";
+import TipSheet from "@/components/TipSheet";
 import { labelVideoThumb } from "@/lib/videoLabel";
 import DragGhost from "@/components/DragGhost";
 import type { Photo } from "@/lib/photoData";
@@ -218,6 +219,7 @@ function HomeContent() {
       else if (t.to === "dm") { setDmTargetId(t.userId); setConnectionsOpen(true); }
       else if (t.to === "taste") setMenuOpen(true); // MainMenu listens too and scrolls to the box
       else if (t.to === "credits") setCreditsSheetOpen(true);
+      else if (t.to === "tip") setTipId(t.id);
     }
     window.addEventListener(NAV_EVENT, onNav);
     return function() { window.removeEventListener(NAV_EVENT, onNav); };
@@ -254,6 +256,7 @@ function HomeContent() {
   var [scanning, setScanning] = useState(false);
   var [findOriginalPhoto, setFindOriginalPhoto] = useState<Photo | null>(null);
   var [cropPhoto, setCropPhoto] = useState<Photo | null>(null);
+  var [tipId, setTipId] = useState<string | null>(null);
   var [captionInitialDumpId, setCaptionInitialDumpId] = useState<string | null>(null);
   var [shareSheetDumpId, setShareSheetDumpId] = useState<string | null>(null);
   var [actionSheetDumpId, setActionSheetDumpId] = useState<string | null>(null);
@@ -1289,6 +1292,16 @@ function HomeContent() {
         onFindOriginal={function(photo) { setFindOriginalPhoto(photo); setContextMenu(null); setSelectedPhotoId(null); }}
         onCrop={function(photo) { setCropPhoto(photo); setContextMenu(null); setSelectedPhotoId(null); }}
         onDismissDuplicate={function(photoId) { dismissDuplicate(photoId); setContextMenu(null); setSelectedPhotoId(null); toast("Won't flag this one again"); }}
+      />
+      <TipSheet
+        tipId={tipId}
+        onClose={function() { setTipId(null); }}
+        onTry={function(what) {
+          if (what === "autogen") setAiSheetOpen(true);
+          else if (what === "captions") { setCaptionInitialDumpId(null); setCaptionSheetOpen(true); }
+          else if (what === "igscrub") setIGScrubOpen(true);
+          else if (what === "friends") setConnectionsOpen(true);
+        }}
       />
       <CropSheet
         photo={cropPhoto}
