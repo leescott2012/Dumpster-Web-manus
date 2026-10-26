@@ -78,7 +78,9 @@ function readBody(req: IncomingMessage): Promise<string> {
 
 export async function handleAISuggest(
   req: IncomingMessage,
-  res: ServerResponse
+  res: ServerResponse,
+  /** Preferences learned from this user's behavior (server/learned.ts); soft, strict rules win. */
+  learned = ""
 ): Promise<boolean> {
   if (req.method !== "POST") {
     res.writeHead(405, { "Content-Type": "application/json" });
@@ -112,6 +114,7 @@ export async function handleAISuggest(
     variation = parsed.variation || 0;
     // Cap the taste block (profile 2000 + rules 1500 + style + captions) so cost stays bounded
     tasteBlock = typeof parsed.tasteBlock === "string" ? parsed.tasteBlock.slice(0, 6000) : "";
+    if (learned) tasteBlock += (tasteBlock ? "\n\n" : "") + learned;
     // Cap freeform input so a malicious / runaway prompt can't blow up the request
     userHint = (parsed.userHint || "").slice(0, 500);
     if (typeof parsed.targetCount === "number" && parsed.targetCount >= 2 && parsed.targetCount <= 20) {
