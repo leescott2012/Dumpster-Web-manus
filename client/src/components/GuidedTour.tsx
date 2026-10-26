@@ -42,7 +42,6 @@ var STEPS: TourStep[] = [
   { target: "[data-tour='ai-suggest']", title: "Auto Gen", body: "One tap builds your best carousel from your pool.", swallow: true, scroll: true },
   { target: "[data-tour='new-dump']", title: "New Dump", body: "Start an empty dump and fill it yourself.", swallow: true, scroll: true },
   { target: "[data-tour='pool-section']", title: "The Pool", body: "Your unused photos wait here. Videos and captions have pools too. Tap it.", scroll: true },
-  { target: "[data-tour='credits-badge']", title: "Invite a friend", body: "Tap your credits to share your invite link. Earn 10 credits for each friend who finishes setup, enough for a new AI dump.", scroll: true }, // not swallowed: the tap really opens the credits screen with the invite link
 ];
 
 var GOLD = "var(--accent)";
