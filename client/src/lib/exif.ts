@@ -12,7 +12,8 @@
  *   - GPS coordinates are personally identifiable. They're stored alongside
  *     the photo locally and are included in the AI prompt context when
  *     present, so Claude can do location-aware clustering / captions. They
- *     are NEVER sent to Sentry or any analytics path.
+ *     are NEVER sent to Sentry or any analytics path. They ARE saved with the photo in the
+ *     user's own cloud workspace (owner decision 2026-10-26) so they survive reloads/devices.
  *   - If a photo has no EXIF (screenshots, downloaded images, photos already
  *     processed), all fields stay undefined and the rest of the app behaves
  *     exactly like before this feature shipped.
@@ -77,6 +78,9 @@ export async function extractPhotoMeta(file: File, knownDims?: { w: number; h: n
         "CreateDate",
         "GPSLatitude",
         "GPSLongitude",
+        // Refs carry N/S and E/W — without them western/southern coordinates come out with the wrong sign.
+        "GPSLatitudeRef",
+        "GPSLongitudeRef",
         "Make",
         "Model",
         "LensModel",

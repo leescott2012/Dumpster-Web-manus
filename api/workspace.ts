@@ -40,9 +40,21 @@ interface InPhoto {
   id: string; url: string; category?: string;
   // AI-generated specific label (photo.alt in the UI, e.g. "Matte black G-Wagon").
   alt?: string;
-  // Duplicate-detection signature only — never GPS/camera/lens (those stay
-  // client-local, see client/src/lib/photoData.ts PhotoMeta).
-  meta?: { fileSize?: number; width?: number; height?: number };
+  // Full EXIF subset (time, GPS, camera, lens, exposure, dimensions) — see client/src/lib/photoData.ts
+  // PhotoMeta. Allowlisted + range-checked by cleanMeta() before it is stored.
+  meta?: Record<string, unknown>;
+}
+const META_NUM = ["takenAt", "lat", "lng", "iso", "focalLength", "fStop", "shutterSpeed", "orientation", "width", "height", "fileSize"] as const;
+const META_STR = ["camera", "lens", "format"] as const;
+/** Keep only known EXIF fields with sane types/ranges; null when nothing valid is left. */
+function cleanMeta(m: Record<string, unknown> | undefined): Record<string, number | string> | null {
+  if (!m || typeof m !== "object") return null;
+  const out: Record<string, number | string> = {};
+  for (const k of META_NUM) { const v = m[k]; if (typeof v === "number" && isFinite(v)) out[k] = v; }
+  for (const k of META_STR) { const v = m[k]; if (typeof v === "string" && v) out[k] = v.slice(0, 120); }
+  if (typeof out.lat === "number" && (out.lat < -90 || out.lat > 90)) { delete out.lat; delete out.lng; }
+  if (typeof out.lng === "number" && (out.lng < -180 || out.lng > 180)) { delete out.lat; delete out.lng; }
+  return Object.keys(out).length ? out : null;
 }
 interface InDump { id: string; title?: string; subtitle?: string; photos: InPhoto[] }
 interface InBody { dumps: InDump[]; pool: InPhoto[] }
@@ -134,11 +146,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         url = uploaded;
       }
       if (!url) continue;
-      // Allowlist only the 3 dup-signature fields — never trust/forward the
-      // whole client object (GPS/camera/lens must never reach the server).
-      var dupMeta = ph.meta
-        ? { fileSize: ph.meta.fileSize, width: ph.meta.width, height: ph.meta.height }
-        : null;
+      // Owner decision (Lee, 2026-10-26): save ALL photo metadata (time, place, camera…) so it
+      // survives reloads and devices. Allowlist + validate; never forward the raw client object.
+      var dupMeta = cleanMeta(ph.meta);
       photoRows.push({ id: dbId, user_id: userId, url: url, category: ph.category || "", label: ph.alt || null, order: order++, dup_meta: dupMeta });
     }
 

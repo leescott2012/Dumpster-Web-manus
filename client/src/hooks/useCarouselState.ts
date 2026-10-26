@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { INITIAL_DUMPS, INITIAL_POOL, IS_OWNER, type Dump, type Photo } from "@/lib/photoData";
+import { INITIAL_DUMPS, INITIAL_POOL, IS_OWNER, type Dump, type Photo, type PhotoMeta } from "@/lib/photoData";
 import { nanoid } from "nanoid";
 import type { SuggestedCluster } from "@/components/AISuggestSheet";
 import { idbGet, idbSet, idbDel, idbFlush } from "@/lib/localStore";
@@ -303,6 +303,26 @@ export function useCarouselState() {
         extras[await normDumpId(dumpsRef.current[li].id)] = dumpsRef.current[li];
       }
     } catch { /* no crypto: fall back to plain cloud dumps */ }
+    // Photos saved before full metadata synced come back from the cloud with only size/dimensions.
+    // If this device still holds the richer local copy (time/GPS/camera), keep it — the next save
+    // then uploads it, which backfills the cloud.
+    var richMeta: Record<string, PhotoMeta> = {};
+    try {
+      var localPhotos: Photo[] = poolRef.current.slice();
+      dumpsRef.current.forEach(function(d) { d.photos.forEach(function(p) { localPhotos.push(p); }); });
+      for (var mi = 0; mi < localPhotos.length; mi++) {
+        var lm = localPhotos[mi].meta;
+        if (lm && (lm.takenAt || typeof lm.lat === "number" || lm.camera)) richMeta[await normDumpId(localPhotos[mi].id)] = lm;
+      }
+    } catch { /* no crypto: cloud meta only */ }
+    function withRichMeta(p: Photo): Photo {
+      var rm = richMeta[p.id];
+      var cm = p.meta;
+      if (!rm || (cm && (cm.takenAt || typeof cm.lat === "number" || cm.camera))) return p;
+      return { ...p, meta: { ...(cm || {}), ...rm } };
+    }
+    newPool = newPool.map(withRichMeta);
+    cloudDumps = cloudDumps.map(function(d) { return { ...d, photos: d.photos.map(withRichMeta) }; });
     var newDumps = cloudDumps.map(function(nd) {
       var ld = extras[nd.id] || extras[nd.id.toLowerCase()];
       return ld ? { ...nd, captions: ld.captions, vibe: ld.vibe, favorited: ld.favorited, rating: ld.rating, chatHistory: ld.chatHistory } : nd;
