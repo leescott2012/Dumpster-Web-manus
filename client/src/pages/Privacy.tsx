@@ -104,6 +104,14 @@ export default function Privacy() {
         records contain your user ID and IP address; they auto-expire after the
         rate-limit window passes (typically 10 minutes to 36 hours).
       </P>
+      <P>
+        To make suggestions and captions fit you better, we also record simple
+        signals about how you use the app (for example, how many photos are in the
+        dumps you keep, which photo categories you swap out, and whether the
+        captions you copy are short or use emojis) and keep them for 90 days.
+        These contain categories and counts only, never your caption text or
+        photos, and are used only to tune your own suggestions.
+      </P>
 
       <H2>6. Error tracking</H2>
       <P>

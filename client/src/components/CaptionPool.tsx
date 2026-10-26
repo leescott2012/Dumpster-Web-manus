@@ -3,6 +3,7 @@
  * Ported from iOS Views/CaptionPoolView.swift.
  * Features: style chips, auto-generate from style banks, custom add, filter tabs, favorite/ban/remove.
  */
+import { track, captionTraits } from "@/lib/analytics";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { Heart, Trash2, Ban, Copy, Check, Sparkles, Plus, RotateCcw } from "lucide-react";
@@ -99,8 +100,18 @@ export default function CaptionPool() {
     setList(loadCaptions());
   }, [customText]);
 
-  const handleFavorite = useCallback((id: string) => setList(toggleFavorite(id)), []);
-  const handleBan = useCallback((id: string) => setList(toggleBanned(id)), []);
+  const handleFavorite = useCallback((id: string) => {
+    const next = toggleFavorite(id);
+    setList(next);
+    const c = next.find(x => x.id === id);
+    if (c && c.favorited) track("learn_caption_fav", captionTraits(c.text));
+  }, []);
+  const handleBan = useCallback((id: string) => {
+    const next = toggleBanned(id);
+    setList(next);
+    const c = next.find(x => x.id === id);
+    if (c && c.banned) track("learn_caption_ban", captionTraits(c.text));
+  }, []);
   const handleRemove = useCallback((id: string) => {
     const before = loadCaptions().find(c => c.id === id);
     setList(removeCaption(id));
@@ -114,6 +125,7 @@ export default function CaptionPool() {
   const handleCopy = useCallback(async (text: string, id: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      track("learn_caption_copy", captionTraits(text));
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 1500);
       // Using a caption archives it → moves to the "Used" tab so the active

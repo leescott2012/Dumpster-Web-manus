@@ -5,6 +5,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { handleAISuggest } from "../server/aiSuggest.js";
 import { checkCredits, runCharged } from "../server/creditGate.js";
+import { learnedForUser } from "../server/learned.js";
 
 export const config = {
   runtime: "nodejs",
@@ -16,5 +17,5 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (!gate.proceed) return;
   // Refund unless the handler reports success — no reason to charge the user
   // for a failed/errored/empty Claude call.
-  await runCharged(res, gate, "ai-suggest", function() { return handleAISuggest(req, res); });
+  await runCharged(res, gate, "ai-suggest", async function() { return handleAISuggest(req, res, await learnedForUser(gate.userId)); });
 }

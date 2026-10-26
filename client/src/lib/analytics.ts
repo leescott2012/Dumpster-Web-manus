@@ -25,7 +25,10 @@ export type AnalyticsEvent =
   | "dump_exported"
   // "Tried it" signals for the daily tip (shared/notifications.ts TIPS).
   | "feature_autogen" | "feature_valet" | "feature_captions" | "feature_igscrub"
-  | "feature_recycle" | "feature_friends" | "feature_video";
+  | "feature_recycle" | "feature_friends" | "feature_video"
+  // Learning signals (counts/categories/lengths only — never caption text). Summarised by shared/learning.ts.
+  | "learn_autogen_kept" | "learn_autogen_rejected" | "learn_recycle"
+  | "learn_caption_copy" | "learn_caption_fav" | "learn_caption_ban";
 
 /**
  * Track a user event.
@@ -56,4 +59,15 @@ export function track(
 /** Track a feature the first time its sheet opens (each open; the tip logic only needs "ever"). */
 export function useTrackWhenOpen(open: boolean, event: AnalyticsEvent): void {
   useEffect(function() { if (open) track(event); }, [open, event]);
+}
+
+/** Shape of a caption without its words: length, emoji, hashtags. */
+export function captionTraits(text: string): { len: number; emoji: boolean; hashtag: boolean } {
+  return { len: text.length, emoji: /[\u2600-\u27BF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|\uD83E[\uDC00-\uDFFF]/.test(text), hashtag: /#\w/.test(text) };
+}
+/** Category → count map for a list of photos. */
+export function categoryCounts(photos: Array<{ category: string }>): Record<string, number> {
+  var out: Record<string, number> = {};
+  photos.forEach(function(p) { out[p.category] = (out[p.category] || 0) + 1; });
+  return out;
 }

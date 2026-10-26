@@ -4,7 +4,7 @@
  * Step 2a (Manual): Show pool grid, tap to swap
  * Step 2b (AI): Call API, auto-swap, show result
  */
-import { useTrackWhenOpen } from "@/lib/analytics";
+import { useTrackWhenOpen, track } from "@/lib/analytics";
 import { useState, useCallback, useEffect } from "react";
 import { aiFetch } from "@/lib/creditSync";
 import { X, Hand, Sparkles, Loader, Check } from "lucide-react";
@@ -66,8 +66,15 @@ export default function RecycleSheet({
     }
   }
 
+  // Learning signal: which kind of photo got swapped out for which (categories only).
+  function learnSwap(inId: string) {
+    var inP = pool.find(function(p) { return p.id === inId; });
+    if (photo && inP) track("learn_recycle", { out: photo.category, in: inP.category });
+  }
+
   var handleManualPick = useCallback(function(poolPhotoId: string) {
     if (dumpId && photoId) {
+      learnSwap(poolPhotoId);
       onSwap(dumpId, photoId, poolPhotoId);
       onClose();
     }
@@ -139,6 +146,7 @@ export default function RecycleSheet({
 
   var handleConfirmAI = useCallback(function() {
     if (dumpId && photoId && aiPickId) {
+      learnSwap(aiPickId);
       onSwap(dumpId, photoId, aiPickId);
       onClose();
     }

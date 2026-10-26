@@ -8,7 +8,7 @@
  * Fallback path: pure-JS offline algorithm (free, instant) — used silently
  * if any AI failure happens (5MB, 429, 503, 504, network down).
  */
-import { useTrackWhenOpen } from "@/lib/analytics";
+import { useTrackWhenOpen, track, categoryCounts } from "@/lib/analytics";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { aiFetch } from "@/lib/creditSync";
 import { toast } from "sonner";
@@ -100,10 +100,14 @@ export default function AISuggestSheet({
   // Single-use token from the server for the dump on screen; spent to get the
   // credits back if the user rejects it (new suggestion / close without Create).
   const refundTokenRef = useRef<string | null>(null);
+  const clusterRef = useRef(cluster); clusterRef.current = cluster;
+  const poolRef = useRef(poolPhotos); poolRef.current = poolPhotos;
   const refundRejected = useCallback(async () => {
     const token = refundTokenRef.current;
     refundTokenRef.current = null;
     if (!token) return;
+    const rc = clusterRef.current;
+    if (rc) track("learn_autogen_rejected", { n: rc.photoIds.length, cats: categoryCounts(rc.photoIds.map((id) => poolRef.current.find((p) => p.id === id)).filter((p): p is Photo => !!p)) });
     try {
       const r = await aiFetch("/api/ai-suggest-refund", {
         method: "POST",
@@ -288,13 +292,14 @@ export default function AISuggestSheet({
   const handleCreate = useCallback(() => {
     if (!finalCluster) return;
     refundTokenRef.current = null; // kept — no refund
+    track("learn_autogen_kept", { n: finalCluster.photoIds.length, cats: categoryCounts(finalCluster.photoIds.map((id) => poolPhotos.find((p) => p.id === id)).filter((p): p is Photo => !!p)) });
     onCreateDumps([finalCluster]);
     onClose();
     setPhase("idle");
     setCluster(null);
     variationRef.current = 0;
     setWindowIndex(0);
-  }, [finalCluster, onCreateDumps, onClose]);
+  }, [finalCluster, onCreateDumps, onClose, poolPhotos]);
 
   const handleClose = useCallback(() => {
     refundRejected();

@@ -92,7 +92,9 @@ function readBody(req: IncomingMessage): Promise<string> {
 
 export async function handleAICaption(
   req: IncomingMessage,
-  res: ServerResponse
+  res: ServerResponse,
+  /** Preferences learned from this user's behavior (server/learned.ts); soft, strict rules win. */
+  learned = ""
 ): Promise<boolean> {
   if (req.method !== "POST") {
     res.writeHead(405, { "Content-Type": "application/json" });
@@ -127,8 +129,9 @@ export async function handleAICaption(
   const tone = payload.tone ?? "default";
   const toneHint = TONE_HINTS[tone];
   // Capped (6000 chars) so a huge profile can't inflate cost
-  const tasteBlock = typeof payload.tasteBlock === "string" && payload.tasteBlock
-    ? `\n\nUser's caption style examples (match this voice and energy):\n${payload.tasteBlock.slice(0, 6000)}`
+  const tasteText = ((typeof payload.tasteBlock === "string" ? payload.tasteBlock.slice(0, 6000) : "") + (learned ? "\n\n" + learned : "")).trim();
+  const tasteBlock = tasteText
+    ? `\n\nUser's caption style examples (match this voice and energy):\n${tasteText}`
     : "";
 
   const system = `You are an Instagram caption writer for photo dumps (carousels). Write 3 aesthetic captions for the dump. ${toneHint} Look at the photos — let the actual visual content guide the captions. Keep them short, scroll-stopping, and authentic. No clichés like "vibes only" unless ironic. Avoid hashtags unless they're a punchline.${tasteBlock}
