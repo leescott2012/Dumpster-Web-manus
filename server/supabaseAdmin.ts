@@ -200,15 +200,14 @@ export async function refundCredits(
 /**
  * Add credits to a user's account (after a Stripe purchase).
  *
- * Concurrency-safe: uses an atomic Postgres function (`increment_credits`)
- * instead of SELECT-then-UPDATE. Two concurrent webhooks granting the same
- * user credits will serialise at the database level — no double-credit.
+ * Idempotency: with `stripePaymentId` (any stable per-purchase key), the
+ * ledger insert and the balance bump happen in ONE transaction via
+ * `grant_credits_once` (supabase-grant-credits-once.sql). The unique index on
+ * credit_transactions.stripe_payment_id makes the insert the claim, so
+ * concurrent or retried deliveries of the same purchase grant exactly once.
  *
- * Idempotency: if `stripePaymentId` is supplied, we first try to insert the
- * transaction row. The `credit_transactions.stripe_payment_id` column has a
- * unique partial index (see supabase-atomic-credits.sql), so a retried
- * webhook with the same payment_intent gets a 23505 unique-violation and
- * we no-op without granting credits twice.
+ * Without a key there is no dedupe — callers granting for a payment must
+ * always pass one.
  */
 export async function addCredits(
   userId: string,
@@ -216,22 +215,20 @@ export async function addCredits(
   type: string,
   stripePaymentId?: string
 ): Promise<void> {
-  // 1) Idempotency guard — if this payment_intent already has a tx row, bail.
-  //    (Belt-and-suspenders: stripe-webhook.ts also dedupes by event.id.)
   if (stripePaymentId) {
-    var { data: existingTx } = await supabaseAdmin
-      .from("credit_transactions")
-      .select("id")
-      .eq("stripe_payment_id", stripePaymentId)
-      .limit(1)
-      .maybeSingle();
-    if (existingTx) {
-      console.log("[addCredits] dedupe — payment_intent already credited:", stripePaymentId);
-      return;
-    }
+    var { data: granted, error: grantErr } = await supabaseAdmin.rpc("grant_credits_once", {
+      p_user_id: userId,
+      p_amount: amount,
+      p_type: type,
+      p_description: "Added " + amount + " credits (" + type + ")",
+      p_payment_key: stripePaymentId,
+    });
+    if (grantErr) throw new Error("grant_credits_once failed: " + grantErr.message);
+    if (!granted) console.log("[addCredits] dedupe — already credited:", stripePaymentId);
+    return;
   }
 
-  // 2) Atomic increment via RPC (no read-modify-write race)
+  // Unkeyed grant: atomic increment via RPC (no read-modify-write race)
   var { error: rpcError } = await supabaseAdmin.rpc("increment_credits", {
     p_user_id: userId,
     p_amount:  amount,
