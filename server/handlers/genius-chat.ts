@@ -122,7 +122,7 @@ async function callAnthropic(apiKey: string, system: string, messages: AnyObj[])
 const WRITABLE_TABLES = ["profiles", "credit_transactions", "bug_reports", "photos", "dumps", "dump_photos", "activity_log"];
 
 function stripSqlComments(sql: string): string {
-  return sql.replace(/--.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  return sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
 function bareStatement(sql: string): string {

@@ -1,4 +1,4 @@
-// Run: SUPABASE_URL=http://localhost:1 npx tsx server/geniusConfirm.check.ts
+// Run: SUPABASE_URL=http://localhost:1 SUPABASE_SERVICE_ROLE_KEY=x npx tsx server/geniusConfirm.check.ts
 // GENIUSS writes/refunds only run with a signed, unexpired token for the admin.
 import assert from "node:assert";
 import { createHmac } from "crypto";
