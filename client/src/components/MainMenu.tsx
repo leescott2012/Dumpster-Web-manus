@@ -13,6 +13,7 @@ import { loadTasteProfile, saveTasteProfile, loadAIRules, saveAIRules, loadDumpS
 import ApiKeysCard from "./ApiKeysCard";
 import { scrubInstagramProfile, mergeTaste, parseIgHandle, saveAccountAsDumpStyle, stripIgBlock } from "@/lib/igProfileScrub";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import { NAV_EVENT } from "@/lib/appNav";
 import { linkInstagram } from "@/lib/igLink";
 
@@ -68,6 +69,30 @@ function saveAccent(hex: string) {
   localStorage.setItem("dumpster_accent", hex);
   document.documentElement.style.setProperty("--accent", hex);
   document.documentElement.style.setProperty("--accent-rgb", hexToRgb(hex));
+}
+
+
+/** Self-service account deletion (also required on iOS by Apple 5.1.1(v)). */
+async function deleteAccount(signOut: () => unknown, onClose: () => void) {
+  if (!window.confirm(
+    "Permanently delete your Dumpster account?\n\n" +
+    "Your cloud photos, dumps, credits, AI memory and profile are erased and can't be recovered. " +
+    "A web (Stripe) subscription is cancelled. If you subscribed in the iPhone app, cancel it in iPhone Settings → Subscriptions."
+  )) return;
+  if (window.prompt('Type DELETE to confirm') !== "DELETE") return;
+  var { data } = await supabase.auth.getSession();
+  var token = data.session?.access_token;
+  if (!token) { window.alert("Please sign in again first."); return; }
+  var res = await fetch("/api/delete-account", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+    body: JSON.stringify({ confirm: "DELETE" }),
+  });
+  var body = await res.json().catch(function() { return {}; });
+  if (!res.ok) { window.alert(body.error || "Couldn't delete your account. Please try again."); return; }
+  await signOut();
+  onClose();
+  window.alert("Your account has been deleted.");
 }
 
 export function initAccent() {
@@ -351,6 +376,18 @@ export default function MainMenu({ open, onClose, onIGScrub, onTour, onSignIn, o
                   </div>
                 </div>
                 <ChevronRight size={14} color="rgba(var(--accent-rgb),0.4)" style={{ flexShrink: 0 }} />
+              </button>
+            )}
+
+            {user && (
+              <button
+                onClick={function() { void deleteAccount(signOut, onClose); }}
+                style={{
+                  background: "none", border: "none", color: "#555", cursor: "pointer",
+                  fontFamily: "inherit", fontSize: 11, padding: "0 4px 10px", textAlign: "left",
+                }}
+              >
+                Delete account
               </button>
             )}
 

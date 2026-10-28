@@ -233,16 +233,25 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     //    a round where uploads happened to fail shouldn't silently mean "there
     //    were no photos" and skip pruning what the user actually deleted.
     if (all.length > 0) {
-      var existingP = await supabaseAdmin.from("photos").select("id").eq("user_id", userId);
+      var existingP = await supabaseAdmin.from("photos").select("id, url").eq("user_id", userId);
       if (!existingP.error && existingP.data) {
         var keepPhotoIds: Record<string, boolean> = {};
         for (var kp = 0; kp < photoRows.length; kp++) keepPhotoIds[photoRows[kp].id] = true;
-        var staleP = existingP.data
-          .map(function (r) { return r.id as string; })
-          .filter(function (id) { return !keepPhotoIds[id]; });
+        var staleRows = existingP.data.filter(function (r) { return !keepPhotoIds[r.id as string]; });
+        var staleP = staleRows.map(function (r) { return r.id as string; });
         if (staleP.length > 0) {
           await supabaseAdmin.from("dump_photos").delete().in("photo_id", staleP);
           await supabaseAdmin.from("photos").delete().in("id", staleP);
+          // Remove the image bytes too, not just the row — otherwise a deleted
+          // photo stays reachable at its URL forever. Only paths inside this
+          // user's own folder; best-effort so a storage hiccup never fails the save.
+          var stalePaths = staleRows
+            .map(function (r) { return String(r.url || "").split("/" + BUCKET + "/")[1] || ""; })
+            .filter(function (path) { return path.indexOf(userId + "/") === 0; });
+          if (stalePaths.length > 0) {
+            var rm = await supabaseAdmin.storage.from(BUCKET).remove(stalePaths);
+            if (rm.error) captureServerError(rm.error, "workspace.storage_remove", { userId: userId });
+          }
         }
       }
     }

@@ -17,7 +17,7 @@ import LegalLayout, { H2, P, Strong, UL, LI, A } from "@/components/LegalLayout"
 
 export default function Privacy() {
   return (
-    <LegalLayout title="Privacy Policy" lastUpdated="August 26, 2026">
+    <LegalLayout title="Privacy Policy" lastUpdated="October 28, 2026">
       <P>
         Dumpster is a tool for sequencing Instagram photo carousels. We want it
         to be useful without becoming another data-vacuum. This page describes
@@ -30,18 +30,20 @@ export default function Privacy() {
 
       <H2>The TL;DR</H2>
       <UL>
-        <LI><Strong>Your photos stay on your device.</Strong> We don't upload them to any
-          server you don't trigger. They live in your browser's local storage.</LI>
+        <LI><Strong>Signed in, your photos back up to the cloud.</Strong> So your pool and
+          dumps follow you across devices, signed-in accounts store photos (and their
+          details, including the location they were taken if the photo has it) in our
+          cloud storage. Videos never leave your device.</LI>
         <LI><Strong>Your AI preferences sync to your account.</Strong> Taste profile, rules,
           and saved captions are stored in our database (Supabase) so they survive
           across devices.</LI>
-        <LI><Strong>AI features send photos to Anthropic.</Strong> When you tap Auto Gen,
-          AI Caption, or Valet (AI Chat), the relevant images and text go to
-          Anthropic's Claude API. Anthropic does not train on this data per
-          their API terms.</LI>
+        <LI><Strong>AI features send photos to an AI provider.</Strong> When you use Auto Gen,
+          AI Caption, auto-labeling, or Valet (AI Chat), the relevant images and text go to
+          Anthropic's Claude API (or Google Gemini as a backup if Claude is unavailable).
+          Neither trains on this data under their API terms.</LI>
         <LI><Strong>Payments go to Stripe.</Strong> We never see your card number.</LI>
-        <LI><Strong>You can delete everything.</Strong> Email us and your account + all data
-          are gone within 7 days.</LI>
+        <LI><Strong>You can delete everything.</Strong> Tap <em>Delete account</em> in the menu
+          (or in Settings in the iPhone app) and your account and data are erased right away.</LI>
       </UL>
 
       <H2>What we collect</H2>
@@ -79,10 +81,24 @@ export default function Privacy() {
 
       <H2>3. Photos and videos</H2>
       <P>
-        Photos you upload <Strong>stay on your device</Strong>. They are stored in your
-        browser's local storage as compressed data URLs. When you use an AI
-        feature, the photos for that one request are sent to Anthropic Claude
-        for analysis and then discarded — they are not stored on our servers.
+        Photos you add are stored on your device. If you are <Strong>signed in</Strong>,
+        your photos and dumps are also backed up to our cloud storage (Supabase) so
+        they sync across your devices, together with photo details such as the time
+        taken, camera and lens settings, and the <Strong>GPS location</Strong> if the
+        photo contains one. Each cloud photo is stored at a long, random, unlisted web
+        address; it is not listed or searchable, but anyone who has that exact address
+        can open the image. Photos are removed from the cloud when you delete them or
+        delete your account. <Strong>Videos are never uploaded</Strong>.
+      </P>
+      <P>
+        When you use an AI feature, the photos for that one request are sent to
+        Anthropic Claude (or Google Gemini as a backup) for analysis; the AI
+        provider does not keep them for training.
+      </P>
+      <P>
+        If you use the Instagram aesthetic scan, the public Instagram profile you
+        enter is fetched through <A href="https://apify.com/privacy-policy">Apify</A> and
+        its images are analyzed by Claude to build your taste profile.
       </P>
       <P>
         If you use the "Save to Photos" feature on iOS, the file goes from your
@@ -141,7 +157,12 @@ export default function Privacy() {
           inputs/outputs to train their models.</LI>
         <LI><Strong>Twilio</Strong> — delivers the verification text and sees your phone number to do so.
           <A href="https://www.twilio.com/legal/privacy"> Twilio Privacy Policy</A>.</LI>
-        <LI><Strong>Supabase</Strong> — account email, phone number, AI memory, subscription status.
+        <LI><Strong>Google (Gemini)</Strong> — backup AI provider; receives the same photos and text as Anthropic
+          only when Claude is unavailable. <A href="https://policies.google.com/privacy">Google Privacy Policy</A>.</LI>
+        <LI><Strong>Apify</Strong> — fetches the public Instagram profile you ask us to scan.
+          <A href="https://apify.com/privacy-policy"> Apify Privacy Policy</A>.</LI>
+        <LI><Strong>Supabase</Strong> — account email, phone number, AI memory, subscription status, and
+          (when signed in) your synced photos, photo details and dumps.
           <A href="https://supabase.com/privacy"> Supabase Privacy Policy</A>.</LI>
         <LI><Strong>Stripe</Strong> — payment details. <A href="https://stripe.com/privacy">Stripe Privacy Policy</A>.</LI>
         <LI><Strong>Vercel</Strong> — hosts the application; sees request metadata in
@@ -155,8 +176,8 @@ export default function Privacy() {
       <H2>Data retention</H2>
       <UL>
         <LI>Account email and AI memory: kept until you delete your account.</LI>
-        <LI>Photos: stored only in your browser; you control them. Clear your
-          browser data to remove them.</LI>
+        <LI>Photos: on your device until you remove them; cloud copies (signed-in
+          accounts) until you delete the photo or your account.</LI>
         <LI>Rate-limit counters: 10 minutes to 36 hours, then auto-deleted.</LI>
         <LI>Payment records: kept as long as required by tax and accounting law
           (Stripe handles this directly).</LI>
@@ -171,8 +192,9 @@ export default function Privacy() {
         <LI><Strong>Access</Strong> the data we have on you (email us and we'll export your row).</LI>
         <LI><Strong>Correct</Strong> your taste profile, rules, and captions inside the app at
           any time.</LI>
-        <LI><Strong>Delete</Strong> your entire account and all AI memory by emailing us. We
-          honor deletion requests within 7 days.</LI>
+        <LI><Strong>Delete</Strong> your entire account, cloud photos and AI memory yourself
+          with <em>Delete account</em> in the app menu (web) or Settings (iPhone). It takes
+          effect immediately.</LI>
         <LI><Strong>Cancel</Strong> your subscription at any time from the Credits menu inside
           the app.</LI>
       </UL>

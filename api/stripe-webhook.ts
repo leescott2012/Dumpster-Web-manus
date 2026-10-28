@@ -20,13 +20,27 @@ var CREDIT_AMOUNTS: Record<string, number> = {
   credits_1500: 1500,
 };
 
+// Stripe events are a few KB; refuse anything absurd before buffering it all.
+var MAX_BODY_BYTES = 512 * 1024;
+
 function getRawBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise(function(resolve, reject) {
     var chunks: Buffer[] = [];
-    req.on("data", function(c: Buffer) { chunks.push(c); });
+    var size = 0;
+    req.on("data", function(c: Buffer) {
+      size += c.length;
+      if (size > MAX_BODY_BYTES) { reject(new Error("body too large")); req.destroy(); return; }
+      chunks.push(c);
+    });
     req.on("end", function() { resolve(Buffer.concat(chunks)); });
     req.on("error", reject);
   });
+}
+
+/** Stable per-purchase grant key: payment_intent for one-time payments (GENIUSS
+ * refunds look these up), the session id for subscription-mode checkouts. */
+function purchaseKey(session: Stripe.Checkout.Session): string {
+  return (session.payment_intent as string | null) || "stripe_cs_" + session.id;
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -35,7 +49,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  var rawBody = await getRawBody(req);
+  var rawBody: Buffer;
+  try {
+    rawBody = await getRawBody(req);
+  } catch {
+    res.writeHead(413).end("Payload too large");
+    return;
+  }
   var sig = req.headers["stripe-signature"] as string;
 
   var event: Stripe.Event;
@@ -47,6 +67,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  var claimed = false;
   try {
     // Atomic idempotency check — INSERT wins or the PK conflict tells us the
     // event is already in-flight / processed. The previous select-then-insert
@@ -70,6 +91,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       // Anything else — let outer catch report via Sentry.
       throw insertErr;
     }
+    claimed = true;
 
     // Handle checkout completed
     if (event.type === "checkout.session.completed") {
@@ -86,7 +108,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
       if (type === "credits" && itemId && CREDIT_AMOUNTS[itemId]) {
         // Add credits
-        await addCredits(userId, CREDIT_AMOUNTS[itemId], "purchase", session.payment_intent as string);
+        await addCredits(userId, CREDIT_AMOUNTS[itemId], "purchase", purchaseKey(session));
       } else if (type === "subscription") {
         if (itemId === "lifetime") {
           // Lifetime purchase — set pro + lifetime flag + bonus credits
@@ -99,7 +121,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
               daily_credits_remaining: 200,
             })
             .eq("id", userId);
-          await addCredits(userId, 500, "lifetime_bonus", session.payment_intent as string);
+          await addCredits(userId, 500, "lifetime_bonus", purchaseKey(session));
         } else {
           // Recurring subscription — set pro
           await supabaseAdmin
@@ -112,7 +134,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             })
             .eq("id", userId);
           // 200 credits monthly drop
-          await addCredits(userId, 200, "subscription_drop", session.payment_intent as string);
+          // Subscription-mode sessions have no payment_intent, so key on the session.
+          await addCredits(userId, 200, "subscription_drop", purchaseKey(session));
         }
       }
     }
@@ -137,7 +160,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       // by webhooks registered before the v17 API version)
       var invoiceSubId = (invoice.parent?.subscription_details?.subscription as string | undefined)
         ?? (invoice as unknown as { subscription?: string }).subscription;
-      if (invoiceSubId) {
+      // The first invoice (billing_reason "subscription_create") is the same
+      // payment checkout.session.completed already granted 200 for above.
+      if (invoiceSubId && invoice.billing_reason !== "subscription_create") {
         // Find user by subscription ID
         var { data: profile } = await supabaseAdmin
           .from("profiles")
@@ -146,13 +171,19 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           .single();
         if (profile) {
           // Monthly credit drop on renewal
-          await addCredits(profile.id, 200, "subscription_renewal");
+          await addCredits(profile.id, 200, "subscription_renewal", "stripe_inv_" + invoice.id);
         }
       }
     }
 
     res.writeHead(200).end("ok");
   } catch (err) {
+    // Release the claim so Stripe's retry re-runs the fulfilment instead of
+    // hitting "Already processed" and dropping the purchase. Safe to re-run:
+    // grants are keyed per purchase (addCredits) and profile updates are sets.
+    if (claimed) {
+      await supabaseAdmin.from("stripe_events").delete().eq("id", event.id).then(undefined, function() {});
+    }
     var errMsg = err instanceof Error ? err.message : "Unknown error";
     console.error("Webhook error:", errMsg);
     // High-signal alert: a payment webhook failing means we may be missing

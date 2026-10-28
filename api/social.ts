@@ -18,6 +18,7 @@ import aiSuggestRefund from "../server/handlers/ai-suggest-refund.js";
 import referralClaim from "../server/handlers/referral-claim.js";
 import otpSend from "../server/handlers/otp-send.js";
 import appleWebhook from "../server/handlers/apple-webhook.js";
+import deleteAccount from "../server/handlers/delete-account.js";
 import { captureServerError } from "../server/sentry.js";
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>;
@@ -35,6 +36,7 @@ const ROUTES: Record<string, Handler> = {
   "otp-send": otpSend as Handler,
   "ai-suggest-refund": aiSuggestRefund as Handler,
   "referral-claim": referralClaim as Handler,
+  "delete-account": deleteAccount as Handler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

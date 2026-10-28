@@ -37,6 +37,7 @@ const DOWNGRADE_TYPES = new Set<string>([
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
+  let claimedId: string | null = null;
   try {
     const body = (req.body || {}) as { signedPayload?: string };
     const signedPayload = body.signedPayload;
@@ -59,6 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (insertErr.code === "23505") return res.status(200).json({ ok: true, note: "already processed" });
         throw insertErr;
       }
+      claimedId = notification.notificationUUID;
     }
 
     const signedTransactionInfo = notification.data?.signedTransactionInfo;
@@ -109,6 +111,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (err instanceof VerificationException) {
       captureServerError(err, "apple-webhook.rejected", { status: err.status });
       return res.status(400).json({ error: "Notification could not be verified.", code: "invalid_notification" });
+    }
+    // Release the claim so Apple's retry re-runs fulfilment instead of hitting
+    // "already processed" and dropping a renewal. Re-running is safe: credit
+    // grants are keyed per Apple transaction and tier updates are plain sets.
+    if (claimedId) {
+      await supabaseAdmin.from("apple_notifications").delete().eq("id", claimedId).then(undefined, () => {});
     }
     captureServerError(err, "apple-webhook");
     if (!res.headersSent) return res.status(500).json({ error: "Internal error" });

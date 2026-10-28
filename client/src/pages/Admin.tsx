@@ -624,6 +624,23 @@ export default function Admin() {
           const reply: string = body.reply || "(no reply)";
           addLog(`[GENIUS] ${reply}`);
           await handleReadAloud(reply);
+          // Writes/refunds come back staged, never executed — they run only if
+          // you confirm here (server checks a signed token, not the model).
+          for (const p of (body.pending || []) as Array<{ token: string; summary: string }>) {
+            if (!window.confirm("GENIUSS wants to:\n\n" + p.summary + "\n\nConfirm?")) {
+              addLog(`[Genius] Cancelled: ${p.summary}`);
+              continue;
+            }
+            const cr = await fetch("/api/genius-chat", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": "Bearer " + session.access_token },
+              body: JSON.stringify({ confirmToken: p.token }),
+            });
+            const cb = await cr.json().catch(() => ({}));
+            const msg: string = cb.reply || cb.error || ("HTTP " + cr.status);
+            addLog(`[GENIUS] ${msg}`);
+            await handleReadAloud(msg);
+          }
           // Conversation mode: listen again so you can reply hands-free. Staying
           // silent ends the loop (a no-speech turn never reaches this path).
           if (conversationModeRef.current && !isMuted()) {

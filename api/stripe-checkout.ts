@@ -39,6 +39,24 @@ function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   });
 }
 
+var PROD_ORIGIN = "https://dumpster-web-manus.vercel.app";
+
+/** Where Stripe sends the buyer back. Origin/Referer are caller-controlled, so
+ * only our own deployments (prod + this project's preview URLs) and local dev
+ * are honored; anything else falls back to production. */
+function returnOrigin(header: string | undefined): string {
+  try {
+    var u = new URL(header || "");
+    var host = u.hostname;
+    var ours = u.protocol === "https:" && (host === "dumpster-web-manus.vercel.app" ||
+      (host.startsWith("dumpster-web-manus-") && host.endsWith("-leescott2012s-projects.vercel.app")));
+    var local = process.env.VERCEL_ENV !== "production" && (host === "localhost" || host === "127.0.0.1");
+    return ours || local ? u.origin : PROD_ORIGIN;
+  } catch {
+    return PROD_ORIGIN;
+  }
+}
+
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== "POST") {
     res.writeHead(405).end("Method not allowed");
@@ -77,9 +95,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return;
     }
 
-    var origin = req.headers.origin || req.headers.referer || "https://dumpster-web-manus.vercel.app";
-    // Remove trailing slash
-    if (origin.endsWith("/")) origin = origin.slice(0, -1);
+    var origin = returnOrigin(req.headers.origin || req.headers.referer);
 
     var isSubscription = body.type === "subscription" && itemId !== "lifetime";
 
