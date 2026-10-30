@@ -77,7 +77,7 @@ export default function ApiKeysCard() {
         <KeyRound size={16} /> Your AI keys
       </div>
       <div style={{ fontSize: 11, color: "#666", marginBottom: 12 }}>
-        Stored on this device only. Each key is tested before it's saved. A verified Claude key is used for AI instead of credits; the other keys are verified and saved for upcoming support.
+        Stored on this device only. Each key is tested before it's saved. A verified key is used for AI instead of credits: Claude first, then Gemini, OpenAI, OpenRouter.
       </div>
       {PROVIDERS.map((p) => {
         const saved = meta[p.id];

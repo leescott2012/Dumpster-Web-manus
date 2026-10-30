@@ -5,7 +5,7 @@
  */
 
 import { llmComplete, llmConfigured, type LlmPart } from "./llm.js";
-import { userAnthropicKey } from "./userKey.js";
+import { userAnthropicKey, userOtherKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
 import { publicAIError } from "./sentry.js";
@@ -243,7 +243,7 @@ Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
     // must finish inside the 60s maxDuration, or Vercel kills the function
     // before the refund runs.
     const rawText = await llmComplete({
-      claudeKey: apiKey, byo: !!byoKey, claudeModel: "claude-haiku-4-5",
+      claudeKey: apiKey, byo: !!byoKey, userProvider: userOtherKey(req), claudeModel: "claude-haiku-4-5",
       maxTokens: 1024, messages: [{ role: "user", content }], totalMs: 40000,
     });
 
@@ -279,7 +279,7 @@ Respond ONLY with valid JSON — no markdown, no explanation, no code fences:
             .map((id) => (capped.findIndex((p) => p.id === id) + 1) + " [" + catOf(id) + "]")
             .join(", ");
           const retryText = await llmComplete({
-            claudeKey: apiKey, byo: !!byoKey, claudeModel: "claude-haiku-4-5",
+            claudeKey: apiKey, byo: !!byoKey, userProvider: userOtherKey(req), claudeModel: "claude-haiku-4-5",
             maxTokens: 1024, totalMs: budgetMs,
             messages: [
               { role: "user", content },

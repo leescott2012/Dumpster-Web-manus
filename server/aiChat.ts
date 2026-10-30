@@ -5,7 +5,7 @@
  */
 
 import { llmComplete, llmConfigured } from "./llm.js";
-import { userAnthropicKey } from "./userKey.js";
+import { userAnthropicKey, userOtherKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { publicAIError } from "./sentry.js";
 import { parseModelJson } from "./parseModelJson.js";
@@ -174,7 +174,7 @@ export async function handleAIChat(
     // 22s total across Claude + fallbacks, no retries: must finish inside the
     // 30s maxDuration, or Vercel kills the function before the refund runs.
     var rawText = await llmComplete({
-      claudeKey: apiKey, byo: !!byoKey, claudeModel: "claude-haiku-4-5",
+      claudeKey: apiKey, byo: !!byoKey, userProvider: userOtherKey(req), claudeModel: "claude-haiku-4-5",
       maxTokens: 1500, // 1024 truncated JSON reorders of 20 photo ids
       system: systemPrompt, messages: messages, totalMs: 22000,
     });

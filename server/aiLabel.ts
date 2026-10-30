@@ -6,7 +6,7 @@
  */
 
 import { llmComplete, llmConfigured, type LlmPart } from "./llm.js";
-import { userAnthropicKey } from "./userKey.js";
+import { userAnthropicKey, userOtherKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
 import { captureServerError } from "./sentry.js";
@@ -163,7 +163,7 @@ Return ONLY JSON, nothing else:
     // must finish inside the 60s maxDuration, or Vercel kills the function
     // before the refund runs.
     const rawText = await llmComplete({
-      claudeKey: apiKey, byo: !!byoKey, claudeModel: "claude-sonnet-4-6",
+      claudeKey: apiKey, byo: !!byoKey, userProvider: userOtherKey(req), claudeModel: "claude-sonnet-4-6",
       maxTokens: 80 * usableIds.length + 250,
       system: audit ? auditSystem : system, messages: [{ role: "user", content }], totalMs: 40000,
     });

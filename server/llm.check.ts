@@ -3,8 +3,10 @@ import assert from "node:assert";
 import { llmComplete } from "./llm.js";
 
 const calls: string[] = [];
+let lastAuth = "";
 let plan: Record<string, number> = {}; // provider -> status (default 200)
-(globalThis as any).fetch = async (url: any) => {
+(globalThis as any).fetch = async (url: any, init?: any) => {
+  lastAuth = String(init?.headers?.["x-goog-api-key"] || init?.headers?.Authorization || "");
   const u = String(url);
   const h = new URL(u).hostname;
   const host = h === "api.anthropic.com" ? "anthropic" : h === "generativelanguage.googleapis.com" ? "gemini" : h === "api.openai.com" ? "openai" : "openrouter";
@@ -46,6 +48,12 @@ const env = (k: Record<string, string>) => {
   assert.equal(await run({ claudeKey: "sk" }), "ERR:400"); assert.deepEqual(calls, ["anthropic"], "400 never falls back");
   plan = { anthropic: 401 };
   assert.equal(await run({ claudeKey: "sk" }), "gemini", "bad platform key falls back");
+  plan = {};
+  assert.equal(await run({ claudeKey: "sk", userProvider: { name: "gemini", key: "AIzaUSER" } }), "gemini"); assert.deepEqual(calls, ["gemini"], "user's own provider is used alone");
+  assert.equal(lastAuth, "AIzaUSER", "the user's key is sent, not ours");
+  assert.equal(await run({ claudeKey: "sk", userProvider: { name: "openai", key: "sk-USER" } }), "openai"); assert.equal(lastAuth, "Bearer sk-USER");
+  plan = { gemini: 503 };
+  assert.equal(await run({ claudeKey: "sk", userProvider: { name: "gemini", key: "AIzaUSER" } }), "ERR:503"); assert.deepEqual(calls, ["gemini"], "user key failure never spends our keys");
   env({});
   assert.ok((await run({ claudeKey: null })).startsWith("ERR:"), "no providers -> error");
   console.log("llm.check OK");
