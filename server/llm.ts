@@ -98,6 +98,8 @@ export function llmConfigured(claudeKey?: string | null): boolean {
 
 const status = (e: unknown): number | undefined => (e as { status?: number } | null)?.status;
 const retryable = (e: unknown) => { const s = status(e); return s === undefined || s === 408 || s === 429 || s >= 500; };
+// Anthropic reports an empty account as a plain 400, not a 402.
+const outOfCredit = (e: unknown) => status(e) === 400 && /credit balance/i.test((e as Error)?.message || "");
 
 export async function llmComplete(o: LlmOpts): Promise<string> {
   const t0 = Date.now();
@@ -127,8 +129,8 @@ export async function llmComplete(o: LlmOpts): Promise<string> {
       firstErr = e;
       const s = status(e);
       // BYO key: only transient errors fall through, never auth/validation.
-      // Env key: a 401/403 (bad/expired platform key) may fall through too.
-      const ok = retryable(e) || (!o.byo && (s === 401 || s === 403));
+      // Env key: a 401/403 (bad/expired platform key) or empty account may fall through too.
+      const ok = retryable(e) || (!o.byo && (s === 401 || s === 403 || outOfCredit(e)));
       if (!ok || !fb.length) throw e;
       console.warn("[llm] claude failed (" + (s ?? "network") + "), falling back");
     }

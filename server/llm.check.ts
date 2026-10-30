@@ -4,6 +4,7 @@ import { llmComplete } from "./llm.js";
 
 const calls: string[] = [];
 let plan: Record<string, number> = {}; // provider -> status (default 200)
+let errMsg = "x";
 (globalThis as any).fetch = async (url: any) => {
   const u = String(url);
   const h = new URL(u).hostname;
@@ -14,7 +15,7 @@ let plan: Record<string, number> = {}; // provider -> status (default 200)
   const body = host === "anthropic" ? { id: "m", type: "message", role: "assistant", model: "x", content: [{ type: "text", text: "claude" }], stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 } }
     : host === "gemini" ? { candidates: [{ content: { parts: [{ text: "gemini" }] } }] }
     : { choices: [{ message: { content: host } }] };
-  return new Response(JSON.stringify(st === 200 ? body : { error: "x" }), { status: st, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(st === 200 ? body : { error: { message: errMsg } }), { status: st, headers: { "content-type": "application/json" } });
 };
 const base = { messages: [{ role: "user" as const, content: [{ text: "hi" }, { image: { mediaType: "image/jpeg", base64: "AAAA" } }] }], maxTokens: 50, claudeModel: "claude-haiku-4-5", totalMs: 20000 };
 const run = async (o: Record<string, unknown> = {}) => {
@@ -46,6 +47,10 @@ const env = (k: Record<string, string>) => {
   assert.equal(await run({ claudeKey: "sk" }), "ERR:400"); assert.deepEqual(calls, ["anthropic"], "400 never falls back");
   plan = { anthropic: 401 };
   assert.equal(await run({ claudeKey: "sk" }), "gemini", "bad platform key falls back");
+  plan = { anthropic: 400 }; errMsg = "Your credit balance is too low to access the Anthropic API.";
+  assert.equal(await run({ claudeKey: "sk" }), "gemini", "empty platform account falls back");
+  assert.equal(await run({ claudeKey: "sk", byo: true }), "ERR:400", "empty BYO account never falls back");
+  errMsg = "x";
   env({});
   assert.ok((await run({ claudeKey: null })).startsWith("ERR:"), "no providers -> error");
   console.log("llm.check OK");
