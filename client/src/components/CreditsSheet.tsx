@@ -20,16 +20,6 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
   var { user, profile, totalCredits } = useAuth();
   var [tab, setTab] = useState<"credits" | "pro">("credits");
   var [loading, setLoading] = useState<string | null>(null);
-  var [lifetimeSlots, setLifetimeSlots] = useState<number | null>(null);
-
-  // Fetch remaining lifetime early-bird slots when Pro tab is shown
-  useEffect(function() {
-    if (!open || tab !== "pro") return;
-    fetch("/api/lifetime-slots")
-      .then(function(r) { return r.json(); })
-      .then(function(d) { if (typeof d.remaining === "number") setLifetimeSlots(d.remaining); })
-      .catch(function() { /* noop */ });
-  }, [open, tab]);
 
   var handleBuyCredits = useCallback(async function(packId: string) {
     if (!user) { onNeedAuth(); return; }
@@ -215,7 +205,7 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
           {tab === "credits" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ fontSize: 12, color: "#8a8a8a", marginBottom: 4, lineHeight: 1.6 }}>
-                Credits let you use AI features. Free users get 15/day, Pro gets 200/day. Buy more anytime.
+                Credits let you use AI features. New accounts start with 30 credits. Pro adds 300 credits a month. Buy more anytime.
               </div>
 
               {profile && profile.referral_code && (
@@ -390,16 +380,6 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
                           <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>
                             {plan.id === "lifetime" ? "One-time payment, forever" : "Cancel anytime"}
                           </div>
-                          {plan.id === "lifetime" && lifetimeSlots !== null && (
-                            <div style={{
-                              display: "flex", alignItems: "center", gap: 4, marginTop: 6,
-                              fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
-                              color: lifetimeSlots <= 100 ? "#f87171" : lifetimeSlots <= 300 ? "#fb923c" : "#a78bfa",
-                            }}>
-                              <Flame size={10} />
-                              {lifetimeSlots + " of 1,000 slots remaining"}
-                            </div>
-                          )}
                         </div>
                         <div style={{ fontSize: 17, fontWeight: 800, color: "#a78bfa", flexShrink: 0 }}>
                           {isLoading ? <Loader size={18} style={{ animation: "spin 0.8s linear infinite" }} /> : plan.priceLabel}

@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import Stripe from "stripe";
 import { addCredits, supabaseAdmin } from "../server/supabaseAdmin.js";
 import { captureServerError } from "../server/sentry.js";
+import { PRO_MONTHLY_CREDITS } from "../shared/pricing.js";
 
 export const config = { runtime: "nodejs", maxDuration: 15, memory: 256 };
 
@@ -111,14 +112,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         await addCredits(userId, CREDIT_AMOUNTS[itemId], "purchase", purchaseKey(session));
       } else if (type === "subscription") {
         if (itemId === "lifetime") {
-          // Lifetime purchase — set pro + lifetime flag + bonus credits
+          // Lifetime is no longer sold (checkout rejects it); kept only to settle any session created before. Not metered by day.
           await supabaseAdmin
             .from("profiles")
             .update({
               subscription_tier: "pro",
               lifetime_purchase: true,
               stripe_customer_id: session.customer as string,
-              daily_credits_remaining: 200,
+              daily_credits_remaining: 0, // Pro is a monthly pool, no daily refill
             })
             .eq("id", userId);
           await addCredits(userId, 500, "lifetime_bonus", purchaseKey(session));
@@ -130,12 +131,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
               subscription_tier: "pro",
               stripe_customer_id: session.customer as string,
               stripe_subscription_id: session.subscription as string,
-              daily_credits_remaining: 200,
+              daily_credits_remaining: 0, // Pro is a monthly pool, no daily refill
             })
             .eq("id", userId);
-          // 200 credits monthly drop
+          // Monthly credit pool
           // Subscription-mode sessions have no payment_intent, so key on the session.
-          await addCredits(userId, 200, "subscription_drop", purchaseKey(session));
+          await addCredits(userId, PRO_MONTHLY_CREDITS, "subscription_drop", purchaseKey(session));
         }
       }
     }
@@ -161,7 +162,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       var invoiceSubId = (invoice.parent?.subscription_details?.subscription as string | undefined)
         ?? (invoice as unknown as { subscription?: string }).subscription;
       // The first invoice (billing_reason "subscription_create") is the same
-      // payment checkout.session.completed already granted 200 for above.
+      // payment checkout.session.completed already granted the monthly credits above.
       if (invoiceSubId && invoice.billing_reason !== "subscription_create") {
         // Find user by subscription ID
         var { data: profile } = await supabaseAdmin
@@ -171,7 +172,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           .single();
         if (profile) {
           // Monthly credit drop on renewal
-          await addCredits(profile.id, 200, "subscription_renewal", "stripe_inv_" + invoice.id);
+          await addCredits(profile.id, PRO_MONTHLY_CREDITS, "subscription_renewal", "stripe_inv_" + invoice.id);
         }
       }
     }

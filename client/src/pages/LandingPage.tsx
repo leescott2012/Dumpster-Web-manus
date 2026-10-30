@@ -267,7 +267,7 @@ const PLANS = [
       'Instagram scrub (10/mo)',
       'Engagement playbook',
       'iOS app included',
-      '$34.99/yr or $19.99 lifetime available in-app',
+      '$34.99/yr available in-app',
     ],
     cta: 'Start Pro — $5.99/mo',
     highlight: true,

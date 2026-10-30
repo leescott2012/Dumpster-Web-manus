@@ -94,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (notificationType === NotificationTypeV2.DID_RENEW) {
       await supabaseAdmin
         .from("profiles")
-        .update({ subscription_tier: "pro", daily_credits_remaining: 200 })
+        .update({ subscription_tier: "pro", daily_credits_remaining: 0 })
         .eq("id", profile.id);
       // Idempotent per Apple transaction — each renewal mints a new transactionId.
       if (decoded.transactionId) {

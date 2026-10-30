@@ -67,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .update({
           subscription_tier: "pro",
           apple_original_transaction_id: decoded.originalTransactionId || decoded.transactionId,
-          daily_credits_remaining: 200,
+          daily_credits_remaining: 0,
         })
         .eq("id", userId);
 

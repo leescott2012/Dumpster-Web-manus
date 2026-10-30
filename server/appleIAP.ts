@@ -5,6 +5,7 @@
  * or product-ID change only needs to happen once.
  */
 import { SignedDataVerifier, Environment, VerificationException } from "@apple/app-store-server-library";
+import { PRO_MONTHLY_CREDITS } from "../shared/pricing.js";
 
 // Public root cert from https://www.apple.com/certificateauthority/ — not a secret,
 // safe to inline. Apple signs StoreKit 2 transactions with a chain up to this root.
@@ -35,7 +36,7 @@ export const SUBSCRIPTION_PRODUCTS = new Set([
   "com.dumpster.pro.monthly",
   "com.dumpster.pro.yearly",
 ]);
-export const SUBSCRIPTION_CREDIT_DROP = 200;
+export const SUBSCRIPTION_CREDIT_DROP = PRO_MONTHLY_CREDITS;
 
 let verifiers: { production: SignedDataVerifier; sandbox: SignedDataVerifier } | null = null;
 export function getVerifiers() {

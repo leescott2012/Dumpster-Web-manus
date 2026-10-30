@@ -24,7 +24,6 @@ var PRICE_MAP: Record<string, string> = {
   credits_1500: process.env.STRIPE_PRICE_CREDITS_1500 || "",
   pro_monthly: process.env.STRIPE_PRICE_PRO_MONTHLY || "",
   pro_yearly: process.env.STRIPE_PRICE_PRO_YEARLY || "",
-  lifetime: process.env.STRIPE_PRICE_LIFETIME || "",
 };
 
 function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -97,7 +96,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     var origin = returnOrigin(req.headers.origin || req.headers.referer);
 
-    var isSubscription = body.type === "subscription" && itemId !== "lifetime";
+    var isSubscription = body.type === "subscription";
 
     var sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: isSubscription ? "subscription" : "payment",
