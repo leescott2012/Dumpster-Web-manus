@@ -17,6 +17,7 @@ import { enforceRateLimit } from "./rateLimit.js";
 import { checkBudget, recordCost } from "./dailyBudget.js";
 import { captureServerError } from "./sentry.js";
 import { makeRefundToken, claimRefundToken } from "./dumpRefund.js";
+import { freeScanLeft, FREE_FIRST_SCAN_PHOTOS, FREE_SCAN_USED_CODE } from "../shared/aiLabelCost.js";
 
 /** No-op refund for gates that never deducted anything. */
 async function noopRefund(): Promise<void> {}
@@ -208,7 +209,9 @@ export async function runCharged(
 }
 
 /**
- * Free auto-label abuse limits. The `auto` flag comes from the client, so the
+ * The free path is a ONE-TIME first-scan allowance per account
+ * (FREE_FIRST_SCAN_PHOTOS, counted from activity_log); after that the only way
+ * to scan is the paid Scan button. Within the allowance, abuse limits. The `auto` flag comes from the client, so the
  * server can't prove a request is really system-initiated — instead the free
  * path is bounded so abusing it is worth little:
  *   - at most AUTO_LABEL_MAX_PER_REQUEST images per request (client batches 6);
@@ -220,6 +223,21 @@ export async function runCharged(
  * Note: if Upstash env vars are missing, rate limits fail open (dev only).
  */
 export var AUTO_LABEL_MAX_PER_REQUEST = 6;
+
+/**
+ * Photos this account has already had auto-scanned for free. null = couldn't
+ * tell (fail closed: no free scan rather than an unmetered one).
+ * ponytail: two parallel requests can both pass; the 3 req / 10 min limit caps the overshoot at a few photos.
+ */
+async function freeScanPhotosUsed(userId: string): Promise<number | null> {
+  var { data, error } = await supabaseAdmin
+    .from("activity_log").select("metadata").eq("user_id", userId).eq("event", "ai_label_auto").limit(500);
+  if (error || !data) return null;
+  if (data.length >= 500) return FREE_FIRST_SCAN_PHOTOS; // 500+ free runs = long past the allowance
+  return data.reduce(function(sum, r) {
+    return sum + (Number((r.metadata as { images?: number } | null)?.images) || 0);
+  }, 0);
+}
 
 /**
  * Same gates as checkCredits (auth, rate limit, daily budget) but skips the
@@ -247,6 +265,18 @@ export async function checkAutoCredits(
       error: "Too many photos for a free auto-scan (max " + AUTO_LABEL_MAX_PER_REQUEST + ").",
       code: "auto_label_limit",
     }));
+    return { userId: userId, proceed: false, refund: noopRefund };
+  }
+
+  var used = await freeScanPhotosUsed(userId);
+  if (used === null) {
+    res.writeHead(503, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Couldn't check your free scan — try again.", code: "free_scan_check_failed" }));
+    return { userId: userId, proceed: false, refund: noopRefund };
+  }
+  if (freeScanLeft(used) <= 0) {
+    res.writeHead(402, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Your free first scan is used up. Scanning costs 1 credit per photo.", code: FREE_SCAN_USED_CODE }));
     return { userId: userId, proceed: false, refund: noopRefund };
   }
 

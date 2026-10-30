@@ -57,6 +57,8 @@ interface SheetProps {
   onVerify: (p: Photo) => void;
   onEdit: (p: Photo, category: string, label: string) => void;
   onToggleAutoFix: (on: boolean) => void;
+  /** The one-time free first scan is used up: labeling is the paid Scan button only. */
+  freeUsed?: boolean;
 }
 
 export default function LabelHealthSheet(props: SheetProps) {
@@ -159,25 +161,30 @@ export default function LabelHealthSheet(props: SheetProps) {
             <summary style={{ fontSize: 11, color: "var(--accent)", cursor: "pointer" }}>How is this scored?</summary>
             <p style={{ fontSize: 11, color: "#8a8a8a", lineHeight: 1.5, margin: "6px 0 0" }}>
               Every time you tap "Looks right" on an AI label it counts as a hit; every time you change an AI label it counts as a miss.
-              Those count double. A few photos a day also get a second, independent AI look — if it picks the same category that's a hit, otherwise a miss.
+              Those count double.
               The score is hits divided by all checks. We only show it after {MIN_CHECKS_FOR_SCORE} checks so it isn't a guess.
             </p>
           </details>
         </div>
 
         {/* Controls */}
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 16 }}>
+        {props.freeUsed && (
+          <p style={{ fontSize: 12, color: "#bbb", lineHeight: 1.5, margin: "16px 0 0" }}>
+            Your free first scan is used up. New photos are labeled only when you tap Scan (1 credit per photo).
+          </p>
+        )}
+        {!props.freeUsed && <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 16 }}>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, color: "#bbb", cursor: "pointer" }}>
             <input type="checkbox" role="switch" aria-checked={store.autoFix} checked={store.autoFix}
               onChange={function(e) { props.onToggleAutoFix(e.target.checked); }} />
-            Auto-fix labels
+            Free first scan (auto)
           </label>
           <button onClick={props.onRunFix} disabled={fix.kind === "running"}
             style={Object.assign({}, btn, { background: "var(--accent)", color: "#000", fontWeight: 700, border: "1px solid var(--accent)", opacity: fix.kind === "running" ? 0.7 : 1 })}>
             {fix.kind === "running" ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
-            {fix.kind === "running" ? "Fixing…" : "Auto-fix now"}
+            {fix.kind === "running" ? "Fixing…" : "Scan free now"}
           </button>
-        </div>
+        </div>}
 
         {/* Needs attention */}
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", color: "#8a8a8a", margin: "20px 0 8px" }}>
@@ -239,7 +246,7 @@ export default function LabelHealthSheet(props: SheetProps) {
           })}
         </ul>
         {items.length > shown.length && (
-          <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 8 }}>{"+" + (items.length - shown.length) + " more — Auto-fix works through them in the background."}</div>
+          <div style={{ fontSize: 11, color: "#8a8a8a", marginTop: 8 }}>{"+" + (items.length - shown.length) + " more — " + (props.freeUsed ? "tap Scan to label them (1 credit per photo)." : "the free first scan works through them.")}</div>
         )}
       </div>
     </>

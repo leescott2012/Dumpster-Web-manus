@@ -33,6 +33,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   var auto = body.auto === true;
+  // The free path is only the one-time first scan; second-opinion audits are never free.
+  if (auto && body.audit === true) {
+    res.writeHead(402, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Audits are not part of the free scan.", code: "free_scan_used" }));
+    return;
+  }
   var imageCount = body && Array.isArray(body.photos) ? body.photos.length : 0;
   // Paid path: 1 credit per photo actually scanned (min 1, max 12 — the
   // handler ignores photos past 12). Refunds return exactly this amount.

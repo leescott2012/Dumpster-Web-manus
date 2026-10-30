@@ -56,6 +56,7 @@ import { syncAIProfileOnSignIn, flushAIProfileSave } from "@/lib/aiProfileSync";
 import { loadWorkspace, scheduleWorkspaceSave, flushWorkspaceSave, uploadPhotoToCloud, loadArchivedDumpIds, scheduleArchivedDumpIdsSave, flushArchivedDumpIdsSave, setDumpPublic } from "@/lib/workspaceSync";
 import { scanPhotos } from "@/lib/aiLabel";
 import { CREDIT_COSTS } from "@/lib/credits";
+import { FREE_FIRST_SCAN_PHOTOS } from "@shared/aiLabelCost";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { track } from "@/lib/analytics";
 import { logBug } from "@/lib/bugLogger";
@@ -72,6 +73,12 @@ var photoLimit = createLimiter(LOW_MEM ? 2 : 4);
 var uploadLimit = createLimiter(LOW_MEM ? 2 : 4);
 var PHOTO_MAX_DIM = LOW_MEM ? 1600 : 2048;
 var MAX_PHOTO_BYTES = 40 * 1024 * 1024;
+
+/** Show a one-time notice (remembered per device). */
+function notifyOnce(key: string, msg: string, ms: number) {
+  try { if (localStorage.getItem(key)) return; localStorage.setItem(key, "1"); } catch (_) { /* storage blocked: show it anyway */ }
+  toast(msg, { duration: ms });
+}
 
 function HomeContent() {
   var {
@@ -269,7 +276,10 @@ function HomeContent() {
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
   var [demoBannerVisible, setDemoBannerVisible] = useState(false);
   var { user, profile, canAfford, refreshProfile, totalCredits } = useAuth();
-  var labelHealth = useLabelHealth({ photos: allWorkspacePhotos, signedIn: !!user, applyPhotoLabels: applyPhotoLabels });
+  var labelHealth = useLabelHealth({
+    photos: allWorkspacePhotos, signedIn: !!user, applyPhotoLabels: applyPhotoLabels,
+    onFreeScanUsed: function() { notifyOnce("dumpster_free_scan_used_notice", "Your free first scan is used up. Scanning now costs 1 credit per photo — tap Scan when you want it.", 9000); },
+  });
   var [labelHealthOpen, setLabelHealthOpen] = useState(false);
 
   // ── AI profile sync — merge captions/taste/rules from cloud on sign-in.
@@ -712,6 +722,7 @@ function HomeContent() {
         : "Couldn't add " + (total === 1 ? "that file" : "those files");
       if (notes.length) msg += " (" + notes.join("; ") + ")";
       (added ? toast.success : toast.error)(msg, { id: toastId, duration: notes.length ? 8000 : 4000 });
+      if (added && user) notifyOnce("dumpster_free_scan_notice", "Your first " + FREE_FIRST_SCAN_PHOTOS + " photos are scanned and labeled free. After that, Scan costs 1 credit per photo, and only when you tap it.", 10000);
     }
 
     list.forEach(function(file) {
@@ -1255,6 +1266,7 @@ function HomeContent() {
         <LabelHealthSheet
           health={labelHealth.health}
           store={labelHealth.store}
+          freeUsed={labelHealth.freeDone}
           fix={labelHealth.fix}
           photos={allWorkspacePhotos}
           onClose={function() { setLabelHealthOpen(false); }}
@@ -1356,8 +1368,6 @@ function HomeContent() {
         var n = scanTargets.length;
         var cost = n * CREDIT_COSTS.ai_label_per_photo;
         var short = !!user && totalCredits < cost && import.meta.env.VITE_DISABLE_CREDIT_LIMIT !== "1";
-        var fx = labelHealth.fix;
-        var autoFixFree = labelHealth.store.autoFix && !(fx.kind === "paused" && Date.now() < fx.until);
         return (
           <AlertDialog open={scanConfirmOpen} onOpenChange={setScanConfirmOpen}>
             <AlertDialogContent style={{ background: "#141414", border: "1px solid #2a2a2a", color: "#eee" }}>
@@ -1365,7 +1375,6 @@ function HomeContent() {
               <AlertDialogDescription style={{ color: "#aaa" }}>
                 {"This uses " + cost + (cost === 1 ? " credit" : " credits") + " (you have " + totalCredits + ")."}
                 {short && <><br /><span style={{ color: "#f87171" }}>{"You need " + (cost - totalCredits) + " more."}</span></>}
-                {autoFixFree && <><br />Auto-fix labels photos for free (daily limit applies).</>}
               </AlertDialogDescription>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
