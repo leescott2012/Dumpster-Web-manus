@@ -46,7 +46,7 @@ export async function getUserFromRequest(req: IncomingMessage): Promise<string |
 // 1 credit = ~1¢ of real AI cost. Keep in sync with server/dailyBudget.ts
 // COST_CENTS and client/src/lib/credits.ts CREDIT_COSTS.
 var COSTS: Record<string, number> = {
-  ai_suggest: 8,  // Auto Gen dump — subsidised (real cost up to ~25¢); refunded if the user rejects it
+  ai_suggest: 12, // Auto Gen dump — real cost up to ~25¢ (was 8, which lost money); refunded if the user rejects it
   ai_caption: 3,  // Claude Haiku vision (~3¢)
   // ai_label: no flat cost — priced per photo, see shared/aiLabelCost.ts (api/ai-label.ts passes opts.cost)
   ai_chat: 1,     // Valet (~1¢)

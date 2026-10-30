@@ -381,7 +381,7 @@ export default function LandingPageV3() {
           <div className="v3-plan v3-plan--pro">
             <h3>GO PRO — $5.99/MO</h3>
             <h4>Unlimited everything,<br />plus the AI engine.</h4>
-            <p>Unlimited dumps and pool, AI auto-arrange, captions in your voice, Instagram scrub, the playbook, and the iOS app. $34.99/yr or $19.99 lifetime in-app.</p>
+            <p>Unlimited dumps and pool, AI auto-arrange, captions in your voice, Instagram scrub, the playbook, and the iOS app. $34.99/yr in-app.</p>
             <img src={src(PHOTOS[3], 400, 260)} alt="" draggable={false} />
             <button className="v3-plan__plus v3-plan__plus--gold" aria-label="Start Pro" onClick={() => navigate('/app')}>+</button>
           </div>

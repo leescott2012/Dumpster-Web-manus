@@ -72,8 +72,8 @@ async function handleTick(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // Credits low (skip lifetime/pro: effectively unmetered for them).
-  if (prof && !prof.lifetime_purchase && prof.subscription_tier !== "pro"
+  // Credits low (Pro is a monthly pool now, so it gets the nudge too; only legacy lifetime is skipped).
+  if (prof && !prof.lifetime_purchase
     && creditsAreLow({ credits: prof.credits, daily: prof.daily_credits_remaining, dailyResetAt: prof.daily_credits_reset_at, nowMs })) {
     await notify({
       userId, type: "credits_low", link: "/credits", dedupeKey: creditsLowKey(day),

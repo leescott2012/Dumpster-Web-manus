@@ -22,7 +22,7 @@ export var CREDIT_COSTS: Record<string, number> = {
   ai_caption: 3,             // Claude Haiku vision — generates 3 captions (~3¢)
 
   // Dump building
-  ai_suggest: 8,             // Auto Gen dump — subsidised (real cost up to ~25¢); refunded if rejected
+  ai_suggest: 12,            // Auto Gen dump — real cost up to ~25¢ (was 8, lost money); refunded if rejected
 
   // Chat
   ai_chat: VALET_COST,       // Valet — chat to reorder / swap / set vibe (~1¢)
@@ -60,7 +60,6 @@ export var CREDIT_PACKS = [
 export var SUBSCRIPTION_PLANS = [
   { id: "pro_monthly",  price: 599,  label: "Pro Monthly",  priceLabel: "$5.99/mo",  interval: "month" as const },
   { id: "pro_yearly",   price: 3499, label: "Pro Yearly",   priceLabel: "$34.99/yr", interval: "year" as const, badge: "Save 51%" },
-  { id: "lifetime",     price: 1999, label: "Lifetime",     priceLabel: "$19.99",    interval: "once" as const, badge: "Early bird — first 1,000 users" },
 ];
 
 /** Daily free credits by tier */
