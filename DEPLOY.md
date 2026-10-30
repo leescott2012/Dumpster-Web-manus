@@ -27,7 +27,7 @@ Set these in **Vercel → Project (dumpster-web-manus) → Settings → Environm
 |---|---|
 | `STRIPE_SECRET_KEY` | Charges + webhook signatures |
 | `STRIPE_WEBHOOK_SECRET` | Verify webhook events |
-| `STRIPE_PRICE_CREDITS_100/500/1500` | Credit pack price IDs |
+| `STRIPE_PRICE_CREDITS_100/300/800` | Credit pack price IDs |
 | `STRIPE_PRICE_PRO_MONTHLY/YEARLY` | Subscription price IDs |
 | `STRIPE_PRICE_LIFETIME` | Lifetime price ID |
 
