@@ -15,8 +15,11 @@ var webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
 
 // Credit amounts for each pack
 var CREDIT_AMOUNTS: Record<string, number> = {
-  credits_30: 30,
   credits_100: 100,
+  credits_300: 300,
+  credits_800: 800,
+  // Retired 2026-10-30; kept so a checkout started before the change still credits.
+  credits_30: 30,
   credits_500: 500,
   credits_1500: 1500,
 };

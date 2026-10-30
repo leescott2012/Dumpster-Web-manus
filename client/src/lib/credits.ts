@@ -50,10 +50,9 @@ export var CREDIT_LABELS: Record<string, string> = {
 
 /** Credit packs available for purchase */
 export var CREDIT_PACKS = [
-  { id: "credits_30",   credits: 30,   price: 100,  label: "30 Credits",   tag: "Try it",      priceLabel: "$1.00" },
-  { id: "credits_100",  credits: 100,  price: 199,  label: "100 Credits",  tag: "Quick fix",   priceLabel: "$1.99" },
-  { id: "credits_500",  credits: 500,  price: 499,  label: "500 Credits",  tag: "Power user",  priceLabel: "$4.99" },
-  { id: "credits_1500", credits: 1500, price: 999,  label: "1,500 Credits", tag: "Best value", priceLabel: "$9.99" },
+  { id: "credits_100", credits: 100, price: 299,  label: "100 Credits", tag: "Quick fix",  priceLabel: "$2.99" },
+  { id: "credits_300", credits: 300, price: 699,  label: "300 Credits", tag: "Popular",    priceLabel: "$6.99" },
+  { id: "credits_800", credits: 800, price: 1499, label: "800 Credits", tag: "Best value", priceLabel: "$14.99" },
 ];
 
 /** Subscription plans */
