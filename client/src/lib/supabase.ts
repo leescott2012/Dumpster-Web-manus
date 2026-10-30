@@ -17,15 +17,19 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   return {};
 }
 
-/** Auth headers plus the user's own verified Claude key (if saved) for AI calls. */
+/** Auth headers plus the user's own verified AI key (Claude first, then Gemini, OpenAI, OpenRouter) for AI calls. */
 export async function getAiHeaders(): Promise<Record<string, string>> {
   var h = await getAuthHeaders();
   try {
-    var meta = JSON.parse(localStorage.getItem("dumpster_aikey_meta_anthropic") || "null");
-    var key = localStorage.getItem("dumpster_aikey_anthropic");
-    if (key && meta && meta.status === "verified") {
-      h["x-api-key"] = key;
-      h["x-api-provider"] = "anthropic";
+    var order = ["anthropic", "gemini", "openai", "openrouter"];
+    for (var i = 0; i < order.length; i++) {
+      var meta = JSON.parse(localStorage.getItem("dumpster_aikey_meta_" + order[i]) || "null");
+      var key = localStorage.getItem("dumpster_aikey_" + order[i]);
+      if (key && meta && meta.status === "verified") {
+        h["x-api-key"] = key;
+        h["x-api-provider"] = order[i];
+        break;
+      }
     }
   } catch { /* storage blocked — fall back to credits */ }
   return h;

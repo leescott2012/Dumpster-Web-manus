@@ -6,7 +6,7 @@
  */
 
 import { llmComplete, llmConfigured, type LlmPart } from "./llm.js";
-import { userAnthropicKey } from "./userKey.js";
+import { userAnthropicKey, userOtherKey } from "./userKey.js";
 import type { IncomingMessage, ServerResponse } from "http";
 import { fetchImageAsBase64 } from "./imageBase64.js";
 import { parseModelJson } from "./parseModelJson.js";
@@ -189,7 +189,7 @@ Respond ONLY with valid JSON, no markdown, no code fences:
     // must finish inside the 30s maxDuration, or Vercel kills the function
     // before the refund runs.
     const rawText = await llmComplete({
-      claudeKey: apiKey, byo: !!byoKey, claudeModel: "claude-haiku-4-5",
+      claudeKey: apiKey, byo: !!byoKey, userProvider: userOtherKey(req), claudeModel: "claude-haiku-4-5",
       maxTokens: 700, system, messages: [{ role: "user", content }], totalMs: 18000,
     });
     let parsed: { captions?: unknown; vibe?: unknown };

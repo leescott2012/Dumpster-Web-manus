@@ -11,7 +11,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import { createClient } from "@supabase/supabase-js";
-import { userAnthropicKey } from "./userKey.js";
+import { userAnthropicKey, userOtherKey } from "./userKey.js";
 import { deductCredits, refundCredits, supabaseAdmin } from "./supabaseAdmin.js";
 import { enforceRateLimit } from "./rateLimit.js";
 import { checkBudget, recordCost } from "./dailyBudget.js";
@@ -81,9 +81,9 @@ export async function checkCredits(
   var rlOk = await enforceRateLimit(req, res, action, userId);
   if (!rlOk) return { userId: userId, proceed: false, refund: noopRefund };
 
-  // Own verified Claude key: the user pays their provider, so no credits and
+  // Own verified AI key: the user pays their provider, so no credits and
   // no draw on our daily $ budget (auth + rate limit above still apply).
-  if (userAnthropicKey(req)) return { userId: userId, proceed: true, refund: noopRefund };
+  if (userAnthropicKey(req) || userOtherKey(req)) return { userId: userId, proceed: true, refund: noopRefund };
 
   // Free actions (one-time taste-profile scrub) also get a per-user DAILY cap.
   if (opts && opts.free) {

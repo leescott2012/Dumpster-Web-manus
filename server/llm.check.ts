@@ -3,8 +3,11 @@ import assert from "node:assert";
 import { llmComplete } from "./llm.js";
 
 const calls: string[] = [];
+let lastAuth = "";
 let plan: Record<string, number> = {}; // provider -> status (default 200)
-(globalThis as any).fetch = async (url: any) => {
+let errMsg = "x";
+(globalThis as any).fetch = async (url: any, init?: any) => {
+  lastAuth = String(init?.headers?.["x-goog-api-key"] || init?.headers?.Authorization || "");
   const u = String(url);
   const h = new URL(u).hostname;
   const host = h === "api.anthropic.com" ? "anthropic" : h === "generativelanguage.googleapis.com" ? "gemini" : h === "api.openai.com" ? "openai" : "openrouter";
@@ -14,7 +17,7 @@ let plan: Record<string, number> = {}; // provider -> status (default 200)
   const body = host === "anthropic" ? { id: "m", type: "message", role: "assistant", model: "x", content: [{ type: "text", text: "claude" }], stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 } }
     : host === "gemini" ? { candidates: [{ content: { parts: [{ text: "gemini" }] } }] }
     : { choices: [{ message: { content: host } }] };
-  return new Response(JSON.stringify(st === 200 ? body : { error: "x" }), { status: st, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(st === 200 ? body : { error: { message: errMsg } }), { status: st, headers: { "content-type": "application/json" } });
 };
 const base = { messages: [{ role: "user" as const, content: [{ text: "hi" }, { image: { mediaType: "image/jpeg", base64: "AAAA" } }] }], maxTokens: 50, claudeModel: "claude-haiku-4-5", totalMs: 20000 };
 const run = async (o: Record<string, unknown> = {}) => {
@@ -46,6 +49,16 @@ const env = (k: Record<string, string>) => {
   assert.equal(await run({ claudeKey: "sk" }), "ERR:400"); assert.deepEqual(calls, ["anthropic"], "400 never falls back");
   plan = { anthropic: 401 };
   assert.equal(await run({ claudeKey: "sk" }), "gemini", "bad platform key falls back");
+  plan = { anthropic: 400 }; errMsg = "Your credit balance is too low to access the Anthropic API.";
+  assert.equal(await run({ claudeKey: "sk" }), "gemini", "empty platform account falls back");
+  assert.equal(await run({ claudeKey: "sk", byo: true }), "ERR:400", "empty BYO account never falls back");
+  errMsg = "x";
+  plan = {};
+  assert.equal(await run({ claudeKey: "sk", userProvider: { name: "gemini", key: "AIzaUSER" } }), "gemini"); assert.deepEqual(calls, ["gemini"], "user's own provider is used alone");
+  assert.equal(lastAuth, "AIzaUSER", "the user's key is sent, not ours");
+  assert.equal(await run({ claudeKey: "sk", userProvider: { name: "openai", key: "sk-USER" } }), "openai"); assert.equal(lastAuth, "Bearer sk-USER");
+  plan = { gemini: 503 };
+  assert.equal(await run({ claudeKey: "sk", userProvider: { name: "gemini", key: "AIzaUSER" } }), "ERR:503"); assert.deepEqual(calls, ["gemini"], "user key failure never spends our keys");
   env({});
   assert.ok((await run({ claudeKey: null })).startsWith("ERR:"), "no providers -> error");
   console.log("llm.check OK");

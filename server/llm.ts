@@ -17,6 +17,8 @@ export interface LlmOpts {
   claudeKey?: string | null;
   /** True when claudeKey is the user's own key: auth errors never fall through. */
   byo?: boolean;
+  /** The user's own non-Claude key. Used alone: it never falls through to our keys. */
+  userProvider?: { name: string; key: string } | null;
   /** Total wall budget across all providers. */
   totalMs: number;
 }
@@ -25,7 +27,7 @@ const GEMINI_MODEL = "gemini-2.5-flash";
 const OPENAI_MODEL = "gpt-4o-mini";
 const OPENROUTER_MODEL = "google/gemini-2.5-flash";
 
-type Fallback = { name: string; run: (o: LlmOpts, ms: number) => Promise<string> };
+type Fallback = { name: string; run: (o: LlmOpts, ms: number, key?: string) => Promise<string> };
 
 class LlmHttpError extends Error {
   constructor(public status: number, provider: string) { super(provider + " HTTP " + status); }
@@ -46,8 +48,8 @@ async function post(url: string, headers: Record<string, string>, body: unknown,
 
 const gemini: Fallback = {
   name: "gemini",
-  run: async (o, ms) => {
-    const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  run: async (o, ms, userKey) => {
+    const key = userKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     const data = await post(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
       { "x-goog-api-key": key! },
@@ -68,7 +70,7 @@ const gemini: Fallback = {
 
 const chatCompat = (name: string, url: string, keyEnv: string, model: string): Fallback => ({
   name,
-  run: async (o, ms) => {
+  run: async (o, ms, userKey) => {
     const messages: any[] = [];
     if (o.system) messages.push({ role: "system", content: o.system });
     for (const m of o.messages) {
@@ -78,7 +80,7 @@ const chatCompat = (name: string, url: string, keyEnv: string, model: string): F
           "text" in p ? { type: "text", text: p.text } : { type: "image_url", image_url: { url: `data:${p.image.mediaType};base64,${p.image.base64}` } }),
       });
     }
-    const data = await post(url, { Authorization: "Bearer " + process.env[keyEnv] }, { model, max_tokens: o.maxTokens, messages }, ms, name);
+    const data = await post(url, { Authorization: "Bearer " + (userKey || process.env[keyEnv]) }, { model, max_tokens: o.maxTokens, messages }, ms, name);
     return String(data?.choices?.[0]?.message?.content || "").trim();
   },
 });
@@ -98,8 +100,17 @@ export function llmConfigured(claudeKey?: string | null): boolean {
 
 const status = (e: unknown): number | undefined => (e as { status?: number } | null)?.status;
 const retryable = (e: unknown) => { const s = status(e); return s === undefined || s === 408 || s === 429 || s >= 500; };
+// Anthropic reports an empty account as a plain 400, not a 402.
+const outOfCredit = (e: unknown) => status(e) === 400 && /credit balance/i.test((e as Error)?.message || "");
 
 export async function llmComplete(o: LlmOpts): Promise<string> {
+  if (o.userProvider) {
+    const f = FALLBACKS.find((x) => x.name === o.userProvider!.name);
+    if (!f) throw new Error("Unknown AI provider");
+    const text = await f.run(o, o.totalMs, o.userProvider.key);
+    if (!text) throw new Error(f.name + " empty");
+    return text;
+  }
   const t0 = Date.now();
   const fb = activeFallbacks();
   const haveClaude = !!o.claudeKey && o.claudeKey !== "your_anthropic_api_key_here";
@@ -127,8 +138,8 @@ export async function llmComplete(o: LlmOpts): Promise<string> {
       firstErr = e;
       const s = status(e);
       // BYO key: only transient errors fall through, never auth/validation.
-      // Env key: a 401/403 (bad/expired platform key) may fall through too.
-      const ok = retryable(e) || (!o.byo && (s === 401 || s === 403));
+      // Env key: a 401/403 (bad/expired platform key) or empty account may fall through too.
+      const ok = retryable(e) || (!o.byo && (s === 401 || s === 403 || outOfCredit(e)));
       if (!ok || !fb.length) throw e;
       console.warn("[llm] claude failed (" + (s ?? "network") + "), falling back");
     }
