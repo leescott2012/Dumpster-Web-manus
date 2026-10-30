@@ -1,12 +1,13 @@
 /**
- * Label Health — state + background auto-fix loop.
+ * Label Health — state + the one-time free first scan.
  *
- * Auto-fix runs on app open and when the photo set changes (debounced,
- * throttled to one run / 10 min). One run sends at most 3 free auto-scan
- * requests of ≤6 photos — exactly the server's ai_label_auto burst limit
- * (3 req / 10 min) and its per-request cap (6 images). Priority: unlabeled →
- * suspect → audit sample (≤ AUDIT_PER_DAY/day). Any quota answer (402/429/503)
- * pauses quietly instead of erroring.
+ * Only the FIRST ~100 photos an account uploads are scanned automatically and
+ * free (server-enforced, shared/aiLabelCost.ts). Once the server says the free
+ * scan is used up (402 free_scan_used) auto-scan stops for the session and
+ * labeling is the paid Scan button only (1 credit/photo, user-initiated).
+ * While it lasts: runs on app open / photo changes (debounced, one run / 10 min),
+ * ≤3 requests of ≤6 photos (the server's burst limit and per-request cap).
+ * No second-opinion audits. Other quota answers (429/503) pause quietly.
  *
  * Videos are device-only by owner decision — filtered out before any request.
  * Only { id, url } is ever sent: no EXIF/GPS.
@@ -20,9 +21,10 @@ import { track } from "@/lib/analytics";
 import type { Photo } from "@/lib/photoData";
 import type { PhotoLabel } from "@/lib/aiLabel";
 import {
-  AUDIT_PER_DAY, addSnapshot, computeHealth, dayKey, isValidCategory, isGenericLabel, isVideoLike,
-  loadStore, pickAuditSample, saveStore, type LabelHealthStore, type LabelInfo, type LabelCheck,
+  addSnapshot, computeHealth, dayKey, isValidCategory, isGenericLabel, isVideoLike,
+  loadStore, saveStore, type LabelHealthStore, type LabelInfo,
 } from "@/lib/labelHealth";
+import { FREE_SCAN_USED_CODE } from "@shared/aiLabelCost";
 
 var BATCH = 6;
 var REQUESTS_PER_RUN = 3;
@@ -36,12 +38,13 @@ export type FixStatus =
 
 class QuotaError extends Error {
   daily: boolean;
-  constructor(daily: boolean) { super("quota"); this.daily = daily; }
+  freeUsed: boolean;
+  constructor(daily: boolean, freeUsed?: boolean) { super("quota"); this.daily = daily; this.freeUsed = !!freeUsed; }
 }
 
 // Free auto-scan request, same endpoint as aiLabel.ts autoScanPhotos, but
 // surfaces the HTTP status so quota exhaustion can pause instead of error.
-async function requestLabels(photos: Photo[], audit: boolean): Promise<PhotoLabel[]> {
+async function requestLabels(photos: Photo[]): Promise<PhotoLabel[]> {
   var safe = photos.filter(function(p) { return !isVideoLike(p); });
   if (safe.length === 0) return [];
   var body = await Promise.all(safe.map(async function(p) {
@@ -51,12 +54,12 @@ async function requestLabels(photos: Photo[], audit: boolean): Promise<PhotoLabe
   var res = await aiFetch("/api/ai-label", {
     method: "POST",
     headers: Object.assign({ "Content-Type": "application/json" }, headers),
-    body: JSON.stringify({ photos: body, auto: true, audit: audit }),
+    body: JSON.stringify({ photos: body, auto: true }),
   });
   if (res.status === 402 || res.status === 429 || res.status === 503) {
     var code = "";
     try { code = (await res.json()).code || ""; } catch { /* ignore */ }
-    throw new QuotaError(code !== "rate_limit_exceeded");
+    throw new QuotaError(code !== "rate_limit_exceeded", code === FREE_SCAN_USED_CODE);
   }
   if (!res.ok) throw new Error("Label request failed (" + res.status + ")");
   var data = await res.json();
@@ -67,8 +70,10 @@ export function useLabelHealth(opts: {
   photos: Photo[];
   signedIn: boolean;
   applyPhotoLabels: (labels: Array<{ id: string; category: string; label: string }>) => void;
+  /** Called once when the server says the one-time free scan is used up. */
+  onFreeScanUsed?: () => void;
 }) {
-  var { photos, signedIn, applyPhotoLabels } = opts;
+  var { photos, signedIn, applyPhotoLabels, onFreeScanUsed } = opts;
   var [store, setStore] = useState<LabelHealthStore>(loadStore);
   var storeRef = useRef(store);
   storeRef.current = store;
@@ -78,6 +83,9 @@ export function useLabelHealth(opts: {
   var fixRef = useRef(fix);
   fixRef.current = fix;
   var lastRunRef = useRef(0);
+  // In memory on purpose: the server is the source of truth, and this is per account, not per device.
+  var [freeDone, setFreeDone] = useState(false);
+  var freeDoneRef = useRef(false);
 
   var update = useCallback(function(fn: (s: LabelHealthStore) => LabelHealthStore) {
     setStore(function(prev) {
@@ -118,28 +126,14 @@ export function useLabelHealth(opts: {
     return ok;
   }, [applyPhotoLabels, update]);
 
-  var recordAudit = useCallback(function(labels: PhotoLabel[]) {
-    var byId: Record<string, Photo> = {};
-    photosRef.current.forEach(function(p) { byId[p.id] = p; });
-    var now = Date.now();
-    update(function(s) {
-      var info = Object.assign({}, s.info);
-      var checks = s.checks.slice();
-      labels.forEach(function(l) {
-        var p = byId[l.id];
-        if (!p || (info[p.id] && info[p.id].source === "user")) return;
-        var kind: LabelCheck["kind"] = l.category.toUpperCase() === p.category.toUpperCase() ? "agree" : "disagree";
-        var prev: LabelInfo = info[p.id] || { source: "ai", labeledAt: now };
-        info[p.id] = Object.assign({}, prev, { audit: kind });
-        checks.push({ id: p.id, kind: kind, at: now });
-      });
-      var today = dayKey(now);
-      var count = (s.auditDay === today ? s.auditCount : 0) + labels.length;
-      return Object.assign({}, s, { info: info, checks: checks, auditDay: today, auditCount: count });
-    });
-  }, [update]);
-
   var handleError = useCallback(function(e: unknown) {
+    if (e instanceof QuotaError && e.freeUsed) {
+      freeDoneRef.current = true;
+      setFreeDone(true);
+      setFix({ kind: "idle" });
+      if (onFreeScanUsed) onFreeScanUsed();
+      return;
+    }
     if (e instanceof QuotaError) {
       // A rejected request costs nothing, so a fixed back-off is fine:
       // short for the burst limit, long for the per-user daily cap/credits/budget.
@@ -149,11 +143,11 @@ export function useLabelHealth(opts: {
     }
     setFix({ kind: "idle" });
     logBug({ source: "auto-relabel", message: "Label Health auto-fix failed: " + (e instanceof Error ? e.message : "unknown"), silent: true });
-  }, []);
+  }, [onFreeScanUsed]);
 
   var runFix = useCallback(async function(force: boolean) {
     var f = fixRef.current;
-    if (!signedIn || f.kind === "running") return;
+    if (!signedIn || f.kind === "running" || freeDoneRef.current) return;
     if (f.kind === "paused" && Date.now() < f.until) return;
     if (!force && Date.now() - lastRunRef.current < RUN_EVERY_MS) return;
     lastRunRef.current = Date.now();
@@ -168,20 +162,14 @@ export function useLabelHealth(opts: {
       .filter(function(x) { var i = s.info[x.photo.id]; return !i || now - i.labeledAt > RELABEL_COOLDOWN_MS || i.audit === "disagree"; })
       .map(function(x) { return byId[x.photo.id]; });
     var queue = unlabeled.concat(suspects).filter(Boolean);
-    var auditLeft = AUDIT_PER_DAY - (s.auditDay === dayKey(now) ? s.auditCount : 0);
-    if (queue.length === 0 && auditLeft <= 0) return;
+    if (queue.length === 0) return;
 
     setFix({ kind: "running" });
     var requests = 0;
     var healed: PhotoLabel[] = [];
     try {
       for (var i = 0; i < queue.length && requests < REQUESTS_PER_RUN; i += BATCH, requests++) {
-        healed = healed.concat(applyAi(await requestLabels(queue.slice(i, i + BATCH), false)));
-      }
-      if (requests < REQUESTS_PER_RUN && auditLeft > 0) {
-        var sample = pickAuditSample(photosRef.current, storeRef.current.info, Math.min(BATCH, auditLeft), Math.random)
-          .map(function(p) { return byId[p.id]; });
-        if (sample.length > 0) recordAudit(await requestLabels(sample, true));
+        healed = healed.concat(applyAi(await requestLabels(queue.slice(i, i + BATCH))));
       }
       setFix({ kind: "idle" });
     } catch (e) {
@@ -191,22 +179,27 @@ export function useLabelHealth(opts: {
       track("photos_auto_relabeled", { count: healed.length });
       logBug({ source: "auto-relabel", message: "Label Health auto-fixed " + healed.length + " photo label(s) — no charge to the user.", context: { after: healed }, status: "fixed", silent: true });
     }
-  }, [signedIn, applyAi, recordAudit, handleError]);
+  }, [signedIn, applyAi, handleError]);
 
   // App open + pool changes → debounced, throttled background run.
   useEffect(function() {
-    if (!signedIn || !store.autoFix) return;
+    if (!signedIn || !store.autoFix || freeDone) return;
     var t = setTimeout(function() { void runFix(false); }, 4000);
     return function() { clearTimeout(t); };
-  }, [signedIn, store.autoFix, photos, runFix]);
+  }, [signedIn, store.autoFix, freeDone, photos, runFix]);
 
-  /** "Fix now" on one photo — free path, respects pause. Resolves to an error message, or null on success. */
+  /** "Fix now" on one photo — only while the free first scan lasts. Resolves to an error message, or null on success. */
   var fixOne = useCallback(async function(photo: Photo): Promise<string | null> {
-    var paused = "Auto-fix is paused — daily limit reached. Try again later.";
+    var paused = "Auto-fix is paused — try again later.";
+    if (freeDoneRef.current) return "Your free first scan is used up — use Scan (1 credit per photo).";
     var f = fixRef.current;
     if (f.kind === "paused" && Date.now() < f.until) return paused;
-    try { applyAi(await requestLabels([photo], false)); return null; }
-    catch (e) { handleError(e); return e instanceof QuotaError ? paused : "Couldn't fix that label — try again."; }
+    try { applyAi(await requestLabels([photo])); return null; }
+    catch (e) {
+      handleError(e);
+      if (e instanceof QuotaError && e.freeUsed) return "Your free first scan is used up — use Scan (1 credit per photo).";
+      return e instanceof QuotaError ? paused : "Couldn't fix that label — try again.";
+    }
   }, [applyAi, handleError]);
 
   /** "Looks right" — user verifies the current label (primary accuracy hit). */
@@ -240,5 +233,5 @@ export function useLabelHealth(opts: {
     update(function(s) { return Object.assign({}, s, { autoFix: on }); });
   }, [update]);
 
-  return { health: health, store: store, fix: fix, applyAi: applyAi, runFix: runFix, fixOne: fixOne, verify: verify, editLabel: editLabel, setAutoFix: setAutoFix };
+  return { health: health, store: store, fix: fix, freeDone: freeDone, applyAi: applyAi, runFix: runFix, fixOne: fixOne, verify: verify, editLabel: editLabel, setAutoFix: setAutoFix };
 }
