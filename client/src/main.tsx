@@ -8,8 +8,10 @@ import App from "./App";
 import "./index.css";
 import { captureReferral } from "./lib/referral";
 import { claimOnBoot } from "./lib/deviceOwner";
+import { installStaleReleaseReload } from "./lib/staleRelease";
 
 captureReferral();
+installStaleReleaseReload();
 
 // React 19+: forward all error categories to Sentry via createRoot hooks.
 // This catches errors that React 19 normally swallows (uncaught + recoverable).
