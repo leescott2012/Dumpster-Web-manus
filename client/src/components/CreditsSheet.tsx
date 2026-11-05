@@ -9,14 +9,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { CREDIT_PACKS, SUBSCRIPTION_PLANS, CREDIT_COSTS, CREDIT_LABELS } from "@/lib/credits";
 import { getAuthHeaders } from "@/lib/supabase";
 import { referralLink } from "@/lib/referral";
+import PhotoBackdrop from "@/components/PhotoBackdrop";
 
 interface CreditsSheetProps {
   open: boolean;
   onClose: () => void;
   onNeedAuth: () => void;
+  /** Pool photo URLs shuffled in the background. */
+  photos?: string[];
 }
 
-export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheetProps) {
+export default function CreditsSheet({ open, onClose, onNeedAuth, photos }: CreditsSheetProps) {
   var { user, profile, totalCredits } = useAuth();
   var [tab, setTab] = useState<"credits" | "pro">("credits");
   var [loading, setLoading] = useState<string | null>(null);
@@ -99,15 +102,12 @@ export default function CreditsSheet({ open, onClose, onNeedAuth }: CreditsSheet
   return (
     <>
       {/* Backdrop */}
-      <div onClick={onClose} style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
-        backdropFilter: "blur(4px)", zIndex: 600,
-      }} />
+      <PhotoBackdrop photos={photos} onClick={onClose} />
 
       {/* Sheet */}
       <div style={{
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 601,
-        background: "#0e0e0e", borderTop: "1px solid #2a2a2a",
+        background: "rgba(14,14,14,0.74)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", borderTop: "1px solid #2a2a2a",
         borderRadius: "20px 20px 0 0", overflow: "hidden",
         maxHeight: "88vh", display: "flex", flexDirection: "column",
       }}>

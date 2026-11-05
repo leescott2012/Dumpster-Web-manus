@@ -6,13 +6,16 @@ import { useState } from "react";
 import { X, Loader } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import PhoneCodeForm from "@/components/PhoneCodeForm";
+import PhotoBackdrop from "@/components/PhotoBackdrop";
 
 interface AuthSheetProps {
   open: boolean;
   onClose: () => void;
+  /** Pool photo URLs shuffled in the background. */
+  photos?: string[];
 }
 
-export default function AuthSheet({ open, onClose }: AuthSheetProps) {
+export default function AuthSheet({ open, onClose, photos }: AuthSheetProps) {
   var { signInWithGoogle, signInWithApple, signInWithFacebook } = useAuth();
   var [error, setError] = useState<string | null>(null);
   var [loading, setLoading] = useState<string | null>(null);
@@ -33,15 +36,12 @@ export default function AuthSheet({ open, onClose }: AuthSheetProps) {
   return (
     <>
       {/* Backdrop */}
-      <div onClick={onClose} style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
-        backdropFilter: "blur(4px)", zIndex: 600,
-      }} />
+      <PhotoBackdrop photos={photos} onClick={onClose} />
 
       {/* Sheet */}
       <div style={{
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 601,
-        background: "#0e0e0e", borderTop: "1px solid #2a2a2a",
+        background: "rgba(14,14,14,0.74)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", borderTop: "1px solid #2a2a2a",
         borderRadius: "20px 20px 0 0", overflow: "hidden",
         maxHeight: "85vh", display: "flex", flexDirection: "column",
       }}>
