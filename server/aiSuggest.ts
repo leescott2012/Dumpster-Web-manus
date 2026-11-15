@@ -104,14 +104,16 @@ export async function handleAISuggest(
 
   let photos: PhotoInput[] = [];
   let variation = 0;
+  let avoidIds: string[] = [];
   let targetCount: number | null = null;
   let tasteBlock = "";
   let userHint = "";
   try {
     const body = await readBody(req);
-    const parsed = JSON.parse(body) as { photos?: PhotoInput[]; variation?: number; targetCount?: number | null; tasteBlock?: string; userHint?: string };
+    const parsed = JSON.parse(body) as { photos?: PhotoInput[]; variation?: number; avoidIds?: string[]; targetCount?: number | null; tasteBlock?: string; userHint?: string };
     photos = parsed.photos || [];
     variation = parsed.variation || 0;
+    avoidIds = Array.isArray(parsed.avoidIds) ? parsed.avoidIds.filter((x) => typeof x === "string").slice(0, 200) : [];
     // Cap the taste block (profile 2000 + rules 1500 + style + captions) so cost stays bounded
     tasteBlock = typeof parsed.tasteBlock === "string" ? parsed.tasteBlock.slice(0, 6000) : "";
     if (learned) tasteBlock += (tasteBlock ? "\n\n" : "") + learned;
@@ -156,6 +158,11 @@ export async function handleAISuggest(
     ? ` This is attempt #${variation + 1} — pick a DIFFERENT theme or photo selection than you would have chosen before.`
     : "";
 
+  const avoidNums = capped.map((p, i) => (avoidIds.includes(p.id) ? i + 1 : 0)).filter(Boolean);
+  const avoidHint = avoidNums.length
+    ? ` Photos ${avoidNums.join(", ")} were already used in earlier suggestions — build this one mostly from the OTHER photos.`
+    : "";
+
   // Rules go BEFORE photos (frames the analysis) in a clearly delimited
   // REQUIRED block, and the key ones are restated right before the schema —
   // a no-style live run ignored "variety" rules sitting only at the top.
@@ -170,7 +177,7 @@ export async function handleAISuggest(
     : "";
 
   content.push({
-    text: `You are an expert Instagram content strategist. I'm going to show you ${capped.length} photos. Pick the BEST single Instagram carousel sequence from these photos.${variationHint}\n\n${tastePrefix}Here are the photos (numbered for reference):`,
+    text: `You are an expert Instagram content strategist. I'm going to show you ${capped.length} photos. Pick the BEST single Instagram carousel sequence from these photos.${variationHint}${avoidHint}\n\n${tastePrefix}Here are the photos (numbered for reference):`,
   });
 
   for (let i = 0; i < capped.length; i++) {

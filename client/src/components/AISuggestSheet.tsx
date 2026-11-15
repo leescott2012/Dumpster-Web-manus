@@ -95,6 +95,7 @@ export default function AISuggestSheet({
     setDumpStyles(loadDumpStyles());
     setActiveStyleId(loadActiveDumpStyleId());
     setStyleSwitched(false);
+    setSeenIds(new Set());
   }, [open]);
   const variationRef = useRef(0);
   // Single-use token from the server for the dump on screen; spent to get the
@@ -131,10 +132,16 @@ export default function AISuggestSheet({
   // Newest first (pool appends uploads), unless the user asked for a shuffle.
   // Photos already in a dump are stripped by applyAutoGenFilters.
   const shuffled = filters.mix.on && filters.mix.shuffle;
-  const orderedPool = useMemo(
-    () => (shuffled ? filteredPool : filteredPool.slice().reverse()),
-    [filteredPool, shuffled]
-  );
+  // Photos from suggestions already shown this session go last, so a refresh
+  // or Try Again looks at fresh photos first instead of repeating the same dump.
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const orderedPool = useMemo(() => {
+    const base = shuffled ? filteredPool : filteredPool.slice().reverse();
+    return base.filter((p) => !seenIds.has(p.id)).concat(base.filter((p) => seenIds.has(p.id)));
+  }, [filteredPool, shuffled, seenIds]);
+  const seenRef = useRef(seenIds);
+  seenRef.current = seenIds;
+  const markSeen = useCallback((ids: string[]) => setSeenIds((prev) => new Set([...Array.from(prev), ...ids])), []);
   // The server caps at MAX_PHOTOS; rotate which window is sent so repeated
   // "New Suggestion" runs see the whole pool instead of the same first 20.
   const [windowIndex, setWindowIndex] = useState(0);
@@ -167,6 +174,7 @@ export default function AISuggestSheet({
     const offline = await offlineAutoGen(photos, targetCount);
     if (!offline) return false;
     setCluster(offline);
+    markSeen(offline.photoIds);
     setPhase("result");
     // Subtle toast so the user knows it wasn't the full-AI path
     toast(`Used quick gen (${aiFailureReason})`);
@@ -204,6 +212,7 @@ export default function AISuggestSheet({
         body: JSON.stringify({
           photos: compressedPhotos,
           variation,
+          avoidIds: Array.from(seenRef.current),
           targetCount,
           tasteBlock: buildTasteBlock(),
           // Pass any freeform vibe note from Advanced — server appends it
@@ -248,6 +257,7 @@ export default function AISuggestSheet({
 
       refundTokenRef.current = res.headers.get("X-Refund-Token");
       setCluster(first);
+      markSeen(first.photoIds);
       setPhase("result");
     } catch (e) {
       const fe = friendlyError(e, "ai_suggest");
@@ -272,7 +282,7 @@ export default function AISuggestSheet({
     if (tooFewCredits) return;
     refundRejected();
     variationRef.current += 1;
-    const next = isCapped ? windowIndex + 1 : 0;
+    const next = 0; // seen photos sort last, so window 0 is always the freshest
     setWindowIndex(next);
     analyze(variationRef.current, pickPhotoWindow(orderedPool, MAX_PHOTOS, next));
   }, [analyze, orderedPool, isCapped, windowIndex, tooFewCredits, refundRejected]);
