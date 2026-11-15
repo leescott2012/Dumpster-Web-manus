@@ -1,156 +1,34 @@
 import { useLocation } from 'wouter';
-import { useRef, useState, useEffect, memo, lazy, Suspense, type ReactNode } from 'react';
-import { motion, animate, useAnimationFrame, useReducedMotion, useMotionValue, useTransform, useSpring, useVelocity, type MotionValue } from 'framer-motion';
+import { useRef, useState, type ReactNode } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import './LandingPage.css';
 
-// The shader pulls in regl (~150 kB) purely for background decoration. Loading
-// it lazily lets the hero copy paint first; it fades in when it arrives.
-const ColorPanels = lazy(() =>
-  import('@paper-design/shaders-react').then((m) => ({ default: m.ColorPanels }))
-);
-
-const HeroShader = memo(function HeroShader() {
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // ponytail: feature-detect once — @paper-design/shaders-react throws from an
-  // unawaited async init effect when webgl2 is unavailable (blocked GPU,
-  // disabled hw accel, some VMs/RDP), which surfaces as an unhandled promise
-  // rejection and crashes shader init. Skip the shader there instead.
-  const [webgl2Supported] = useState(() => {
-    try {
-      return !!document.createElement('canvas').getContext('webgl2');
-    } catch {
-      return false;
-    }
-  });
-  return (
-    <div className="lp-hero__shader" aria-hidden="true">
-      {webgl2Supported && (
-        <Suspense fallback={null}>
-        <ColorPanels
-          colors={['#C8A96E', '#8B6F3A', '#d4b87a', '#5a4620']}
-          colorBack="#08080800"
-          density={4.2}
-          angle1={0.62}
-          angle2={0.3}
-          length={1.1}
-          edges
-          blur={0.3}
-          fadeIn={0.85}
-          fadeOut={0.35}
-          gradient={0.5}
-          speed={reduced ? 0 : 1.6}
-          scale={1}
-          rotation={180}
-          style={{ width: '100%', height: '100%' }}
-        />
-        </Suspense>
-      )}
-    </div>
-  );
-});
-
-/* Photo-dump carousel driven by page scroll — cards slide, wobble, and wrap
-   around as you swipe between slides. ponytail: Pexels stock (free license),
-   swap for real dump shots when we have them. */
+/* Hero background: tilted photo columns drifting in opposite directions (CSS
+   only). ponytail: Pexels stock (free license), swap for real dump shots later. */
 const CARD_PHOTOS = [1926769, 1183266, 1758144, 2043590, 2529148, 733872, 1130626, 2613260];
-const CARD_COUNT = CARD_PHOTOS.length;
-const CARD_SPACING = 170;
-const CARD_LOOP = CARD_COUNT * CARD_SPACING;
-const SCROLL_TRAVEL = CARD_LOOP * 1.5;
-const CARD_W = 132;
-const cardSrc = (i: number) =>
-  `https://images.pexels.com/photos/${CARD_PHOTOS[i]}/pexels-photo-${CARD_PHOTOS[i]}.jpeg?auto=compress&cs=tinysrgb&w=280&h=360&fit=crop`;
-const cardTop = (i: number) => 14 + (i % 3) * 16;
-const wrapLoop = (v: number) => ((v % CARD_LOOP) + CARD_LOOP) % CARD_LOOP;
+const cardSrc = (id: number) =>
+  `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=360&h=640&fit=crop`;
+const COLS = 9;
 
-function DumpCard({ i, travel, lean, center }: {
-  i: number;
-  travel: MotionValue<number>;
-  lean: MotionValue<number>;
-  center: number;
-}) {
-  const x = useTransform(travel, (t) => wrapLoop(i * CARD_SPACING + t) - CARD_SPACING);
-  // depth: cards shrink + dim toward the strip edges, pop at center
-  const dist = (xv: number) => Math.min(Math.abs(xv + CARD_W / 2 - center) / Math.max(center, 1), 1);
-  const scale = useTransform(x, (xv) => 1.06 - dist(xv) * 0.22);
-  const opacity = useTransform(x, (xv) => 1 - dist(xv) * 0.5);
-  // wobble as the strip travels + lean into the swipe direction
-  const rotate = useTransform([travel, lean], ([t, l]: number[]) => Math.sin(i * 1.7 + t / 130) * 6 + l);
+function HeroColumns() {
   return (
-    <motion.div className="lp-card" style={{ x, rotate, scale, opacity, top: cardTop(i) }}>
-      <motion.div
-        className="lp-card__inner"
-        whileHover={{ scale: 1.12, y: -10 }}
-        whileTap={{ scale: 0.95 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-      >
-        <img src={cardSrc(i)} alt="" loading="lazy" draggable={false} />
-      </motion.div>
-    </motion.div>
-  );
-}
-
-function ScrollCarousel({ progress }: { progress: MotionValue<number> }) {
-  const reduced = useReducedMotion();
-  const stripRef = useRef<HTMLDivElement>(null);
-  const [center, setCenter] = useState(600);
-  const drag = useMotionValue(0);
-  const auto = useMotionValue(0);
-  const paused = useRef(false);
-  // idle drift: the strip scrolls on its own, pausing while hovered or grabbed
-  useAnimationFrame((_, delta) => {
-    if (!paused.current) auto.set(auto.get() + delta * 0.032);
-  });
-  // page scroll + drag + auto-drift feed one travel value, spring-smoothed so motion overshoots a touch
-  const travelRaw = useTransform([progress, drag, auto], ([p, d, a]: number[]) => p * SCROLL_TRAVEL + d + a);
-  const travel = useSpring(travelRaw, { stiffness: 140, damping: 24, mass: 0.7 });
-  const velocity = useVelocity(travel);
-  const lean = useTransform(velocity, [-2500, 2500], [9, -9], { clamp: true });
-
-  useEffect(() => {
-    const measure = () => setCenter((stripRef.current?.offsetWidth ?? 1200) / 2);
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, []);
-
-  if (reduced) {
-    return (
-      <div className="lp-carousel" aria-hidden="true">
-        {CARD_PHOTOS.map((_, i) => (
-          <div key={i} className="lp-card" style={{ left: i * CARD_SPACING - CARD_SPACING / 2, top: cardTop(i) }}>
-            <div className="lp-card__inner">
-              <img src={cardSrc(i)} alt="" loading="lazy" draggable={false} />
+    <div className="lp-cols" aria-hidden="true">
+      <div className="lp-cols__grid">
+        {Array.from({ length: COLS }, (_, c) => {
+          const seq = Array.from({ length: 6 }, (_, k) => CARD_PHOTOS[(c * 3 + k) % CARD_PHOTOS.length]);
+          return (
+            <div className="lp-col" key={c}>
+              <div className="lp-col__track" style={{ animationDelay: `${-c * 11}s` }}>
+                {[...seq, ...seq].map((id, k) => (
+                  <div className="lp-col__card" key={k}>
+                    <img src={cardSrc(id)} alt="" draggable={false} />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-    );
-  }
-
-  return (
-    <div aria-hidden="true">
-      <motion.div
-        ref={stripRef}
-        className="lp-carousel"
-        onHoverStart={() => { paused.current = true; }}
-        onHoverEnd={() => { paused.current = false; }}
-        onPanStart={() => { paused.current = true; drag.stop(); }}
-        onPan={(_, info) => drag.set(drag.get() + info.delta.x)}
-        onPanEnd={(_, info) => {
-          paused.current = false;
-          // fling with momentum, then settle snapped to a card position
-          const scrollPart = progress.get() * SCROLL_TRAVEL;
-          const projected = drag.get() + info.velocity.x * 0.35;
-          const snapped = Math.round((scrollPart + projected) / CARD_SPACING) * CARD_SPACING - scrollPart;
-          animate(drag, snapped, { type: 'spring', velocity: info.velocity.x, stiffness: 90, damping: 22 });
-        }}
-      >
-        {CARD_PHOTOS.map((_, i) => (
-          <DumpCard key={i} i={i} travel={travel} lean={lean} center={center} />
-        ))}
-      </motion.div>
-      <p className="lp-carousel__hint">Drag the dump — or just keep swiping</p>
     </div>
   );
 }
@@ -199,13 +77,6 @@ const IconArrow = () => (
 const IconCheck = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12"/>
-  </svg>
-);
-const IconInstagram = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
   </svg>
 );
 const IconPhone = () => (
@@ -286,12 +157,10 @@ export default function LandingPage() {
   const [, navigate] = useLocation();
   const rootRef = useRef<HTMLDivElement>(null);
   const [{ active, scrolled }, setScrollState] = useState({ active: 0, scrolled: false });
-  const scrollProgress = useMotionValue(0);
 
   const handleScroll = () => {
     const root = rootRef.current;
     if (!root) return;
-    scrollProgress.set(root.scrollTop / Math.max(1, root.scrollHeight - root.clientHeight));
     const mid = root.scrollTop + root.clientHeight / 2;
     let current = 0;
     root.querySelectorAll<HTMLElement>('.lp-slide').forEach((slide, i) => {
@@ -344,44 +213,13 @@ export default function LandingPage() {
 
       {/* ─── Slide 1: Hero ──────────────────────────────────────── */}
       <section id="hero" className="lp-slide lp-hero">
-        <HeroShader />
-        <Rise className="lp-hero__eyebrow">
-          <span className="lp-badge">
-            <IconInstagram />
-            Instagram Carousel Builder
-          </span>
-        </Rise>
-        <Rise delay={0.08}>
-          <h1 className="lp-hero__headline">
-            Build Dumps<br />
-            <em>That Hit.</em>
-          </h1>
-        </Rise>
-        <Rise delay={0.16}>
-          <p className="lp-hero__sub">
-            The AI-powered carousel sequencer for creators who care about
-            {' '}how their feed looks and what it does.
-          </p>
-        </Rise>
-        <Rise delay={0.24} className="lp-hero__ctas">
-          <button className="lp-btn lp-btn--gold lp-btn--lg" onClick={() => navigate('/app')}>
-            Sign up free <IconArrow />
+        <HeroColumns />
+        <div className="lp-hero__copy">
+          <h1 className="lp-hero__headline">Build dumps that hit.</h1>
+          <button className="lp-hero__btn" onClick={() => navigate('/app')}>
+            Sign up free
           </button>
-          <button className="lp-btn lp-btn--ghost lp-btn--lg" onClick={() => goTo(2)}>
-            See How It Works
-          </button>
-        </Rise>
-        <Rise delay={0.32} className="lp-hero__carousel-wrap">
-          <ScrollCarousel progress={scrollProgress} />
-        </Rise>
-        <button
-          className="lp-swipe-hint"
-          style={{ opacity: active === 0 ? 1 : 0 }}
-          aria-label="Swipe to features"
-          onClick={() => goTo(1)}
-        >
-          <IconChevronDown />
-        </button>
+        </div>
       </section>
 
       {/* ─── Slide 2: Features ──────────────────────────────────── */}
