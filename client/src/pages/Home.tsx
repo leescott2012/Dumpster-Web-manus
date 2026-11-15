@@ -273,6 +273,10 @@ function HomeContent() {
   var [recycleDumpId, setRecycleDumpId] = useState<string | null>(null);
   var [authSheetOpen, setAuthSheetOpen] = useState(false);
   var [creditsSheetOpen, setCreditsSheetOpen] = useState(false);
+  // Newest pool photos (videos excluded) shuffle behind the sign-in / credits sheets.
+  var backdropPhotos = useMemo(function() {
+    return pool.filter(notVideo).slice(-10).map(function(p) { return p.url; });
+  }, [pool]);
   var [outOfCreditsAction, setOutOfCreditsAction] = useState<string | null>(null);
   var [demoBannerVisible, setDemoBannerVisible] = useState(false);
   var { user, profile, canAfford, refreshProfile, totalCredits } = useAuth();
@@ -1340,7 +1344,7 @@ function HomeContent() {
       <GuidedTour active={tourActive} onEnd={endTour} />
       {user && !user.phone && !tourActive && <PhoneGate onResolved={function() { setPhoneTick(function(n) { return n + 1; }); }} />}
       {user && user.phone && <PinGate />}
-      <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} />
+      <AuthSheet open={authSheetOpen} onClose={function() { setAuthSheetOpen(false); }} photos={backdropPhotos} />
       <OnboardingFlow
         open={onboardingOpen}
         poolCount={pool.length}
@@ -1361,6 +1365,7 @@ function HomeContent() {
       )}
       <CreditsSheet
         open={creditsSheetOpen}
+        photos={backdropPhotos}
         onClose={function() { setCreditsSheetOpen(false); }}
         onNeedAuth={function() { setCreditsSheetOpen(false); setAuthSheetOpen(true); }}
       />
