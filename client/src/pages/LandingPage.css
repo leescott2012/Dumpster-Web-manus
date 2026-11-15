@@ -265,10 +265,24 @@
 }
 .lp-col:nth-child(even) .lp-col__track { animation-name: lp-col-down; }
 .lp-col__card { aspect-ratio: 9 / 16; border-radius: 28px; overflow: hidden; background: #141414; }
-.lp-col__card img { width: 100%; height: 100%; object-fit: cover; display: block; user-select: none; }
+.lp-col__card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  /* tiles feel alive like short clips: slow push-in + drift, staggered per tile */
+  animation: lp-tile-pan 9s ease-in-out infinite alternate;
+}
+.lp-col__card:nth-child(3n) img { animation-duration: 11s; animation-delay: -3s; }
+.lp-col__card:nth-child(3n+1) img { animation-duration: 8s; animation-delay: -5s; animation-direction: alternate-reverse; }
+@keyframes lp-tile-pan {
+  from { transform: scale(1) translate(0, 0); }
+  to   { transform: scale(1.18) translate(-3%, -3%); }
+}
 @keyframes lp-col-up   { from { transform: translateY(0); } to { transform: translateY(calc(-50% - 6px)); } }
 @keyframes lp-col-down { from { transform: translateY(calc(-50% - 6px)); } to { transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .lp-col__track { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .lp-col__track, .lp-col__card img { animation: none; } }
 
 /* fade the photos to black toward the bottom, hold copy on top */
 .lp-hero::before {
