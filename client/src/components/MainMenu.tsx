@@ -1216,7 +1216,7 @@ function AboutPanel({ onTour }: { onTour?: () => void }) {
       }}>
         <a href="/privacy" style={{ color: "inherit", textDecoration: "none" }}>Privacy</a>
         <a href="/terms" style={{ color: "inherit", textDecoration: "none" }}>Terms</a>
-        <a href="mailto:axiomonellc@outlook.com" style={{ color: "inherit", textDecoration: "none", marginLeft: "auto" }}>Contact</a>
+        <a href="mailto:support@chamillioncollective.com" style={{ color: "inherit", textDecoration: "none", marginLeft: "auto" }}>Contact</a>
       </div>
     </div>
   );
