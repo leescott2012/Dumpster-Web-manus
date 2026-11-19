@@ -19,7 +19,7 @@ export default function Terms() {
       <P>
         By using Dumpster you agree to these terms. They're written in plain
         English. If something's unclear, email
-        <A href="mailto:ariyaonellc@outlook.com"> ariyaonellc@outlook.com</A>.
+        <A href="mailto:support@chamillioncollective.com"> support@chamillioncollective.com</A>.
       </P>
       <P>
         Dumpster is operated by <Strong>Chamillion Collective</Strong> ("Dumpster,"
@@ -152,7 +152,7 @@ export default function Terms() {
       <H2>9. Account termination</H2>
       <P>
         You can delete your account at any time by emailing
-        <A href="mailto:ariyaonellc@outlook.com"> ariyaonellc@outlook.com</A>.
+        <A href="mailto:support@chamillioncollective.com"> support@chamillioncollective.com</A>.
         We honor deletion within 7 days. We may terminate accounts that
         violate the Acceptable Use rules, with notice when possible.
       </P>
@@ -180,7 +180,7 @@ export default function Terms() {
       <H2>12. Contact</H2>
       <P>
         Questions or concerns:
-        <A href="mailto:ariyaonellc@outlook.com"> ariyaonellc@outlook.com</A>.
+        <A href="mailto:support@chamillioncollective.com"> support@chamillioncollective.com</A>.
       </P>
     </LegalLayout>
   );

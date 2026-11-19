@@ -1174,7 +1174,7 @@ function HomeContent() {
           <a href="/terms" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
             Terms
           </a>
-          <a href="mailto:axiomonellc@outlook.com" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
+          <a href="mailto:support@chamillioncollective.com" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
             Contact
           </a>
         </nav>

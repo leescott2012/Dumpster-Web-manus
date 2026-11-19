@@ -202,7 +202,7 @@ export default function Privacy() {
         If you're in the EU, UK, or California, the regional privacy laws
         (GDPR, UK GDPR, CCPA) give you additional rights to portability and
         objection. To exercise any of these, email
-        <A href="mailto:ariyaonellc@outlook.com"> ariyaonellc@outlook.com</A>.
+        <A href="mailto:support@chamillioncollective.com"> support@chamillioncollective.com</A>.
       </P>
 
       <H2>Children</H2>
@@ -222,7 +222,7 @@ export default function Privacy() {
       <H2>Contact</H2>
       <P>
         Questions, deletion requests, or anything else:
-        <A href="mailto:ariyaonellc@outlook.com"> ariyaonellc@outlook.com</A>.
+        <A href="mailto:support@chamillioncollective.com"> support@chamillioncollective.com</A>.
       </P>
     </LegalLayout>
   );

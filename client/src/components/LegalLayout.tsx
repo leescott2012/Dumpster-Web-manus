@@ -86,7 +86,7 @@ export default function LegalLayout({ title, lastUpdated, children }: LegalLayou
           <div style={{ display: "flex", gap: 18 }}>
             <Link href="/privacy" style={{ color: "#888", textDecoration: "none" }}>Privacy</Link>
             <Link href="/terms" style={{ color: "#888", textDecoration: "none" }}>Terms</Link>
-            <a href="mailto:ariyaonellc@outlook.com" style={{ color: "#888", textDecoration: "none", marginLeft: "auto" }}>
+            <a href="mailto:support@chamillioncollective.com" style={{ color: "#888", textDecoration: "none", marginLeft: "auto" }}>
               Contact
             </a>
           </div>
